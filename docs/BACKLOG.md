@@ -9,7 +9,6 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P1] Per-school records toggle.** A `recordsEnabled` school setting, enforced server-side (detection, minting, records screens and exports), for schools that do not keep a record book.
 - **[P1] Deploying a release.** A pushed `vX.Y.Z` tag now builds the images and a GitHub release, but `scripts/deploy/vm-deploy.sh` follows `main`: its script-currency check compares with `origin/main`, so a host cannot stay on a release tag. Let it deploy a checked-out tag, and document upgrading from one release to the next.
 - **[P1] Self-host template.** A school deployment template (configuration only: `.env`, mapping, event templates, branding) to sit beside [self-hosting](admin/self-host.md).
-- **[P1] Dependency licence check in CI.** Fail the build on a non-permissive licence in the API or app dependency tree, so commercial licensing stays possible.
 - **[P2] Docs link check in CI.** Catch broken relative links across `docs/` and the root documents.
 - **[P2] Staff guide pages.** The *(planned)* pages in [`docs/README.md`](README.md): setting up a carnival, importing the roster, carnival day, house points/records/reports, roles and shared devices.
 

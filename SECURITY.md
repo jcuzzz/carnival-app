@@ -12,7 +12,7 @@ Only the latest release and the `main` branch receive security fixes.
 
 Include, as far as you can: what the issue is and where, minimal steps to reproduce, the impact, and a proof of concept as text.
 
-**Test against a local instance only** ([docs/development/local-dev.md](docs/development/local-dev.md) seeds synthetic data). Never test against a school's live instance. If you believe you have found something on a running school system, report it and stop: do not enumerate further, download data, or access student records. If a report involves what you believe is real student information, say so first and include no sample of it.
+**Test against a local instance only** (the [Linux runbook](docs/admin/linux-runbook.md) and [local development](docs/development/local-dev.md) seed synthetic data). Never test against a school's live instance. If you believe you have found something on a running school system, report it and stop: do not enumerate further, download data, or access student records. If a report involves what you believe is real student information, say so first and include no sample of it.
 
 ## What to expect
 
