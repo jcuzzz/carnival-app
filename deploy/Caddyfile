@@ -1,0 +1,79 @@
+# Single-origin Caddy for the per-school instance (ADR-0001,
+# docs/development/frontend-deployment.md). Baked into the proxy image by
+# deploy/Dockerfile.web together with the built PWA (dist -> /srv).
+#
+# One host, one port (443 on the host):
+#   https://<host>/            -> SPA static files (history-API fallback)
+#   https://<host>/api/*       -> api:8080 (versioned API surface)
+#   https://<host>/health      -> api:8080 (compose/ops health probe)
+#   https://<host>/signin-oidc, /signout-callback-oidc -> api:8080
+#                                 (Entra OIDC callback paths, ADR-0001)
+#
+# Inside the container Caddy runs unprivileged and listens on 8080/8443;
+# compose publishes host 80 -> 8080 and 443 -> 8443.
+#
+# {$SITE_ADDRESS} = localhost -> Caddy serves its internal/self-signed cert.
+# Public DNS on 80/443 gets automatic ACME certificates with no extra config;
+# otherwise use ICT-supplied certificates (ADR-0001 review note 3).
+{
+	# Unprivileged ports: the proxy image drops to a non-root user
+	# (deploy/Dockerfile.web), which cannot bind 80/443 without
+	# CAP_NET_BIND_SERVICE.
+	http_port 8080
+	https_port 8443
+
+	# Caddy's generated HTTP->HTTPS redirect would point at :8443 — the
+	# container port, not the port the client actually reached. The explicit
+	# redirect site below uses {host} alone, which is correct externally.
+	auto_https disable_redirects
+}
+
+http://{$SITE_ADDRESS}:8080 {
+	redir https://{host}{uri} 308
+}
+
+{$SITE_ADDRESS}:8443 {
+	# TLS. Internal DMZ hosts have no public inbound path, so public ACME
+	# cannot complete — default to Caddy's internal CA (self-signed; trust
+	# the Caddy root on devices, or install an ICT cert). Override for a
+	# real certificate: TLS_MODE="/etc/caddy/cert.pem /etc/caddy/key.pem"
+	# (mount the files). For a genuinely public host, set TLS_MODE to an
+	# admin email to enable automatic ACME.
+	tls {$TLS_MODE:internal}
+
+	# --- Security response headers (assessment B10) --------------------
+	# Single origin, so one block covers the SPA and the API. Verified
+	# against the built app: no inline <script> (vite-plugin-pwa emits
+	# registerSW.js as a file), no external origins, no web fonts.
+	# Inline STYLE is still needed — React sets style attributes.
+	# No HSTS yet: the certificate is Caddy's internal CA, so pinning
+	# HTTPS would lock devices onto an untrusted cert. HSTS lands with the
+	# ICT-supplied certificate (assessment B9).
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+	}
+
+	# --- API surface -> API container ---------------------------------
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	@apiExtra path /health /signin-oidc /signout-callback-oidc
+	handle @apiExtra {
+		reverse_proxy api:8080
+	}
+
+	# --- Everything else: the PWA -------------------------------------
+	# try_files = history-API fallback: real files (assets, sw.js,
+	# manifest) are served as-is; any client route falls back to
+	# index.html so deep links and PWA navigation work.
+	handle {
+		root * /srv
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

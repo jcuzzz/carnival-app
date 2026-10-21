@@ -1,0 +1,274 @@
+# Per-school compose project (ADR-0001, proposal §7.1).
+# One compose project = one school: own DB volume, own backups, own keys,
+# own Entra registration. Copy .env.example → .env per deployment; no secrets
+# are committed. Set COMPOSE_PROJECT_NAME per school for isolation.
+
+# Container hardening (assessment C3). Limits are sized for the 4 GB test VM —
+# revisit with the host if a school runs bigger. Unbounded json-file logs share
+# the one disk with the database, so every service caps at 30 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    # Built in CI, pulled by digest (ADR-0049). The deploy script writes a
+    # digest pin into .env; the :main default is a convenience for a bare
+    # `docker compose up`. Local dev builds via docker-compose.build.yml.
+    image: ${API_IMAGE:-ghcr.io/jcuzzz/carnival-app-api:main}
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    pids_limit: 512
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      # GSS Encryption Mode: Npgsql 10 defaults to Prefer, which probes libgssapi_krb5
+      # (absent from the runtime image) on every physical connection. Kerberos is not used.
+      # Two roles (ADR-0047 §3): requests run as the least-privilege role, which
+      # deploy/db/init-roles.sql creates — a stack brought up without that script
+      # has no sports_app and the api cannot connect.
+      ConnectionStrings__SportsDb: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER:-sports_app};Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable"
+      # Migrations only, as the owner role. Unset = both paths use the string above.
+      ConnectionStrings__SportsDbMigrations: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      School__Name: ${SCHOOL_NAME}
+      School__Timezone: ${SCHOOL_TIMEZONE}
+      # Optional brand colour (ADR-0040 §3), #rrggbb or #rgb. Empty means the
+      # neutral default palette; the API refuses to start on a value it cannot
+      # parse or that no readable ink (black or white) reaches 4.5:1 against.
+      # First-run seed only — after the first start this is edited in the app (ADR-0045).
+      School__BrandColour: ${SCHOOL_BRAND_COLOUR:-}
+      # Houses are configuration data (proposal §7.3): import house validation
+      # and the seed/demo path need them. Four slots match the current school;
+      # a school with a different house count edits this block (or moves the
+      # list into a mounted appsettings.School.json).
+      # First-run seed only — after the first start houses are edited in the app (ADR-0045).
+      School__Houses__0: ${SCHOOL_HOUSE_1:-BANKSIA}
+      School__Houses__1: ${SCHOOL_HOUSE_2:-WATTLE}
+      School__Houses__2: ${SCHOOL_HOUSE_3:-MOUNTAIN ASH}
+      School__Houses__3: ${SCHOOL_HOUSE_4:-GREVILLEA}
+      # Optional per-house colour (ADR-0044 §2): one key per house code, as
+      # below. Empty means that house renders text-only; a value that cannot be
+      # parsed, or that repeats another house's colour, is dropped with a
+      # warning, never a startup failure. Any colour is allowed — the swatch
+      # carries a hairline border, so a pale one stays visible. A code containing a
+      # space (MOUNTAIN ASH) cannot be an environment variable name — configure those
+      # in a mounted appsettings.School.json instead.
+      # The key after HouseColours__ must equal the house CODE above: rename
+      # SCHOOL_HOUSE_1 and this key has to be renamed with it, or it colours nothing.
+      # First-run seed only — after the first start house colours are edited in the app (ADR-0045).
+      School__HouseColours__BANKSIA: ${SCHOOL_HOUSE_1_COLOUR:-}
+      # Config-bootstrap (ADR-0007): the repo ./config directory is mounted
+      # read-only at /config, so the import mapping and event templates ship
+      # with the deployment without baking them into the API image.
+      Imports__MappingPath: ${IMPORT_MAPPING_PATH:-/config/import-mapping.example.json}
+      EventTemplates__Path: /config/event-templates
+      # Apply EF migrations on startup (test VM / first stand-up; production
+      # upgrades use backup-gated bundles per ADR-0001).
+      Database__ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS:-false}
+      # Dev header authentication (X-Dev-Subject/-Roles) for the local dev loop:
+      # honoured only with ASPNETCORE_ENVIRONMENT=Development and no Entra/ADFS
+      # configured, and refused outright on a demo host. Keep false. The public
+      # demo does not use it — it runs its own session-cookie identity (ADR-0061).
+      Identity__DevAuth__Enabled: ${DEV_AUTH:-false}
+      # Entra ID (config-only; keys match what the API reads — AzureAd + Identity).
+      # Empty = auth inactive (endpoints return 401) until the app registration exists.
+      # Instance is REQUIRED by Microsoft.Identity.Web (IDW10106 if absent); it
+      # defaults to the public cloud and is overridable for sovereign clouds.
+      AzureAd__Instance: ${ENTRA_INSTANCE:-https://login.microsoftonline.com/}
+      AzureAd__TenantId: ${ENTRA_TENANT_ID}
+      AzureAd__ClientId: ${ENTRA_CLIENT_ID}
+      AzureAd__ClientSecret: ${ENTRA_CLIENT_SECRET}
+      # ADR-0048 §3: lockout recovery and the department-tenant bootstrap; empty is fine while group mapping grants SystemAdministrator.
+      # Comma-separate several UPNs or subject ids in the one variable.
+      Identity__BootstrapAdministrators__0: ${BOOTSTRAP_ADMIN_UPN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    expose:
+      - "8080"
+    volumes:
+      # Persist the ASP.NET DataProtection keyring across container recreates
+      # (otherwise auth cookies/antiforgery tokens break on every redeploy).
+      # At-rest encryption of the keyring is a follow-up (needs a cert/KMS).
+      # Path follows $HOME: the API configures no explicit keyring path, so
+      # DataProtection derives it from HOME, now /home/app (api/Dockerfile).
+      - dp-keys:/home/app/.aspnet/DataProtection-Keys
+      # School configuration data: import mapping + event templates
+      # (config-bootstrap, ADR-0007). Read-only — edits happen in the repo /
+      # change control, not inside the container.
+      - ./config:/config:ro
+      # Optional per-deployment settings file (house colours, ADR-0044; any
+      # School:* key). ⚠ A mounted appsettings.School.json is added LAST in the
+      # config order, so it OUTRANKS the environment block above — put ONLY the
+      # keys you mean to set (e.g. the School.HouseColours block), never a copy
+      # of the full example file.
+      # - ./appsettings.School.json:/app/appsettings.School.json:ro
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    # No cap_drop: the postgres entrypoint needs setuid/setgid/chown to drop
+    # from root to the postgres user and fix the data directory at init.
+    mem_limit: 1536m
+    pids_limit: 512
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - data
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backup job baked into the baseline (ADR-0001 review note 1), encrypted at
+  # rest to an age recipient whose private key lives off the VM (ADR-0047 §4).
+  # scripts/deploy/push-backups.sh copies the ciphertext off-host.
+  backup:
+    image: ${BACKUP_IMAGE:-ghcr.io/jcuzzz/carnival-app-backup:main}
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    # No cap_drop: same postgres entrypoint, same setuid/setgid/chown need.
+    mem_limit: 256m
+    pids_limit: 128
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_ENCRYPTION: ${BACKUP_ENCRYPTION:-on}
+    # Two gates before the loop: refuse to write plaintext without an explicit
+    # opt-out, and wait for the schema — otherwise the first backup races the
+    # API's startup migration and captures an empty database.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ -z "$$BACKUP_AGE_RECIPIENT" ] && [ "$$BACKUP_ENCRYPTION" != "off" ]; then
+          echo "backup: BACKUP_AGE_RECIPIENT is empty. Set it to the school's age" >&2
+          echo "backup: public key, or BACKUP_ENCRYPTION=off for a synthetic test VM." >&2
+          exit 1
+        fi
+        if [ "$$BACKUP_ENCRYPTION" != "off" ] && ! printf '' | age -r "$$BACKUP_AGE_RECIPIENT" -o /dev/null; then
+          echo "backup: BACKUP_AGE_RECIPIENT is not a valid age recipient (expected age1...)." >&2
+          exit 1
+        fi
+        until [ "$$(psql -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" -gt 0 ]; do
+          echo "backup: waiting for schema before first dump..."
+          sleep 5
+        done
+        echo "backup: schema present; starting dump loop"
+        KEEP_MIN=3
+        while true; do
+          TS="$$(date +%Y%m%d-%H%M%S)"
+          TMP="/tmp/sports-$$TS.dump"
+          WROTE=0
+          if pg_dump -Fc -f "$$TMP"; then
+            if [ "$$BACKUP_ENCRYPTION" = "off" ]; then
+              mv "$$TMP" "/backups/sports-$$TS.dump" && WROTE=1
+            elif age -r "$$BACKUP_AGE_RECIPIENT" -o "/backups/.sports-$$TS.partial" "$$TMP"; then
+              mv "/backups/.sports-$$TS.partial" "/backups/sports-$$TS.dump.age" && WROTE=1
+            else
+              echo "backup: encryption failed; no backup written this cycle" >&2
+              rm -f "/backups/.sports-$$TS.partial"
+            fi
+          else
+            echo "backup: pg_dump failed; no backup written this cycle" >&2
+          fi
+          rm -f "$$TMP"
+          # Prune only after a cycle that wrote a dump, and never the newest
+          # $$KEEP_MIN: a fortnight of failed cycles used to age the last good
+          # backup away silently. .last-success is what a check can read.
+          if [ "$$WROTE" = "1" ]; then
+            date -u +%Y-%m-%dT%H:%M:%SZ > /backups/.last-success
+            for OLD in $$(ls -1t /backups/*.dump.age /backups/*.dump 2>/dev/null | tail -n +$$((KEEP_MIN + 1)) || true); do
+              if [ -n "$$(find "$$OLD" -maxdepth 0 -mtime +$$BACKUP_RETENTION_DAYS 2>/dev/null)" ]; then
+                rm -f "$$OLD"
+                echo "backup: pruned $$OLD (older than $$BACKUP_RETENTION_DAYS days)"
+              fi
+            done
+          fi
+          sleep $$BACKUP_INTERVAL_SECONDS
+        done
+    networks:
+      - data
+    volumes:
+      - db-backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Single-origin web tier: one Caddy serves the built PWA (static /srv)
+  # AND reverse-proxies /api/* (+ /health, OIDC callbacks) to the API —
+  # same host, port 443 only (the VM sits in a managed DMZ; no new ports).
+  # Caddyfile + dist are baked into the image (deploy/Dockerfile.web).
+  proxy:
+    # VITE_DEMO_MODE is baked in, so the public-demo build is a DIFFERENT IMAGE
+    # (carnival-app-web-demo), never a runtime flag — ADR-0049 §2. A school stack
+    # always runs carnival-app-web.
+    image: ${WEB_IMAGE:-ghcr.io/jcuzzz/carnival-app-web:main}
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    pids_limit: 256
+    # Caddy runs unprivileged inside and cannot bind 80/443, so it listens on
+    # 8080/8443 (deploy/Caddyfile) and the host keeps the standard ports.
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # Certificate source, the Caddyfile's `tls` argument: internal (Caddy's
+      # own CA), "<cert> <key>" file paths, or an email for public ACME.
+      TLS_MODE: ${TLS_MODE:-internal}
+    networks:
+      - edge
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      # An ICT-supplied certificate, with
+      # TLS_MODE="/etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem":
+      # - ./certs:/etc/caddy/certs:ro
+    depends_on:
+      - api
+
+# Network isolation inside the host (ADR-0047 §2). Only `api` joins both, so
+# `proxy` has no route to Postgres at all; `data` is internal, so `db` and
+# `backup` have no route off the host either.
+networks:
+  edge:
+  data:
+    internal: true
+
+volumes:
+  db-data:
+  db-backups:
+  caddy-data:
+  caddy-config:
+  dp-keys:

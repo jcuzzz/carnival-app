@@ -1,0 +1,33 @@
+# Local-dev build overlay (ADR-0049 §4). docker-compose.yml pulls images from
+# GHCR; this file puts the build definitions back for anyone working on the
+# code without a registry credential:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+#
+# Local dev, and on the VM only under LOCAL_BUILD=1 (ADR-0049 amendment), when CI has
+# published no images. A normal VM deploy runs the digests vm-deploy.sh writes into .env.
+#
+# A local build TAGS the result with the `image:` value from docker-compose.yml
+# (ghcr.io/jcuzzz/carnival-app-*:main by default), so a later plain `docker compose
+# up` here reuses that local image rather than pulling. Run `docker compose
+# pull` when you want GHCR's copy back.
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+
+  proxy:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+      args:
+        # Build-time demo flag for the PWA (default false = Entra build).
+        # true ONLY together with DEV_AUTH=true — shows the persistent
+        # DEMO MODE banner. CI publishes the true variant as carnival-app-web-demo.
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
+
+  backup:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backup

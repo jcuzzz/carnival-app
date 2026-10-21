@@ -1,0 +1,280 @@
+{
+  "$comment": "Athletics carnival event template. School configuration data, applied to a carnival via POST /api/v1/carnivals/{id}/apply-template. A division is an age x category x tier. The age codes must match the codes the roster import derives (age as at 31 December of the competition year), or entries will not match events. Track events are Time in seconds, throws and horizontal jumps are Distance in metres to the centimetre, high jump is Height in metres. No hurdles, and no novelty-race definition: the sack, cone-ball and three-legged races are house-point adjustments in the Track stream.",
+  "template": "athletics",
+  "name": "Athletics carnival",
+  "divisions": {
+    "$comment": "One division per age group, 12 to 18: each age is its own event with its own placings and house points. Combined running of several ages is a schedule slot holding several instances, which the field-station slots express through their division filters. Categories M/F; tiers Competitive (C) and Social (S).",
+    "ageGroups": ["12", "13", "14", "15", "16", "17", "18"],
+    "categories": ["M", "F"],
+    "tiers": ["Competitive", "Social"]
+  },
+  "schedule": {
+    "$comment": "The default program: seven streams that run concurrently - one Track column beside six field stations - each holding its slots in running order. Advisory only: nothing is gated on it, so it drives the program printout and the 'next event' navigation, and an event in no slot is fully usable. A field station's slots carry a time range and a division filter, so 'SHOT PUT 10:00-11:00 C 15/16/17' holds exactly those instances and 'S 13/14' is a separate slot; the first slot of a stream whose filter matches an instance claims it. Age 12 runs with the 13/14 sessions and age 18 with the 15/16/17 sessions. Times are local 24-hour clock times ('HH:mm'): the carnival owns the date and the school owns the timezone. Applying the template is idempotent: a stream is matched by name and a slot by label, an existing one is never rewritten, and only unscheduled events are placed, so a re-apply cannot undo an organiser's edits.",
+    "streams": [
+      {
+        "$comment": "The novelty items carry no start time: they run between running events, as announced. They are house-point adjustments, never results, so the slot names its adjustment category and holds no events; the category must be one the carnival has configured (the defaults are 'Novelty 1'..'Novelty 3', 'Best Dressed House', 'Loudest House').",
+        "name": "Track",
+        "slots": [
+          { "start": "10:00", "label": "1500m", "events": ["AT-1500"] },
+          { "start": "10:45", "label": "100m", "events": ["AT-100"] },
+          { "label": "Novelty event - SACK RACE", "adjustmentCategory": "Novelty 1" },
+          { "start": "11:45", "label": "200m", "events": ["AT-200"] },
+          { "label": "Novelty event - CONE-BALL RACE", "adjustmentCategory": "Novelty 2" },
+          { "start": "12:25", "label": "400m", "events": ["AT-400"] },
+          { "label": "Novelty event - THREE LEGGED RACE", "adjustmentCategory": "Novelty 3" },
+          { "start": "12:55", "label": "800m", "events": ["AT-800"] },
+          { "start": "13:25", "label": "RELAYS", "events": ["AT-4X100-RELAY"] }
+        ]
+      },
+      {
+        "name": "Shot Put",
+        "slots": [
+          {
+            "start": "10:00", "end": "11:00", "label": "C 15/16/17",
+            "events": [{ "code": "AT-SHOT-PUT", "ages": ["15", "16", "17", "18"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "11:00", "end": "11:30", "label": "S 15/16/17",
+            "events": [{ "code": "AT-SHOT-PUT", "ages": ["15", "16", "17", "18"], "tiers": ["Social"] }]
+          },
+          {
+            "start": "11:30", "end": "13:00", "label": "C 13/14",
+            "events": [{ "code": "AT-SHOT-PUT", "ages": ["12", "13", "14"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "13:00", "end": "13:30", "label": "S 13/14",
+            "events": [{ "code": "AT-SHOT-PUT", "ages": ["12", "13", "14"], "tiers": ["Social"] }]
+          }
+        ]
+      },
+      {
+        "name": "Long Jump",
+        "slots": [
+          {
+            "$comment": "Both tiers run together here, so the slot omits the tiers filter and holds C and S alike.",
+            "start": "10:00", "end": "12:00", "label": "C & S 13/14",
+            "events": [{ "code": "AT-LONG-JUMP", "ages": ["12", "13", "14"] }]
+          },
+          {
+            "start": "12:00", "end": "13:30", "label": "C & S 15/16/17",
+            "events": [{ "code": "AT-LONG-JUMP", "ages": ["15", "16", "17", "18"] }]
+          }
+        ]
+      },
+      {
+        "name": "Javelin",
+        "slots": [
+          {
+            "start": "10:00", "end": "11:00", "label": "C 15/16/17",
+            "events": [{ "code": "AT-JAVELIN", "ages": ["15", "16", "17", "18"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "11:00", "end": "11:30", "label": "S 15/16/17",
+            "events": [{ "code": "AT-JAVELIN", "ages": ["15", "16", "17", "18"], "tiers": ["Social"] }]
+          },
+          {
+            "start": "11:30", "end": "13:00", "label": "C 13/14",
+            "events": [{ "code": "AT-JAVELIN", "ages": ["12", "13", "14"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "13:00", "end": "13:30", "label": "S 13/14",
+            "events": [{ "code": "AT-JAVELIN", "ages": ["12", "13", "14"], "tiers": ["Social"] }]
+          }
+        ]
+      },
+      {
+        "name": "High Jump",
+        "slots": [
+          {
+            "start": "10:00", "end": "11:00", "label": "C 15/16/17",
+            "events": [{ "code": "AT-HIGH-JUMP", "ages": ["15", "16", "17", "18"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "11:00", "end": "12:30", "label": "C 13/14",
+            "events": [{ "code": "AT-HIGH-JUMP", "ages": ["12", "13", "14"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "12:30", "end": "13:00", "label": "S 15/16/17",
+            "events": [{ "code": "AT-HIGH-JUMP", "ages": ["15", "16", "17", "18"], "tiers": ["Social"] }]
+          },
+          {
+            "start": "13:00", "end": "13:45", "label": "S 13/14",
+            "events": [{ "code": "AT-HIGH-JUMP", "ages": ["12", "13", "14"], "tiers": ["Social"] }]
+          }
+        ]
+      },
+      {
+        "name": "Triple Jump",
+        "slots": [
+          {
+            "start": "10:00", "end": "11:30", "label": "C 13/14",
+            "events": [{ "code": "AT-TRIPLE-JUMP", "ages": ["12", "13", "14"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "11:30", "end": "12:30", "label": "S 13/14",
+            "events": [{ "code": "AT-TRIPLE-JUMP", "ages": ["12", "13", "14"], "tiers": ["Social"] }]
+          },
+          {
+            "start": "12:30", "end": "13:30", "label": "C & S 15/16/17",
+            "events": [{ "code": "AT-TRIPLE-JUMP", "ages": ["15", "16", "17", "18"] }]
+          }
+        ]
+      },
+      {
+        "$comment": "The discus slots stop at Social 13-16, so Social 17 and 18 discus are left unscheduled. An unscheduled event still takes entries and results, and an organiser who runs it adds a slot on the day.",
+        "name": "Discus",
+        "slots": [
+          {
+            "start": "10:00", "end": "11:30", "label": "C 13/14",
+            "events": [{ "code": "AT-DISCUS", "ages": ["12", "13", "14"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "11:30", "end": "12:30", "label": "C 15/16/17",
+            "events": [{ "code": "AT-DISCUS", "ages": ["15", "16", "17", "18"], "tiers": ["Competitive"] }]
+          },
+          {
+            "start": "12:30", "end": "13:30", "label": "S 13/14/15/16",
+            "events": [{ "code": "AT-DISCUS", "ages": ["12", "13", "14", "15", "16"], "tiers": ["Social"] }]
+          }
+        ]
+      }
+    ]
+  },
+  "definitions": [
+    {
+      "code": "AT-100",
+      "name": "100m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Sprint", "distance:100m", "surface:Track"]
+    },
+    {
+      "code": "AT-200",
+      "name": "200m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Sprint", "distance:200m", "surface:Track"]
+    },
+    {
+      "code": "AT-400",
+      "name": "400m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Sprint", "distance:400m", "surface:Track"]
+    },
+    {
+      "code": "AT-800",
+      "name": "800m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Middle distance", "distance:800m", "surface:Track"]
+    },
+    {
+      "code": "AT-1500",
+      "name": "1500m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Middle distance", "distance:1500m", "surface:Track"]
+    },
+    {
+      "$comment": "Team event: one house team of 4, a single team time, placings score double (scoringWeight 2). Contested per age and Competitive only, with no open all-ages division.",
+      "code": "AT-4X100-RELAY",
+      "name": "Relay 4x100m",
+      "sport": "Athletics",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "format": "Team",
+      "teamSize": 4,
+      "legs": ["Sprint", "Sprint", "Sprint", "Sprint"],
+      "scoringWeight": 2,
+      "tiers": ["Competitive"],
+      "tags": ["discipline:Relay", "distance:4x100m", "surface:Track"]
+    },
+    {
+      "$comment": "Field event measured as a Distance in metres to the centimetre ('4.32', displayed '4.32 m'). Three attempts per athlete, captured one at a time; the server derives the best valid mark, records NM when every attempt is a foul, and breaks a tie on the best mark by the next-best attempt. NM scores as a DNF and is never a record candidate. The attempt count is frozen once results exist, so change it before the carnival.",
+      "code": "AT-LONG-JUMP",
+      "name": "Long Jump",
+      "sport": "Athletics",
+      "measureType": "Distance",
+      "units": "m",
+      "attempts": 3,
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Jump", "surface:Field"]
+    },
+    {
+      "code": "AT-TRIPLE-JUMP",
+      "name": "Triple Jump",
+      "sport": "Athletics",
+      "measureType": "Distance",
+      "units": "m",
+      "attempts": 3,
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Jump", "surface:Field"]
+    },
+    {
+      "$comment": "The one Height event, contested on a heights ladder: the bar starts at 1.20 m and rises 5 cm, the card records O/X/- per height, and the server derives the best height, the two countback numbers and elimination. A ladder and an attempt count are mutually exclusive. The ladder is frozen once results exist, so change it before the carnival.",
+      "code": "AT-HIGH-JUMP",
+      "name": "High Jump",
+      "sport": "Athletics",
+      "measureType": "Height",
+      "units": "m",
+      "ladder": { "start": 1.20, "step": 0.05 },
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Jump", "surface:Field"]
+    },
+    {
+      "$comment": "Throws: one definition per discipline. A record's identity is (definition, age group, category) and the implement specification belongs to the definition; here the shot, discus and javelin masses follow age and category, which the record key already separates. A school that contests two implement masses within one age and category splits the definition (for example AT-SHOT-3KG / AT-SHOT-4KG) before the first result is recorded, since a definition's measure and units freeze once it has results. Wind is not recorded and does not gate records.",
+      "code": "AT-SHOT-PUT",
+      "name": "Shot Put",
+      "sport": "Athletics",
+      "measureType": "Distance",
+      "units": "m",
+      "attempts": 3,
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Throw", "surface:Field"]
+    },
+    {
+      "code": "AT-DISCUS",
+      "name": "Discus",
+      "sport": "Athletics",
+      "measureType": "Distance",
+      "units": "m",
+      "attempts": 3,
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Throw", "surface:Field"]
+    },
+    {
+      "code": "AT-JAVELIN",
+      "name": "Javelin",
+      "sport": "Athletics",
+      "measureType": "Distance",
+      "units": "m",
+      "attempts": 3,
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Throw", "surface:Field"]
+    }
+  ]
+}

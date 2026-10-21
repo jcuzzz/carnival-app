@@ -1,0 +1,9 @@
+# Backup sidecar (ADR-0047 §4): the postgres client tools plus `age`, so every
+# dump is encrypted to the school's recipient before it lands on the volume.
+# `age` is in Debian main for both bookworm and trixie, so this tracks whatever
+# base postgres:17 currently ships.
+FROM postgres:17
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends age \
+ && rm -rf /var/lib/apt/lists/*

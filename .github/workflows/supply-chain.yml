@@ -1,0 +1,62 @@
+name: Supply chain
+
+# ~14 runner-minutes, weekly instead of per push (owner ruling 2026-09-08).
+# This only reports; version bumps are made locally, tested, and pushed to main.
+# `npm run lint` moved out of here into ci.yml — it is cheap and wanted per push.
+on:
+  schedule:
+    # Sunday 18:00 UTC = Monday 04:00 AEST, an hour after the e2e run.
+    - cron: '0 18 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: supply-chain
+  cancel-in-progress: false
+
+jobs:
+  supply-chain:
+    name: Supply chain + SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: npm ci
+        run: npm ci
+        working-directory: app
+      - name: npm audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: app
+      - name: dotnet restore
+        run: dotnet restore
+        working-directory: api
+      # `dotnet list package --vulnerable` exits 0 whatever it finds, so grep the output.
+      - name: dotnet vulnerable packages
+        run: |
+          dotnet list package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages found — see the listing in this step."
+            exit 1
+          fi
+        working-directory: api
+      - name: SBOM (app)
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom-app.json
+        working-directory: app
+      - name: SBOM (API)
+        run: |
+          dotnet tool install --global CycloneDX
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet CycloneDX api/CarnivalApp.sln -o sbom-api
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: |
+            app/sbom-app.json
+            sbom-api/
+          retention-days: 90

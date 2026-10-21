@@ -1,0 +1,19 @@
+# Build-context filter for deploy/Dockerfile.web (context = repo root).
+# The api service uses its own context (./api), which this file does not
+# affect. Keep the web context down to app/ sources + deploy/Caddyfile.
+
+.git
+.env
+
+# Not needed to build the web image
+api/
+data/
+docs/
+scripts/
+config/
+
+# Node/Vite outputs — the image installs and builds fresh
+app/node_modules/
+app/dist/
+app/tsconfig.tsbuildinfo
+app/.env.development

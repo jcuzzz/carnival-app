@@ -1,0 +1,230 @@
+name: Images
+
+# ADR-0049, amended 2026-09-08 (free-tier CI): images are built ON DEMAND, not on
+# every push. Run it for the commit you are about to deploy:
+#   gh workflow run images.yml -f ref=main
+#   gh run watch
+# The digest gate in scripts/deploy/vm-deploy.sh is unchanged — it resolves
+# sha-<short> in GHCR for the commit being deployed and hard-fails when it is
+# missing. That now also means "someone ran this workflow for this commit".
+on:
+  # A version tag (v1.2.3) also publishes X.Y.Z and X.Y image tags and a GitHub release.
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to build (must be pushed)'
+        required: true
+        default: main
+
+# One build at a time, and never cancel one: a half-published set of four images
+# is worse than a queue.
+concurrency: images
+
+permissions:
+  contents: read
+
+jobs:
+  # The per-push jobs, re-run against the ref being built, so an image is never
+  # published from untested code. ~8 minutes; Playwright and the supply-chain
+  # scan are deliberately NOT here (weekly workflows of their own).
+  test:
+    name: Tests (API + app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: dotnet test
+        run: dotnet test
+        working-directory: api
+      - name: Restore dotnet-ef
+        run: dotnet tool restore
+        working-directory: api
+      - name: Check migrations match the model
+        run: pwsh scripts/check-migration-drift.ps1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: npm ci
+        run: npm ci
+        working-directory: app
+      - name: npm run lint
+        run: npm run lint
+        working-directory: app
+      - name: npm test
+        run: npm test
+        working-directory: app
+      - name: npm run build
+        run: npm run build
+        working-directory: app
+
+  images:
+    name: Build and push images (GHCR)
+    runs-on: ubuntu-latest
+    needs: [test]
+    outputs:
+      api: ${{ steps.api.outputs.digest }}
+      web: ${{ steps.web.outputs.digest }}
+      web_demo: ${{ steps.web-demo.outputs.digest }}
+      backup: ${{ steps.backup.outputs.digest }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      OWNER: jcuzzz
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      # The resolved commit of `inputs.ref`, not github.sha (which is the commit
+      # the workflow file came from). The deploy resolves sha-<short> for the
+      # commit it has checked out, so these must be the same seven characters.
+      # The `main` tag is a human convenience and only ever moves for main.
+      - name: Tags
+        id: tags
+        env:
+          IS_MAIN: ${{ inputs.ref == 'main' }}
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          v="${VERSION#v}"
+          short="$(git rev-parse --short=7 HEAD)"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          for r in api web web_demo backup; do
+            repo="sports-${r//_/-}"
+            t="ghcr.io/${OWNER}/${repo}:sha-${short}"
+            if [ "$IS_MAIN" = "true" ]; then t="$t,ghcr.io/${OWNER}/${repo}:main"; fi
+            if [ -n "$v" ]; then t="$t,ghcr.io/${OWNER}/${repo}:$v"; fi
+            # A pre-release (1.2.0-rc.1) never moves the X.Y tag.
+            if [ -n "$v" ] && [ "${v#*-}" = "$v" ]; then t="$t,ghcr.io/${OWNER}/${repo}:${v%.*}"; fi
+            echo "$r=$t" >> "$GITHUB_OUTPUT"
+            echo "$repo -> $t"
+          done
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # provenance: false on every build. With attestations on, buildx pushes an
+      # image INDEX even for one platform, and the deploy's digest comparison
+      # (`docker inspect .RepoDigests` on the VM) would not match the index
+      # digest recorded here. Cosign/attestations are deferred (ADR-0049 §3).
+      - name: api
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          tags: ${{ steps.tags.outputs.api }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      # Two web images, not a runtime flag (ADR-0049 §2): VITE_DEMO_MODE is
+      # inlined by Vite, and the DEMO MODE banner has to be baked in.
+      - name: web
+        id: web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          build-args: |
+            VITE_DEMO_MODE=false
+          tags: ${{ steps.tags.outputs.web }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: web-demo
+        id: web-demo
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          build-args: |
+            VITE_DEMO_MODE=true
+          tags: ${{ steps.tags.outputs.web_demo }}
+          cache-from: type=gha,scope=web-demo
+          cache-to: type=gha,mode=max,scope=web-demo
+      - name: backup
+        id: backup
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.backup
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          tags: ${{ steps.tags.outputs.backup }}
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
+      # The manifest is provenance evidence and a human-readable record. The
+      # deploy gate does NOT read it — the VM resolves sha-<short> against the
+      # registry, so nothing has to be written back to main (ADR-0049
+      # implementation notes).
+      - name: release.json
+        run: |
+          cat > deploy/release.json <<JSON
+          {
+            "commit": "${{ steps.tags.outputs.sha }}",
+            "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "images": {
+              "api": "ghcr.io/jcuzzz/carnival-app-api@${{ steps.api.outputs.digest }}",
+              "web": "ghcr.io/jcuzzz/carnival-app-web@${{ steps.web.outputs.digest }}",
+              "web-demo": "ghcr.io/jcuzzz/carnival-app-web-demo@${{ steps.web-demo.outputs.digest }}",
+              "backup": "ghcr.io/jcuzzz/carnival-app-backup@${{ steps.backup.outputs.digest }}"
+            }
+          }
+          JSON
+          cat deploy/release.json
+          { echo '### Images published'; echo; echo '```json'; cat deploy/release.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ steps.tags.outputs.short }}
+          path: deploy/release.json
+          retention-days: 90
+
+  release:
+    name: GitHub release
+    runs-on: ubuntu-latest
+    needs: [images]
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          IMAGES: ghcr.io/${{ github.repository_owner }}
+        run: |
+          v="${TAG#v}"
+          {
+            echo '### Images'
+            echo
+            echo '```'
+            echo "$IMAGES/carnival-app-api:$v"
+            echo "$IMAGES/carnival-app-web:$v"
+            echo "$IMAGES/carnival-app-web-demo:$v"
+            echo "$IMAGES/carnival-app-backup:$v"
+            echo '```'
+            echo
+            echo "Pin \`$v\` in your deployment. Digests: api ${{ needs.images.outputs.api }}, web ${{ needs.images.outputs.web }}, web-demo ${{ needs.images.outputs.web_demo }}, backup ${{ needs.images.outputs.backup }}."
+          } > notes.md
+          prerelease=""
+          if [ "${v#*-}" != "$v" ]; then prerelease="--prerelease"; fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --title "$TAG" --notes-file notes.md $prerelease

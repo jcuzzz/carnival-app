@@ -1,0 +1,48 @@
+# Never commit real or unreviewed source data
+data/raw/
+*.xlsx
+*.xls
+*.csv
+# Only the named generator-produced fixtures are tracked (ADR-0033) — no
+# blanket re-include, so a stray CSV dropped in data/synthetic/ stays ignored.
+!data/synthetic/ST_CLEAN.csv
+!data/synthetic/ST_SYNTH.csv
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+# Dev-loop default (no secrets — localhost API base only, docs/development/local-dev.md)
+!app/.env.development
+appsettings.School.json
+*.local.json
+secrets/
+# ICT-supplied TLS certificate for the compose ./certs mount; untracked files block vm-deploy.sh
+certs/
+# Per-deployment compose overlay (group→role mappings etc.) — commit only the example
+docker-compose.override.yml
+!docker-compose.override.example.yml
+
+# Build/deps
+node_modules/
+dist/
+build/
+bin/
+obj/
+__pycache__/
+*.pyc
+.venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+# Word/Office lock files (carry the editor's username)
+~$*
+*.tsbuildinfo
+
+# Agent worktrees (harness-managed)
+.claude/worktrees/
+
+# Machine-specific agent notes
+AGENTS.local.md
+CLAUDE.local.md

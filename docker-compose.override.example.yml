@@ -1,0 +1,71 @@
+# Per-deployment compose overlay (ADR-0007 identity wiring).
+# Copy to docker-compose.override.yml on the deployment host and fill in the
+# Entra security-group OBJECT IDs (Entra admin center → Groups → <group> →
+# Overview → Object ID). Docker Compose merges this over docker-compose.yml
+# automatically. The override file itself is git-ignored (per-school data).
+#
+# Why here and not .env: the group object ID is part of the configuration KEY
+# (Identity__GroupToRoleMappings__<object-id>) and compose does not interpolate
+# variables inside YAML keys. Group object IDs are identifiers, not secrets —
+# the client secret still belongs in .env (ENTRA_CLIENT_SECRET), never here.
+#
+# The role names on the right are the platform roles (proposal §8, ADR-0016) and
+# must match exactly.
+#
+# SIX GROUPS, FOUR ROLES. The school's Entra groups do not change — ADR-0016 §4
+# leaves the tenant untouched, and these env-var KEYS (the group object IDs) never
+# move. Only the values do, and three of them now say the same thing:
+# EventAdmins, Verifiers and RecordsManagers all map to CarnivalAdministrator.
+# That collapse IS the change. carnival-app-host group names for reference:
+#   CARNIVAL-EventAdmins → CarnivalAdministrator      (three groups, one role)
+#   CARNIVAL-Verifiers → CarnivalAdministrator        (three groups, one role)
+#   CARNIVAL-RecordsManagers → CarnivalAdministrator  (three groups, one role)
+#   CARNIVAL-ResultsOfficials → Recorder
+#   CARNIVAL-Viewers → Viewer
+#   CARNIVAL-SysAdmins → SystemAdministrator
+# SystemAdministrator holds every carnival policy as well as imports, so a school
+# with one technical person is never locked out; imports are SystemAdministrator
+# ONLY — CarnivalAdministrator gets nothing on the import surface.
+# Someone in two collapsed groups now gets ONE CarnivalAdministrator claim, so
+# their AuditEvent.ActorRole shortens from e.g. "EventAdministrator;Verifier".
+# Audit history is never rewritten and keeps the old names.
+#
+# TEMPORARY ALIASES: the six retired names (EventAdministrator, Verifier,
+# RecordsManager → CarnivalAdministrator; ResultsOfficial → Recorder;
+# ReadOnlyViewer → Viewer) still resolve, so an existing override file that has
+# not been updated keeps working. This is a migration aid, not the contract — an
+# alias hit logs at Information, and that log line is the condition for removing
+# them: once every deployment's mapping names the four roles below and /me
+# confirms it, the aliases go (ADR-0016 §4).
+# Ordering when you upgrade: deploy the CODE first, edit this file second. New
+# role names in front of an old server is the one state the aliases cannot
+# rescue — every non-SystemAdministrator signs in and then 403s on everything.
+
+services:
+  api:
+    environment:
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000a: CarnivalAdministrator
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000b: Recorder
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000c: CarnivalAdministrator
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000d: CarnivalAdministrator
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000e: Viewer
+      Identity__GroupToRoleMappings__00000000-0000-0000-0000-00000000000f: SystemAdministrator
+
+      # ADFS 2019+ or generic OIDC instead of Entra: leave ENTRA_* empty in .env,
+      # add ADFS_CLIENT_SECRET there, and use this block in place of the one
+      # above. ADFS sends group NAMES in whatever claim the relying-party rule
+      # emits, so the mapping keys are names; a name containing a space cannot be
+      # an environment variable key — map those in a mounted appsettings.School.json.
+      # Identity__Provider: Adfs
+      # Adfs__Authority: https://adfs.example.school/adfs
+      # Adfs__MetadataAddress: https://adfs.example.school/adfs/.well-known/openid-configuration
+      # Adfs__ClientId: <relying-party client id>
+      # Adfs__ClientSecret: ${ADFS_CLIENT_SECRET}
+      # Adfs__Scopes__0: openid
+      # Adfs__Scopes__1: profile
+      # Adfs__NameClaimType: upn
+      # Identity__GroupsClaimType: group
+      # Identity__GroupToRoleMappings__CARNIVAL-SysAdmins: SystemAdministrator
+      # Identity__GroupToRoleMappings__CARNIVAL-EventAdmins: CarnivalAdministrator
+      # Identity__GroupToRoleMappings__CARNIVAL-ResultsOfficials: Recorder
+      # Identity__GroupToRoleMappings__CARNIVAL-Viewers: Viewer

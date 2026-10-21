@@ -1,0 +1,74 @@
+name: CI
+
+# Free-tier budget (owner ruling 2026-09-08): this is the only workflow that runs
+# per push, and it is the two cheap jobs. Playwright, supply chain and CodeQL are
+# weekly; images are built on demand (images.yml).
+on:
+  push:
+    branches: [main]
+    # A docs-only commit costs nothing here. It also builds no images, so the
+    # digest gate in scripts/deploy/vm-deploy.sh will refuse to deploy it until
+    # someone runs images.yml for that commit (ADR-0049, amended 2026-09-08).
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      # The RequiresDocker integration tests skip on runners without Docker.
+      # That is by design — they are the only tests needing a real PostgreSQL.
+      - name: dotnet test
+        run: dotnet test
+        working-directory: api
+      - name: Dependency licences
+        run: python3 scripts/check_licences.py
+      # `has-pending-model-changes` cannot see a hand-edited migration — it compares
+      # the model to a snapshot generated from the model. This diffs the two SQL
+      # scripts instead (model vs. migration history); both run offline against the
+      # design-time factory, so no database service is needed. Commit 80ae244 is the
+      # FK drift the manual version of this sweep caught.
+      # dotnet-ef is a LOCAL tool pinned by api/dotnet-tools.json — restore it, never
+      # install globally: a global tool is shadowed by the unrestored manifest the moment
+      # a command runs from inside api/, which is how the first two runs of this gate died.
+      - name: Restore dotnet-ef
+        run: dotnet tool restore
+        working-directory: api
+      - name: Check migrations match the model
+        run: pwsh scripts/check-migration-drift.ps1
+
+  app:
+    name: App lint + tests + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: npm ci
+        run: npm ci
+        working-directory: app
+      # Moved here from the (now weekly) supply-chain workflow: lint is seconds and
+      # a lint regression should not wait a week to surface.
+      - name: npm run lint
+        run: npm run lint
+        working-directory: app
+      - name: npm test
+        run: npm test
+        working-directory: app
+      - name: npm run build
+        run: npm run build
+        working-directory: app

@@ -1,0 +1,74 @@
+{
+  "$comment": "Example import mapping for a CASES21 ST export (e.g. ST_XXXX.csv). Only the columns listed here are read; every other column in the source file is ignored and never stored. See docs/research and proposal section 11.",
+  "source": {
+    "format": "csv",
+    "expectedFilePattern": "ST_*.csv",
+    "dateEncoding": "excel-serial",
+    "$dateComment": "CASES21 exports encode dates as Excel serial day numbers (e.g. 36526 = 2000-01-01)."
+  },
+  "columns": {
+    "STKEY": {
+      "maps_to": "external_student_id",
+      "required": true,
+      "unique": true
+    },
+    "SURNAME": {
+      "maps_to": "surname",
+      "required": true
+    },
+    "FIRST_NAME": {
+      "maps_to": "first_name",
+      "required": true
+    },
+    "SECOND_NAME": {
+      "maps_to": "second_name",
+      "required": false
+    },
+    "PREF_NAME": {
+      "maps_to": "preferred_name",
+      "required": false,
+      "fallback": "first_name"
+    },
+    "TITLE": {
+      "maps_to": "title",
+      "required": false
+    },
+    "HOUSE": {
+      "maps_to": "house_code",
+      "required": true,
+      "validate": "must match a configured house"
+    },
+    "STATUS": {
+      "maps_to": "enrolment_status",
+      "required": true,
+      "validate": "active statuses promote; LEFT/LVNG mark inactive"
+    },
+    "BIRTHDATE": {
+      "maps_to": "competition_age_group",
+      "required": true,
+      "transform": "derive_age_group",
+      "store_source_value": false,
+      "$comment": "Data minimisation (proposal 11.1): the full birth date is used transiently during import to derive the competition age group (age as at the configured cut-off day of the competition year) and is NOT stored. Storing full DOB would require documented business need + policy approval."
+    },
+    "GENDER": {
+      "maps_to": "competition_category",
+      "required": true,
+      "validate": "one of M / F / X in source; maps to default competition category M / F / S",
+      "$comment": "Used to derive the student's default event-division category (M/F/S). Per-event and per-student overrides are authorised event-administration actions recorded with audit trail — the import value is a default, not a lock."
+    },
+    "HOME_GROUP": {
+      "maps_to": "home_group",
+      "required": false
+    },
+    "SCHOOL_YEAR": {
+      "maps_to": "year_level",
+      "required": true,
+      "validate": "integer within configured year-level range"
+    }
+  },
+  "ageGroupRule": {
+    "cutOff": "12-31",
+    "$comment": "Age as at 31 December of the competition year, per School Sport Victoria convention. Confirmed by project owner 2026-07-24. MM-DD only: the year is not configured here - each roster import names its competition year (defaulting to the year of the next carnival), so this file needs no yearly edit. A legacy cutOffDate (YYYY-MM-DD) is still read for its month and day; its year is ignored.",
+    "$openBandComment": "OPTIONAL senior band. Set openFromAge to collapse every student at or above that age into one band, and openLabel to name it (default 'SNR'). NOT set here: this school competes by plain age. 'OPEN' is REFUSED as openLabel - that token is reserved for an event scoped OPEN ACROSS the age axis (every age eligible), so a band of that name could never be scheduled as a division of its own (ADR-0014 Review notes 1). A purely numeric label is refused for the same class of reason: it would be indistinguishable from the plain age the derivation already produces. Example: \"openFromAge\": 17, \"openLabel\": \"SNR\"."
+  }
+}

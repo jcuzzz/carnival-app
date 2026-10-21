@@ -1,0 +1,91 @@
+name: E2E
+
+# Playwright is ~10 runner-minutes, which the free 2000/month cannot afford on
+# every push (owner ruling 2026-09-08). It runs weekly, and on demand before a
+# release or after a change to the flows it covers.
+on:
+  schedule:
+    # Sunday 17:00 UTC = Monday 03:00 AEST.
+    - cron: '0 17 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # Started here rather than left to playwright.config.ts so the generated
+      # -types drift check below has an API to read the OpenAPI document from.
+      # Both webServer entries set reuseExistingServer: true, and Playwright
+      # probes the url before spawning — with something already answering
+      # /health it logs "WebServer is already available", starts nothing, and
+      # leaves this process alone at teardown. So the API is started once, not
+      # twice, and the e2e run below no longer pays its cold start.
+      # Development => Database:Provider=Sqlite (throwaway file + synthetic
+      # seed via the `http` launch profile), so no database service is needed.
+      - name: Start dev API
+        run: nohup dotnet run --launch-profile http > "$RUNNER_TEMP/api.log" 2>&1 &
+        working-directory: api/src/CarnivalApp.Api
+      - name: npm ci
+        run: npm ci
+        working-directory: app
+      # No wait-on dependency: poll the same /health endpoint Playwright probes.
+      # 180s matches the webServer timeout in playwright.config.ts — a cold
+      # runner pays a NuGet restore + build here before the port opens.
+      - name: Wait for the dev API
+        run: |
+          for i in $(seq 1 180); do
+            if curl -fsS http://localhost:5080/health > /dev/null 2>&1; then
+              echo "API healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::The dev API never answered http://localhost:5080/health within 180s. API log follows."
+          cat "$RUNNER_TEMP/api.log" || true
+          exit 1
+      # ADR-0012 commits app/src/api/generated.d.ts but nothing checked it still
+      # matched the server; a contract change could land with stale client types
+      # and CI stayed green. The OpenAPI document is Development-only, so the
+      # only way to diff is against a live API — hence this sits after the boot
+      # above and before the ~1-2 minute browser install, so drift fails fast.
+      # Weekly since 2026-09-08, so drift can now sit on main for up to a week.
+      - name: Check generated API types are current
+        run: |
+          npm run generate:types
+          if ! git diff --exit-code -- src/api/generated.d.ts; then
+            echo '::error file=app/src/api/generated.d.ts::app/src/api/generated.d.ts is out of date with the API OpenAPI document (see the diff in this step). Fix: start the dev API (pwsh scripts/dev-run.ps1 -ApiOnly), run `npm run generate:types` from app/, and commit the regenerated file.'
+            exit 1
+          fi
+          echo "generated.d.ts is in sync with the API OpenAPI document."
+        working-directory: app
+      # Chromium and WebKit only — the device profiles in playwright.config.ts
+      # need no other engine, and Firefox is not a school-device browser.
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium webkit
+        working-directory: app
+      # playwright.config.ts owns BOTH servers (the API on the throwaway SQLite
+      # loop with the synthetic seed, and Vite). The API started above is
+      # reused; Vite is started here.
+      - name: npm run test:e2e
+        run: npm run test:e2e
+        working-directory: app
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: app/test-results/
+          retention-days: 7

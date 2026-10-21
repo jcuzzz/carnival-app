@@ -1,0 +1,129 @@
+{
+  "$comment": "Swimming carnival event template. School configuration data, applied to a carnival via POST /api/v1/carnivals/{id}/apply-template. A division is an age x category x tier. The age codes must match the codes the roster import derives (age as at 31 December of the competition year), or entries will not match events.",
+  "template": "swimming",
+  "name": "Swimming carnival",
+  "divisions": {
+    "$comment": "One division per age group, 12 to 18: each age is a separate event with its own placings and house points. Ages that swim together in one pool session are a schedule slot holding several divisions, never one merged event.",
+    "ageGroups": ["12", "13", "14", "15", "16", "17", "18"],
+    "categories": ["M", "F"],
+    "tiers": ["Competitive", "Social"]
+  },
+  "schedule": {
+    "$comment": "The default program. Advisory only: nothing is gated on it, so it drives the program printout and the 'next event' navigation, and an event in no slot is fully usable. A carnival has one or more streams that run concurrently (swimming has the single 'Pool'), each holding slots in running order. A slot either lists event definition codes ('events') - a block holding every instance of those definitions in age x category x tier order - or lists none, making it a non-competition program item whose 'label' is the printed line. A slot holding several instances is also how combined running is expressed: the events keep their own placings and points and share the water. Times are local 24-hour clock times ('HH:mm'): the carnival owns the date and the school owns the timezone. Applying the template is idempotent: a stream is matched by name and a slot by label, an existing one is never rewritten, and only unscheduled events are placed, so a re-apply cannot undo an organiser's edits.",
+    "streams": [
+      {
+        "name": "Pool",
+        "slots": [
+          { "start": "08:40", "label": "Buses depart for the pool" },
+          { "start": "09:00", "label": "Arrival, roll call and warm-up" },
+          { "start": "09:45", "label": "FREESTYLE EVENTS", "events": ["SW-50-FREE"] },
+          {
+            "$comment": "Novelty items are house-point adjustments, not results: the slot names its adjustment category so the program and the adjustments panel agree, and it never holds events. The category must be one the carnival has configured (the defaults are 'Novelty 1'..'Novelty 3', 'Best Dressed House', 'Loudest House'). Race names are the school's to set each year.",
+            "start": "10:30", "label": "Novelty event #1 - PIGGY BACK RACE", "adjustmentCategory": "Novelty 1"
+          },
+          { "start": "10:45", "label": "BACKSTROKE EVENTS", "events": ["SW-50-BACK"] },
+          { "start": "11:30", "label": "Novelty event #2", "adjustmentCategory": "Novelty 2" },
+          { "start": "11:45", "label": "BREASTSTROKE EVENTS", "events": ["SW-50-BREAST"] },
+          { "start": "12:25", "label": "Novelty event #3", "adjustmentCategory": "Novelty 3" },
+          { "start": "12:45", "label": "BUTTERFLY EVENTS", "events": ["SW-50-FLY"] },
+          {
+            "$comment": "Both relays run in one house relay block, freestyle first.",
+            "start": "13:30", "label": "HOUSE RELAY", "events": ["SW-4X50-FREE-RELAY", "SW-4X50-MEDLEY-RELAY"]
+          },
+          { "start": "13:40", "label": "STAFF v STUDENT RELAY" },
+          { "start": "13:50", "label": "House chants and Best Dressed House" },
+          { "start": "14:00", "label": "Announcements and presentations" },
+          { "start": "14:15", "label": "Buses depart for school" }
+        ]
+      }
+    ]
+  },
+  "definitions": [
+    {
+      "code": "SW-50-FREE",
+      "name": "Freestyle 50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Freestyle", "distance:50m"]
+    },
+    {
+      "code": "SW-50-BREAST",
+      "name": "Breaststroke 50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Breaststroke", "distance:50m"]
+    },
+    {
+      "code": "SW-50-BACK",
+      "name": "Backstroke 50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Backstroke", "distance:50m"]
+    },
+    {
+      "code": "SW-50-FLY",
+      "name": "Butterfly 50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "tags": ["discipline:Butterfly", "distance:50m"]
+    },
+    {
+      "$comment": "A placed and scored pool event, entered and scored like any individual event - distinct from the novelty house-point adjustments. No school-record category. Competitive only, with no Social twins. In no schedule slot, so its instances start unscheduled: they still take entries and results, and an organiser runs them when there is a gap.",
+      "code": "SW-NOVELTY",
+      "name": "Novelty Race",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": false,
+      "tiers": ["Competitive"],
+      "tags": ["discipline:Novelty"]
+    },
+    {
+      "$comment": "Team event: one house team of 4, a single team time, placings score double (scoringWeight 2). Contested per age and as one open all-ages house relay per category (openDivision). Four freestyle legs. Competitive only.",
+      "code": "SW-4X50-FREE-RELAY",
+      "name": "Freestyle Relay 4x50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "format": "Team",
+      "teamSize": 4,
+      "legs": ["Freestyle", "Freestyle", "Freestyle", "Freestyle"],
+      "scoringWeight": 2,
+      "openDivision": true,
+      "tiers": ["Competitive"],
+      "tags": ["discipline:Freestyle"]
+    },
+    {
+      "$comment": "Team event. Medley leg order back, breast, fly, free. Otherwise as SW-4X50-FREE-RELAY: teams of 4, double points, per-age and open divisions, Competitive only.",
+      "code": "SW-4X50-MEDLEY-RELAY",
+      "name": "Medley Relay 4x50m",
+      "sport": "Swimming",
+      "measureType": "Time",
+      "units": "s",
+      "active": true,
+      "schoolRecords": true,
+      "format": "Team",
+      "teamSize": 4,
+      "legs": ["Backstroke", "Breaststroke", "Butterfly", "Freestyle"],
+      "scoringWeight": 2,
+      "openDivision": true,
+      "tiers": ["Competitive"],
+      "tags": ["discipline:Medley"]
+    }
+  ]
+}

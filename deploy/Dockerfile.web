@@ -1,0 +1,47 @@
+# Web image: PWA static build + Caddy reverse proxy in one container
+# (docs/development/frontend-deployment.md). Build context is the REPO ROOT
+# (compose: context ., dockerfile deploy/Dockerfile.web) so this file can
+# copy both app/ and deploy/Caddyfile. The root .dockerignore keeps the
+# context small (excludes node_modules, dist, api/, docs/, ...).
+
+# --- Stage 1: build the PWA ------------------------------------------
+FROM node:22-alpine AS build
+WORKDIR /build
+
+# Install with the lockfile first for layer caching.
+COPY app/package.json app/package-lock.json ./
+RUN npm ci
+
+COPY app/ ./
+
+# VITE_DEMO_MODE is a BUILD-TIME flag (Vite inlines it into the bundle).
+# Default false = the school build (Entra/ADFS sign-in, no banner). true = the
+# public-demo build for a demo host (ADR-0061): DEMO MODE banner, landing page,
+# identity from the demo session cookie. See docs/development/frontend-deployment.md.
+ARG VITE_DEMO_MODE=false
+ENV VITE_DEMO_MODE=${VITE_DEMO_MODE}
+
+# Production build: app/.env.development is NOT loaded (dev mode only), so
+# VITE_API_BASE is unset and the app calls same-origin relative /api/v1.
+RUN npm run build
+
+# --- Stage 2: Caddy serving dist + proxying /api ---------------------
+FROM caddy:2
+
+# Non-root (assessment C3). The caddy image ships no unprivileged user, and an
+# unprivileged one cannot bind 80/443 — hence the 8080/8443 listeners in the
+# Caddyfile and the 80->8080 / 443->8443 mapping in docker-compose.yml.
+# setcap -r is required, not tidiness: /usr/bin/caddy carries
+# cap_net_bind_service=ep, and an effective-bit file capability outside the
+# bounding set makes execve fail EPERM under cap_drop: [ALL] — the container
+# would never start. The /data and /config volumes predate this change, so
+# scripts/deploy/vm-deploy.sh chowns their existing root-owned contents.
+RUN addgroup -g 10001 caddy \
+ && adduser -D -u 10001 -G caddy -h /srv -H caddy \
+ && setcap -r /usr/bin/caddy \
+ && chown -R caddy:caddy /data /config
+
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build --chown=caddy:caddy /build/dist /srv
+
+USER caddy

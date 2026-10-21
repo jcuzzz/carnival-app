@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Two jobs, ~9 runner-minutes. Weekly only since 2026-09-08 (owner ruling: the
+# repo stays inside the free 2000 Actions minutes) — run it by hand before a
+# release or after touching authorisation, query or file-handling code.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # build-mode none skips autobuild for both languages, so C# needs no SDK here.
+        language: [javascript-typescript, csharp]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      # Private repo without Advanced Security: uploading to code scanning is refused,
+      # so the SARIF is kept as an artifact and error-level results fail the job here.
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+          upload: never
+          output: codeql-results
+      - uses: actions/upload-artifact@v7
+        with:
+          name: codeql-${{ matrix.language }}
+          path: codeql-results
+          retention-days: 90
+      - name: Fail on error-level findings
+        run: |
+          errors=$(jq '[.runs[].results[] | select(.level == "error")] | length' codeql-results/*.sarif | paste -sd+ | bc)
+          echo "error-level results: $errors"
+          jq -r '.runs[].results[] | select(.level == "error") | "\(.ruleId): \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 0)"' codeql-results/*.sarif || true
+          test "$errors" -eq 0

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dev-dist/
+*.local
+test-results/
+playwright-report/
+# UI review captures (npm run screenshots): regenerated on demand, never
+# reviewed as a diff, never uploaded. The README beside them IS committed.
+ui-review/*.png
+ui-review/index.html
