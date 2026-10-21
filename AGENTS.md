@@ -16,7 +16,7 @@ This file is the canonical instruction set for humans and AI coding agents alike
 
 ## Commands
 
-- API: `cd api && dotnet build` / `dotnet test`; migrations: `dotnet ef migrations add <Name>` in `api/src/CarnivalApp.Api`
+- API: `cd api && dotnet build` / `dotnet test`; migrations: `dotnet ef migrations add <Name> --context SportsDbContext` in `api/src/CarnivalApp.Api`
 - App: `cd app && npm ci && npm run build` (Vite); dev server `npm run dev`; tests `npm test` (Vitest)
 - Synthetic data: `python scripts/generate_synthetic_roster.py`
 - Testcontainers tests skip when Docker is unavailable.
