@@ -2,7 +2,7 @@
 
 The platform never owns student identity. A system administrator uploads a CSV export from the school's student system; the API stages it, validates every row, shows what would change, and only writes the roster when the batch is approved and promoted. The importer reads a CASES21 ST-shaped export today.
 
-A generic canonical CSV template (any school, built from date of birth, with CASES21 as one preset and status, gender and year-level values in configuration) is planned; see `docs/HANDOFF.md`. This page describes what exists now.
+A generic canonical CSV template (any school, built from date of birth, with CASES21 as one preset and status, gender and year-level values in configuration) is planned, with test rosters built in code instead of committed fixtures ([ADR-0064](../adr/0064-canonical-roster-csv-and-test-rosters-built-in-code.md), proposed). This page describes what exists now.
 
 ## Pipeline
 

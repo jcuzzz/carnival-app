@@ -1,6 +1,6 @@
 # ADR-0033: The real-shape roster fixture is generated, never sanitised
 
-- **Status:** Accepted (2026-09)
+- **Status:** Accepted (2026-09). §1 (committed fixtures written by a Python generator) is proposed to be superseded by [ADR-0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md), which builds test rosters in code; §2–§5 stand.
 
 ## Context
 

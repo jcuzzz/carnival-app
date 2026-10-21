@@ -26,7 +26,7 @@ Nice to have at launch: README screenshots (synthetic data only) and a live demo
 
 ## Next (Phase 2 — each needs an ADR first)
 
-1. **Generic roster import**: a canonical CSV from date of birth; CASES21 becomes a preset; status, gender and year-level values move into configuration. Blocker: `RosterImportService` hard-codes the CASES21 column names and ignores `maps_to`.
+1. **Generic roster import** ([ADR-0064](adr/0064-canonical-roster-csv-and-test-rosters-built-in-code.md), proposed: maintainer to accept): a canonical CSV from date of birth; CASES21 becomes a preset; status, gender and year-level values move into configuration; test rosters are built by a seeded C# builder and only a small sample roster is committed. Code changes go in the private pilot repository (`api/`, `data/`, `scripts/` are ported). Blocker: `RosterImportService` hard-codes the CASES21 column names and ignores `maps_to`.
 2. **Records toggle**: a per-school `recordsEnabled` setting, enforced server-side.
 3. **Built-in accounts + generic OIDC**: local accounts by default, one OIDC provider as the upgrade, replacing the Entra/ADFS-specific paths.
 4. **School deployment template** (configuration only, pinned to a release) and a self-host guide pass for a tech-capable teacher (`docs/admin/self-host.md` exists).
