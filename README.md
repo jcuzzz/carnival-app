@@ -21,14 +21,6 @@ Free, self-hostable software for running school **swimming and athletics carniva
 - **Develop on Windows:** [docs/development/local-dev.md](docs/development/local-dev.md).
 - **Self-host for a school:** [docs/admin/self-host.md](docs/admin/self-host.md): Docker Compose with PostgreSQL 17, backups and Caddy.
 
-## How this was built
-
-Carnival App was designed and directed by one developer and built with AI coding agents (Claude Code). The developer made every product and architecture decision and reviewed the work. Agents implemented it under explicit gates:
-
-- **Decisions first:** 60+ [architecture decision records](docs/adr/) capture what was decided and why, before the code changed.
-- **Proof, not assertion:** large mechanical changes were checked by token-stream equality against the previous code, pixel-identical screenshot diffs, and full test suites (~2,000 API tests, ~1,600 app tests).
-- **Instructions in the open:** [AGENTS.md](AGENTS.md), [docs/development/agent-practices.md](docs/development/agent-practices.md) and [.claude/skills/](.claude/skills/) are the actual instructions the agents worked under.
-
 ## Documentation
 
 - [Architecture decision records](docs/adr/): one file per decision
