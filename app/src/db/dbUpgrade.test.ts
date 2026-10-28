@@ -39,7 +39,7 @@ const parked: OutboxItem = {
 };
 
 async function seedV5(): Promise<void> {
-  const legacy = new Dexie("sports-platform");
+  const legacy = new Dexie("carnival-app");
   legacy.version(5).stores(V5_STORES);
   await legacy.open();
   await legacy.table("eventRosters").put({

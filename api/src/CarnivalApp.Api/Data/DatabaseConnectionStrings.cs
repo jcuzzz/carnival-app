@@ -9,13 +9,13 @@ namespace CarnivalApp.Api.Data;
 public static class DatabaseConnectionStrings
 {
     public const string DevelopmentFallback =
-        "Host=localhost;Port=5432;Database=sports;Username=sports;Password=dev-only";
+        "Host=localhost;Port=5432;Database=carnival;Username=carnival;Password=dev-only";
 
     public static string Application(IConfiguration configuration) =>
-        Configured(configuration, "SportsDb") ?? DevelopmentFallback;
+        Configured(configuration, "CarnivalAppDb") ?? DevelopmentFallback;
 
     public static string? MigrationsOverride(IConfiguration configuration) =>
-        Configured(configuration, "SportsDbMigrations");
+        Configured(configuration, "CarnivalAppDbMigrations");
 
     public static string Migrations(IConfiguration configuration) =>
         MigrationsOverride(configuration) ?? Application(configuration);
@@ -33,9 +33,9 @@ public static class DatabaseConnectionStrings
 /// </summary>
 public static class MigrationContextOptions
 {
-    public static DbContextOptions<SportsDbContext> Build(
+    public static DbContextOptions<CarnivalAppDbContext> Build(
         string connectionString, ILoggerFactory loggerFactory) =>
-        new DbContextOptionsBuilder<SportsDbContext>()
+        new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseNpgsql(connectionString)
             .UseLoggerFactory(loggerFactory)
             .Options;

@@ -11,7 +11,7 @@ using CarnivalApp.Api.Data;
 
 namespace CarnivalApp.Api.Migrations
 {
-    [DbContext(typeof(SportsDbContext))]
+    [DbContext(typeof(CarnivalAppDbContext))]
     [Migration("20260731010422_WidenActorRoleColumns")]
     partial class WidenActorRoleColumns
     {

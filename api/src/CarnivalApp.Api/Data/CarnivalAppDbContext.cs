@@ -7,7 +7,7 @@ namespace CarnivalApp.Api.Data;
 /// Model and queries stay provider-clean — string enums, no Postgres-only SQL or column types —
 /// to keep a SQL Server deployment possible.
 /// </summary>
-public class SportsDbContext(DbContextOptions<SportsDbContext> options) : DbContext(options)
+public class CarnivalAppDbContext(DbContextOptions<CarnivalAppDbContext> options) : DbContext(options)
 {
     public DbSet<SchoolConfiguration> SchoolConfigurations => Set<SchoolConfiguration>();
     public DbSet<Student> Students => Set<Student>();
@@ -40,6 +40,6 @@ public class SportsDbContext(DbContextOptions<SportsDbContext> options) : DbCont
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(SportsDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CarnivalAppDbContext).Assembly);
     }
 }

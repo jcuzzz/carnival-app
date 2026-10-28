@@ -512,7 +512,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
         factory.Race.ArmOnce("INSERT INTO \"CarnivalDivisions\"", transaction =>
         {
             using var scope = factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.CarnivalDivisions.Add(new CarnivalDivision
             {
@@ -1038,7 +1038,7 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
         params (string AgeGroup, bool Current, bool Active, int SchoolYear)[] rows)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var batch = new ImportBatch
         {
             Id = Guid.CreateVersion7(),

@@ -8,8 +8,8 @@ export interface Session {
   roles: PlatformRole[];
 }
 
-const STORAGE_KEY = "sports.session";
-const CLEAR_PENDING_KEY = "sports.deviceClearPending";
+const STORAGE_KEY = "carnival.session";
+const CLEAR_PENDING_KEY = "carnival.deviceClearPending";
 /** Workbox runtime cache of raw GET /api/v1/* bodies. */
 const API_READ_CACHE = "api-reads";
 

@@ -19,7 +19,7 @@
 set -Eeuo pipefail
 umask 077
 
-DRILL_DB="sports_drill"
+DRILL_DB="carnival_drill"
 
 IDENTITY="${1:-}"
 [ -n "$IDENTITY" ] || { echo "usage: $0 <age-identity-file>" >&2; exit 1; }

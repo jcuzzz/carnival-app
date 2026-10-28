@@ -16,7 +16,7 @@ public static class SchoolSettingsBootstrap
         IServiceProvider services, string? identifierOverride = null, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(SchoolSettingsBootstrap).FullName!);

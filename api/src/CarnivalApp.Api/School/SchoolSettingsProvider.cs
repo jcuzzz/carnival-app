@@ -147,7 +147,7 @@ public sealed class SchoolSettingsProvider(
 
         var generation = Volatile.Read(ref slot.Generation);
         using var scope = scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var row = await db.SchoolConfigurations.AsNoTracking().TheSchool().FirstOrDefaultAsync(ct)
             ?? throw new InvalidOperationException(
                 "No SchoolConfiguration row exists. SchoolSettingsBootstrap creates one at startup "

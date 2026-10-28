@@ -51,7 +51,7 @@ public sealed class SocialScoringTests : IDisposable
         Guid carnivalId;
         using (var scope = _factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             var now = DateTimeOffset.UtcNow;
             var carnival = new Carnival
             {
@@ -133,7 +133,7 @@ public sealed class SocialScoringTests : IDisposable
         }
 
         using var readScope = _factory.Services.CreateScope();
-        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
         var standings = await scoring.ComputeAsync(carnivalId, default);
         Assert.NotNull(standings);
         return standings!;

@@ -32,10 +32,10 @@ services:
       # (absent from the runtime image) on every physical connection. Kerberos is not used.
       # Two roles (ADR-0047 §3): requests run as the least-privilege role, which
       # deploy/db/init-roles.sql creates — a stack brought up without that script
-      # has no sports_app and the api cannot connect.
-      ConnectionStrings__SportsDb: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER:-sports_app};Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable"
+      # has no carnival_app and the api cannot connect.
+      ConnectionStrings__CarnivalAppDb: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER:-carnival_app};Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable"
       # Migrations only, as the owner role. Unset = both paths use the string above.
-      ConnectionStrings__SportsDbMigrations: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      ConnectionStrings__CarnivalAppDbMigrations: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       School__Name: ${SCHOOL_NAME}
       School__Timezone: ${SCHOOL_TIMEZONE}
       # Optional brand colour (ADR-0040 §3), #rrggbb or #rgb. Empty means the
@@ -183,16 +183,16 @@ services:
         KEEP_MIN=3
         while true; do
           TS="$$(date +%Y%m%d-%H%M%S)"
-          TMP="/tmp/sports-$$TS.dump"
+          TMP="/tmp/carnival-app-$$TS.dump"
           WROTE=0
           if pg_dump -Fc -f "$$TMP"; then
             if [ "$$BACKUP_ENCRYPTION" = "off" ]; then
-              mv "$$TMP" "/backups/sports-$$TS.dump" && WROTE=1
-            elif age -r "$$BACKUP_AGE_RECIPIENT" -o "/backups/.sports-$$TS.partial" "$$TMP"; then
-              mv "/backups/.sports-$$TS.partial" "/backups/sports-$$TS.dump.age" && WROTE=1
+              mv "$$TMP" "/backups/carnival-app-$$TS.dump" && WROTE=1
+            elif age -r "$$BACKUP_AGE_RECIPIENT" -o "/backups/.carnival-app-$$TS.partial" "$$TMP"; then
+              mv "/backups/.carnival-app-$$TS.partial" "/backups/carnival-app-$$TS.dump.age" && WROTE=1
             else
               echo "backup: encryption failed; no backup written this cycle" >&2
-              rm -f "/backups/.sports-$$TS.partial"
+              rm -f "/backups/.carnival-app-$$TS.partial"
             fi
           else
             echo "backup: pg_dump failed; no backup written this cycle" >&2

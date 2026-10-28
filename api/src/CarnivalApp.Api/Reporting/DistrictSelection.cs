@@ -24,7 +24,7 @@ public static class DistrictSelection
         string Name, int YearLevel, string Result);
 
     public static async Task<IReadOnlyList<SelectionRow>> BuildAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var ladder = await EventLadder.BuildAsync(db, carnivalId, ct);
         var rows = new List<SelectionRow>();

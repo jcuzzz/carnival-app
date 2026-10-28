@@ -14,7 +14,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Overridable: 5173 is a shared default, and another project's dev server on
 // it would otherwise be reused and driven instead of this app.
-const APP_URL = process.env.SPORTS_APP_URL ?? "http://localhost:5173";
+const APP_URL = process.env.CARNIVAL_APP_URL ?? "http://localhost:5173";
 const API_URL = "http://localhost:5080";
 
 export default defineConfig({

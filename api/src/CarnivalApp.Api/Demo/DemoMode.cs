@@ -17,7 +17,7 @@ public static class DemoMode
     /// <summary>The provisioner role on the control database: CREATEDB, no visitor table grants.</summary>
     public const string ControlConnectionName = "DemoControl";
 
-    public const string DefaultTemplateDatabase = "sports_demo_template";
+    public const string DefaultTemplateDatabase = "carnival_demo_template";
     public const int DefaultPoolSize = 3;
     public const int DefaultMaxSessions = 100;
 

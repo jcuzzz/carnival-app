@@ -62,14 +62,14 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
     private async Task<List<AuditEvent>> AuditAsync(string action)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         return await db.AuditEvents.AsNoTracking().Where(e => e.Action == action).ToListAsync();
     }
 
     private async Task<RoleAssignment> RowAsync(Guid id)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         return await db.RoleAssignments.AsNoTracking().SingleAsync(row => row.Id == id);
     }
 
@@ -88,7 +88,7 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
     private async Task SeedAsync(params RoleAssignment[] rows)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         db.RoleAssignments.AddRange(rows);
         await db.SaveChangesAsync();
         _factory.Services.GetRequiredService<RoleAssignmentProvider>().Invalidate();
@@ -393,7 +393,7 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
     public void Uniqueness_over_the_ACTIVE_rows_is_a_filtered_index_on_upn_and_role()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var index = Assert.Single(
             db.Model.FindEntityType(typeof(RoleAssignment))!.GetIndexes(), i => i.IsUnique);
         Assert.Equal(["SubjectUpn", "Role"], index.Properties.Select(p => p.Name));
@@ -406,7 +406,7 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
         // The endpoint's duplicate check races with itself; this is the guard the
         // GrantAsync DbUpdateException catch turns back into a 409.
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         db.RoleAssignments.AddRange(
             Row("clash@school.test", PlatformRole.Recorder),
             Row("clash@school.test", PlatformRole.Recorder));

@@ -70,12 +70,12 @@ Type: `--font-ui` is `"Inter Variable", system-ui, "Segoe UI", Roboto, sans-seri
 
 ## Outdoor / high contrast
 
-`data-theme="outdoor"` on `<html>` overrides `--ink`, `--muted`, `--line`, `--wash` and `--placeholder` at ~7:1. `@media (prefers-contrast: more)` applies the same overrides automatically. The toggle lives in the shell header (`shell/OutdoorToggle.tsx`), is persisted per device in `localStorage["sports.theme"]`, and is applied before first paint from `main.tsx`. There is no dark mode — on a pool deck it is worse, and nothing here wants it.
+`data-theme="outdoor"` on `<html>` overrides `--ink`, `--muted`, `--line`, `--wash` and `--placeholder` at ~7:1. `@media (prefers-contrast: more)` applies the same overrides automatically. The toggle lives in the shell header (`shell/OutdoorToggle.tsx`), is persisted per device in `localStorage["carnival.theme"]`, and is applied before first paint from `main.tsx`. There is no dark mode — on a pool deck it is worse, and nothing here wants it.
 
 To add an outdoor value, put it on the token in `tokens.json`:
 
 ```json
-"muted": { "$value": "#5a6675", "$extensions": { "sports.outdoor": "#3d4654" } }
+"muted": { "$value": "#5a6675", "$extensions": { "carnival.outdoor": "#3d4654" } }
 ```
 
 then `npm run generate:tokens` and commit both files.

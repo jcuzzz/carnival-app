@@ -27,7 +27,7 @@ public static class CompetitionYears
         year >= Earliest(today) && year <= Latest(today);
 
     // A November import ahead of a February carnival belongs to the carnival's year.
-    public static async Task<int> DefaultAsync(SportsDbContext db, DateOnly today, CancellationToken ct)
+    public static async Task<int> DefaultAsync(CarnivalAppDbContext db, DateOnly today, CancellationToken ct)
     {
         var horizon = new DateOnly(Latest(today), 12, 31);
         var next = await db.Carnivals.AsNoTracking()

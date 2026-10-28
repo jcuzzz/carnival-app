@@ -41,13 +41,13 @@ if (useSqlite)
         sqlitePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CarnivalApp", "dev.db");
-    builder.Services.AddDbContext<SportsDbContext>(options =>
+    builder.Services.AddDbContext<CarnivalAppDbContext>(options =>
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(sqlitePath))!);
         options.UseSqlite($"Data Source={sqlitePath}");
     });
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<SportsDbContext>(name: "sqlite");
+        .AddDbContextCheck<CarnivalAppDbContext>(name: "sqlite");
 }
 else
 {
@@ -59,7 +59,7 @@ else
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<VisitorDatabase>();
         builder.Services.AddSingleton<IDatabaseKey>(sp => sp.GetRequiredService<VisitorDatabase>());
-        builder.Services.AddDbContext<SportsDbContext>((sp, options) =>
+        builder.Services.AddDbContext<CarnivalAppDbContext>((sp, options) =>
             options.UseNpgsql(sp.GetRequiredService<VisitorDatabase>().ConnectionString(connectionString, poolSize)));
         builder.Services.AddDbContext<DemoControlDbContext>(options =>
             options.UseNpgsql(DemoMode.ControlConnectionString(builder.Configuration)));
@@ -70,7 +70,7 @@ else
     }
     else
     {
-        builder.Services.AddDbContext<SportsDbContext>(options =>
+        builder.Services.AddDbContext<CarnivalAppDbContext>(options =>
             options.UseNpgsql(connectionString));
         builder.Services.AddRetention();
     }
@@ -121,10 +121,10 @@ app.Logger.LogInformation(
 
 // The Development fallback carries a literal localhost password, so nothing else may run on it.
 if (!app.Environment.IsDevelopment()
-    && string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("SportsDb")))
+    && string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("CarnivalAppDb")))
     throw new InvalidOperationException(
-        "ConnectionStrings:SportsDb is not configured. Set it in appsettings.School.json or as "
-        + "ConnectionStrings__SportsDb before starting the API.");
+        "ConnectionStrings:CarnivalAppDb is not configured. Set it in appsettings.School.json or as "
+        + "ConnectionStrings__CarnivalAppDb before starting the API.");
 
 var seedSynthetic = useSqlite && app.Environment.IsDevelopment()
     && app.Configuration.GetValue("Database:SeedSyntheticData", false);
@@ -132,7 +132,7 @@ var seedSynthetic = useSqlite && app.Environment.IsDevelopment()
 if (useSqlite)
 {
     using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
     await db.Database.EnsureCreatedAsync();
 }
 // Demo: the template is migrated and bootstrapped when it is built; a clone is never migrated in place.
@@ -142,7 +142,7 @@ else if (!demoMode && app.Configuration.GetValue("Database:ApplyMigrationsOnStar
     var migrationsConnectionString = DatabaseConnectionStrings.MigrationsOverride(app.Configuration);
     if (migrationsConnectionString is not null)
     {
-        await using var db = new SportsDbContext(MigrationContextOptions.Build(
+        await using var db = new CarnivalAppDbContext(MigrationContextOptions.Build(
             migrationsConnectionString, app.Services.GetRequiredService<ILoggerFactory>()));
         var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
         app.Logger.LogInformation(
@@ -154,7 +154,7 @@ else if (!demoMode && app.Configuration.GetValue("Database:ApplyMigrationsOnStar
     else
     {
         using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         await db.Database.MigrateAsync();
     }
 }

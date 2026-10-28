@@ -36,7 +36,7 @@ public sealed class AdjustmentEndpointsTests : IDisposable
     private async Task<Guid> SeedCarnivalAsync(CarnivalStatus status = CarnivalStatus.Open)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = new Carnival
         {
             Id = Guid.CreateVersion7(),
@@ -172,7 +172,7 @@ public sealed class AdjustmentEndpointsTests : IDisposable
         Assert.True((int)r2.StatusCode < 300); // replayed, not an error
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(1, await db.HousePointsAdjustments.CountAsync(a => a.CarnivalId == id));
     }
 
@@ -221,7 +221,7 @@ public sealed class AdjustmentEndpointsTests : IDisposable
         var adjId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var adjustment = await db.HousePointsAdjustments.SingleAsync(a => a.Id == adjId);
         Assert.Equal("admin-departed", adjustment.RecordedBySubject); // never re-attributed
         Assert.Null(adjustment.RecordedByRole);
@@ -241,7 +241,7 @@ public sealed class AdjustmentEndpointsTests : IDisposable
         var adjId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var audit = await db.AuditEvents.SingleAsync(
             a => a.EntityId == adjId.ToString() && a.Action == AuditActions.HouseAdjustmentCreate);
         Assert.Equal("event-admin", audit.ActorSubject);

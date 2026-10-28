@@ -79,10 +79,10 @@ On its first start against an empty database the API writes one `SchoolConfigura
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `POSTGRES_DB` | Database name | none | Yes | Example: `sports`. |
+| `POSTGRES_DB` | Database name | none | Yes | Example: `carnival`. |
 | `POSTGRES_USER` | The owner role: owns the schema, runs migrations | none | Yes | Never used by requests. |
 | `POSTGRES_PASSWORD` | Owner role password | none | Yes | **Secret.** Long and random. |
-| `APP_DB_USER` | The application role every request runs as | `sports_app` | Yes | Data access only; no updates or deletes on the audit table. Created by `deploy/db/init-roles.sql`, which the deploy script runs. |
+| `APP_DB_USER` | The application role every request runs as | `carnival_app` | Yes | Data access only; no updates or deletes on the audit table. Created by `deploy/db/init-roles.sql`, which the deploy script runs. |
 | `APP_DB_PASSWORD` | Application role password | none | Yes | **Secret.** Different from the owner password. |
 | `APPLY_MIGRATIONS` | Applies pending database migrations at start-up, as the owner role | `false` | — | `true` for the first start or an upgrade that carries a migration, then back to `false`. See [upgrades](self-host.md#6-upgrades). |
 
@@ -143,8 +143,8 @@ Keys the compose file sets for you, or that you set through the override file or
 
 | Key | Purpose |
 |---|---|
-| `ConnectionStrings:SportsDb` | The application role's connection string. Required outside Development: the API refuses to start without it. |
-| `ConnectionStrings:SportsDbMigrations` | The owner role's connection string, used only for start-up migrations. Unset, migrations use `SportsDb`. |
+| `ConnectionStrings:CarnivalAppDb` | The application role's connection string. Required outside Development: the API refuses to start without it. |
+| `ConnectionStrings:CarnivalAppDbMigrations` | The owner role's connection string, used only for start-up migrations. Unset, migrations use `CarnivalAppDb`. |
 | `Database:ApplyMigrationsOnStartup` | Set from `APPLY_MIGRATIONS`. |
 | `School:Name`, `School:BrandColour` | As the `.env` variables above. An absent, empty or blank name seeds `(unconfigured)`. |
 | `School:Timezone` | IANA zone id. Absent, empty or blank, `Australia/Melbourne`; unknown, UTC for the import year (the audit stamp keeps the configured text). Stamped on every audit event and used to decide the roster import's default competition year. |
@@ -162,7 +162,7 @@ The `Demo:*` keys configure a public demo host only and stay unset on a school i
 | Key | Default |
 |---|---|
 | `Demo:Enabled` | `false`. `true` requires PostgreSQL, `Identity:Provider=Demo` and `ConnectionStrings:DemoControl`, or the API refuses to start. |
-| `Demo:TemplateDatabase` | `sports_demo_template` |
+| `Demo:TemplateDatabase` | `carnival_demo_template` |
 | `Demo:VisitorPoolSize` | `3` |
 | `Demo:MaxSessions` | `100` |
 | `Demo:ProvisionsPerIpPerHour` | `10` |

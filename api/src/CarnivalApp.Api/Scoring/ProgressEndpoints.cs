@@ -14,7 +14,7 @@ public static class ProgressEndpoints
     }
 
     private static async Task<IResult> GetProgressAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var progress = await ProgressService.ComputeAsync(db, id, ct);
         return progress is null ? CarnivalGuards.CarnivalNotFound() : Results.Ok(progress);

@@ -132,7 +132,7 @@ fi
 # rebuild — so this is a gate, not a warning.
 PG_DB="$(env_value POSTGRES_DB)"
 PG_USER="$(env_value POSTGRES_USER)"
-APP_USER="$(env_value APP_DB_USER)"; [ -n "$APP_USER" ] || APP_USER="sports_app"
+APP_USER="$(env_value APP_DB_USER)"; [ -n "$APP_USER" ] || APP_USER="carnival_app"
 APP_PASSWORD="$(env_value APP_DB_PASSWORD)"
 if [ -z "$APP_PASSWORD" ] || [ -z "$PG_DB" ] || [ -z "$PG_USER" ]; then
   echo "POSTGRES_DB, POSTGRES_USER and APP_DB_PASSWORD must all be set in .env (see .env.example)." >&2

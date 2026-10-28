@@ -10,7 +10,7 @@ public sealed record AuditActor(string Subject, string? Role);
 /// Never calls SaveChanges: the row rides the caller's own save, so it commits or rolls back
 /// atomically with the mutation it records.
 /// </summary>
-public class AuditService(SportsDbContext db, IConfiguration configuration)
+public class AuditService(CarnivalAppDbContext db, IConfiguration configuration)
 {
     private static readonly string AppVersion =
         typeof(AuditService).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";

@@ -10,7 +10,7 @@ public sealed record RetentionOutcome(int IdempotencyKeysDeleted, int ImportBatc
 /// Ages out operational rows only. Record classes are never touched, and the removed rows are not
 /// audited entities, so nothing is audited per row.
 /// </summary>
-public sealed class RetentionSweep(SportsDbContext db, TimeProvider time)
+public sealed class RetentionSweep(CarnivalAppDbContext db, TimeProvider time)
 {
     public static readonly TimeSpan IdempotencyKeyRetention = TimeSpan.FromDays(30);
 
@@ -80,7 +80,7 @@ public sealed class RetentionJob(
     public async Task<bool> SweepOnceAsync(CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         if (!db.Database.IsNpgsql()) return false;
 
         var outcome = await scope.ServiceProvider.GetRequiredService<RetentionSweep>().RunAsync(ct);

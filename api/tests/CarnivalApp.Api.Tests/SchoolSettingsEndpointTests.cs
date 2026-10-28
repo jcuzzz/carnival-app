@@ -62,7 +62,7 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
     private async Task MutateRowAsync(Action<SchoolConfiguration> mutate)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var row = await db.SchoolConfigurations.SingleAsync();
         mutate(row);
         await db.SaveChangesAsync();
@@ -160,7 +160,7 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
         Assert.Equal("Renamed College", version.GetProperty("school").GetString());
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var audit = await db.AuditEvents.SingleAsync(a => a.Action == AuditActions.SchoolSettings);
         Assert.Equal("sys-1", audit.ActorSubject);
         Assert.Equal(nameof(SchoolConfiguration), audit.EntityType);
@@ -311,7 +311,7 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
     private async Task SeedRosterHouseAsync(string houseCode)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var batch = new ImportBatch
         {
             Id = Guid.CreateVersion7(),
@@ -478,7 +478,7 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
         _factory.Race.ArmOnce("UPDATE \"SchoolConfigurations\"", transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             var row = db.SchoolConfigurations.Single();
             row.Name = "Competitor";

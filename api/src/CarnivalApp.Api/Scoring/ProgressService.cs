@@ -59,7 +59,7 @@ public static class ProgressService
         IReadOnlyList<RecordToday> RecordsToday);
 
     public static async Task<CarnivalProgress?> ComputeAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == carnivalId, ct);
@@ -93,7 +93,7 @@ public static class ProgressService
         int Expected, int Recorded);
 
     private static async Task<List<EventProgress>> EventsAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var rows = await db.CarnivalEvents.AsNoTracking()
             .Where(e => e.CarnivalId == carnivalId)
@@ -152,7 +152,7 @@ public static class ProgressService
     private sealed record ParticipantRow(string HouseCode, Guid StudentId, bool Recorded);
 
     private static async Task<List<HouseParticipation>> ParticipationAsync(
-        SportsDbContext db, Guid carnivalId, CarnivalStatus status, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CarnivalStatus status, CancellationToken ct)
     {
         // There is no per-carnival roster: every active student's current snapshot.
         var roster = await db.RosterSnapshots.AsNoTracking()
@@ -219,7 +219,7 @@ public static class ProgressService
     // The comparison finalisation mints with, writing nothing: records mint only at finalisation.
     // Once finalised the book holds this carnival's own records, so those are read back instead.
     private static async Task<List<RecordToday>> RecordsTodayAsync(
-        SportsDbContext db, Guid carnivalId, bool finalised, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, bool finalised, CancellationToken ct)
     {
         var ladder = await EventLadder.BuildAsync(db, carnivalId, ct);
         var contested = ladder

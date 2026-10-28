@@ -36,7 +36,6 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P2]** Template reconcile diffs definitions only, so a changed slot division filter in a template never reaches an already-applied carnival's schedule.
 - **[P2]** School settings → Event templates auto-selects the alphabetically first template (athletics before swimming).
 - **[P2]** Dead model surface: `Result.Place` is never written; `ImportBatchStatus.Staged` is never persisted; audit actions `ResultVerify`, `ResultReturnToProvisional` and `CarnivalEventFinalise` have no writer; error codes `EVENT_FINALISED`, `EVENT_NOT_CLOSED`, `EVENT_FINALISE_VIA_GATE` and `FINALISATION_BLOCKED` have no emitter; `ResultEndpoints.TransitionRequest` is unused.
-- **[P2]** Internal runtime identifiers keep the pre-port `sports` prefix deliberately: IndexedDB `sports-platform`, localStorage `sports.*` keys, database and role names `sports`/`sports_app`, backup files `sports-<timestamp>.dump.age`. Renaming breaks existing installs, so any rename needs a migration path.
 - **[P3]** Remove the retired role-name aliases in `Identity/PlatformRoles.cs` once no deployment relies on them (alias hits are logged).
 - **[P3]** Drop the frozen legacy `Divisions` key from `Carnival.SettingsJson` (a data migration); it is carried through writes and never read.
 - **[P3]** Serialisable isolation only guards the definition editor against the reconciler; a result capture runs Read Committed, so editor-versus-first-result is a narrow window, not a closed one.

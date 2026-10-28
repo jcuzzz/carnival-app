@@ -491,11 +491,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "dotnet build failed in $Project." }
 
         Write-Host 'Scripting the model (dotnet ef dbcontext script)...'
-        & dotnet ef dbcontext script --no-build --context SportsDbContext --output $modelSql | Out-Null
+        & dotnet ef dbcontext script --no-build --context CarnivalAppDbContext --output $modelSql | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'dotnet ef dbcontext script failed.' }
 
         Write-Host 'Scripting the migration history (dotnet ef migrations script)...'
-        & dotnet ef migrations script --no-build --context SportsDbContext --output $migrationsSql | Out-Null
+        & dotnet ef migrations script --no-build --context CarnivalAppDbContext --output $migrationsSql | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'dotnet ef migrations script failed.' }
     }
     finally { Pop-Location }

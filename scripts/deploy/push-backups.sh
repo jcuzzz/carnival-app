@@ -6,7 +6,7 @@
 #
 # Reads BACKUP_PUSH_TARGET from the repo .env — any rsync-over-ssh destination
 # the deploy account can reach without a passphrase, e.g.
-# backups@nas.school.internal:/srv/sports/carnival-app-host. Unset = a clean no-op.
+# backups@nas.school.internal:/srv/carnival-app/carnival-app-host. Unset = a clean no-op.
 #
 # Only *.dump.age files are pushed. Plaintext *.dump is never copied off the
 # host: if you see any, BACKUP_ENCRYPTION is off and that is the thing to fix.
@@ -34,7 +34,7 @@ docker volume inspect "$VOLUME" >/dev/null 2>&1 || { echo "No volume $VOLUME." >
 
 # The volume is not mounted on the host, so stage a copy the deploy account can
 # read. Cleared on every exit — the ciphertext is safe, the disk space is not.
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/sports-push.XXXXXX")"
+STAGE="$(mktemp -d "${TMPDIR:-/tmp}/carnival-app-push.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 
 COUNT="$(docker run --rm -v "$VOLUME:/backups:ro" alpine:3 \

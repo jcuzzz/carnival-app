@@ -25,7 +25,7 @@ const PREFIXES = {
 };
 // @media cannot read var(): these are documented in a comment, never declared.
 const COMMENT_ONLY = new Set(["breakpoint"]);
-const OUTDOOR = "sports.outdoor";
+const OUTDOOR = "carnival.outdoor";
 
 const quote = (family) => (/[^a-zA-Z0-9-]/.test(family) ? `"${family}"` : family);
 const render = (value) => (Array.isArray(value) ? value.map(quote).join(", ") : String(value));

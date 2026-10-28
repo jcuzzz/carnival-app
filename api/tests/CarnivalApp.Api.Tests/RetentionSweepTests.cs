@@ -18,21 +18,21 @@ namespace CarnivalApp.Api.Tests;
 public sealed class RetentionSweepTests : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly DbContextOptions<SportsDbContext> _options;
+    private readonly DbContextOptions<CarnivalAppDbContext> _options;
     private readonly ManualTime _time = new();
 
     public RetentionSweepTests()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        _options = new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options;
-        using var db = new SportsDbContext(_options);
+        _options = new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options;
+        using var db = new CarnivalAppDbContext(_options);
         db.Database.EnsureCreated();
     }
 
     public void Dispose() => _connection.Dispose();
 
-    private SportsDbContext NewDb() => new(_options);
+    private CarnivalAppDbContext NewDb() => new(_options);
 
     private DateTimeOffset Now => _time.Now;
 

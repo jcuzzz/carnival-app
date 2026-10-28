@@ -16,7 +16,7 @@ This file is the canonical instruction set for humans and AI coding agents alike
 
 ## Commands
 
-- API: `cd api && dotnet build` / `dotnet test`; migrations: `dotnet ef migrations add <Name> --context SportsDbContext` in `api/src/CarnivalApp.Api`
+- API: `cd api && dotnet build` / `dotnet test`; migrations: `dotnet ef migrations add <Name> --context CarnivalAppDbContext` in `api/src/CarnivalApp.Api`
 - App: `cd app && npm ci && npm run build` (Vite); dev server `npm run dev`; tests `npm test` (Vitest)
 - Synthetic data: `python scripts/generate_synthetic_roster.py`
 - Testcontainers tests skip when Docker is unavailable.
@@ -38,6 +38,7 @@ ADRs are secondary and short. Write one only for a significant design decision: 
 - **Before any UI change, read `docs/development/design-system.md`** (ADR-0040): tokens, component vocabulary, icon/type/44px rules. No raw hex or size literals outside `app/src/tokens.css`.
 - **After any UI-affecting change**, run `cd app && npm run screenshots` and review the PNGs in `app/ui-review/` (open `app/ui-review/index.html`) before committing. Captures use synthetic data only.
 - **Before ending a work session**, update `docs/HANDOFF.md` (the `handoff-update` skill).
+- Commits carry no AI attribution (no `Co-Authored-By` lines).
 
 ## Contributions
 

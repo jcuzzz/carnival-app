@@ -29,7 +29,7 @@ public sealed class TemplateReconcileTests : IDisposable
 
     public TemplateReconcileTests()
     {
-        _store = Directory.CreateTempSubdirectory("sports-reconcile-").FullName;
+        _store = Directory.CreateTempSubdirectory("carnival-app-reconcile-").FullName;
         _factory = new ApiTestFactory().With("EventTemplates:Path", _store);
         _admin = _factory.CreateClientAs("sys-recon", "SystemAdministrator");
     }
@@ -98,7 +98,7 @@ public sealed class TemplateReconcileTests : IDisposable
     private async Task<Guid> SeedDefinitionAsync(string code, Action<EventDefinition>? adjust = null)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var definition = new EventDefinition
         {
             Id = Guid.CreateVersion7(),
@@ -122,7 +122,7 @@ public sealed class TemplateReconcileTests : IDisposable
         bool withResult = false, bool teamEntry = false, bool individualEntry = false)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = new Carnival
         {
             Id = Guid.CreateVersion7(),
@@ -199,7 +199,7 @@ public sealed class TemplateReconcileTests : IDisposable
     {
         await SeedEventAsync(definitionId, withResult: true);
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var result = await db.Results.OrderByDescending(r => r.Id).FirstAsync();
         db.SchoolRecords.Add(new SchoolRecord
         {
@@ -286,7 +286,7 @@ public sealed class TemplateReconcileTests : IDisposable
         // The in-app editor's own audit row is the only knowable signal (§8).
         using (var scope = _factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             new AuditService(db, Fixtures.Config()).Record(
                 new AuditActor("admin-1", "SystemAdministrator"), AuditActions.EventDefinitionUpdate,
                 nameof(EventDefinition), edited.ToString());
@@ -418,7 +418,7 @@ public sealed class TemplateReconcileTests : IDisposable
         // Another administrator edits the row between preview and apply.
         using (var scope = _factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             var row = await db.EventDefinitions.SingleAsync(d => d.Code == "REC-STALE");
             row.Name = "Something else entirely";
             await db.SaveChangesAsync();
@@ -867,7 +867,7 @@ public sealed class TemplateReconcileTests : IDisposable
         _factory.Race.ArmOnce("INSERT INTO \"EventDefinitions\"", transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.EventDefinitions.Add(new EventDefinition
             {

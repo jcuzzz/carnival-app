@@ -10,8 +10,8 @@ using CarnivalApp.Api.Data;
 
 namespace CarnivalApp.Api.Migrations
 {
-    [DbContext(typeof(SportsDbContext))]
-    partial class SportsDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(CarnivalAppDbContext))]
+    partial class CarnivalAppDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {

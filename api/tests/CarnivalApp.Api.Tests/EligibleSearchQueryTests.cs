@@ -20,12 +20,12 @@ namespace CarnivalApp.Api.Tests;
 /// </summary>
 public class EligibleSearchQueryTests
 {
-    private static SportsDbContext Postgres() => new(
-        new DbContextOptionsBuilder<SportsDbContext>()
+    private static CarnivalAppDbContext Postgres() => new(
+        new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseNpgsql("Host=localhost;Database=design_time_placeholder;Username=x;Password=x").Options);
 
-    private static SportsDbContext Sqlite() => new(
-        new DbContextOptionsBuilder<SportsDbContext>()
+    private static CarnivalAppDbContext Sqlite() => new(
+        new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseSqlite("DataSource=:memory:").Options);
 
     [Fact]

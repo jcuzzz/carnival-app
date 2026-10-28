@@ -57,7 +57,7 @@ public sealed class RoleAssignmentProvider(
         try
         {
             using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             rows = await db.RoleAssignments.AsNoTracking()
                 .Where(row => row.RevokedAtUtc == null)
                 .Select(row => new ActiveAssignment(row.Id, row.SubjectId, row.SubjectUpn, row.Role))
@@ -91,7 +91,7 @@ public sealed class RoleAssignmentProvider(
         if (assignmentIds.Count == 0) return;
 
         using var scope = scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var audit = scope.ServiceProvider.GetRequiredService<AuditService>();
 
         try

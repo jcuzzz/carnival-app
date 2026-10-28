@@ -116,7 +116,7 @@ public static class ResultEndpoints
     };
 
     private static void AppendRevision(
-        SportsDbContext db, Result result, object prior, AuditActor actor, string reason)
+        CarnivalAppDbContext db, Result result, object prior, AuditActor actor, string reason)
     {
         result.CurrentRevision++;
         db.ResultRevisions.Add(new ResultRevision
@@ -321,7 +321,7 @@ public static class ResultEndpoints
     }
 
     private static async Task<IResult> ListResultsAsync(
-        Guid id, Guid eventId, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, Guid eventId, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var scoring = await db.CarnivalEvents.AsNoTracking()
             .Where(e => e.CarnivalId == id && e.Id == eventId)
@@ -347,7 +347,7 @@ public static class ResultEndpoints
 
     private static async Task<IResult> SubmitResultAsync(
         Guid id, Guid eventId, Guid entryId, SubmitResultRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         // The idempotency filter guarantees a parseable key.
         var resultId = Guid.Parse(ctx.Request.Headers[IdempotencyService.HeaderName].ToString());
@@ -471,7 +471,7 @@ public static class ResultEndpoints
     /// <summary>Ordinals may arrive out of order across devices, so a gap is ordinary.</summary>
     private static Task<IResult> RecordAttemptAsync(
         Guid id, Guid eventId, Guid entryId, int ordinal, AttemptRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         decimal? mark = null;
         var higherBetter = false;
@@ -514,7 +514,7 @@ public static class ResultEndpoints
 
     private static Task<IResult> RecordJumpAsync(
         Guid id, Guid eventId, Guid entryId, decimal height, JumpRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         List<decimal> ladderHeights = [];
         var attemptsPerHeight = JumpCard.DefaultAttemptsPerHeight;
@@ -548,7 +548,7 @@ public static class ResultEndpoints
 
     /// <summary>Upserts by entry: the first mark to land creates the result.</summary>
     private static async Task<IResult> CaptureByEntryAsync(
-        Guid id, Guid eventId, Guid entryId, HttpContext ctx, SportsDbContext db,
+        Guid id, Guid eventId, Guid entryId, HttpContext ctx, CarnivalAppDbContext db,
         string notAccepted, string captureNoun, string reason, DateTimeOffset? recordedAtUtc,
         Func<CarnivalEvent, IResult?> configure, CaptureAppend append,
         Action<Result, object?, CaptureActors> auditCapture, CancellationToken ct)
@@ -701,7 +701,7 @@ public static class ResultEndpoints
 
     private static async Task<IResult> CorrectResultAsync(
         Guid resultId, CorrectResultRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Reason))
             return ApiError.BadRequest(ErrorCodes.ReasonRequired, "A reason is required for a correction (§9.3).");
@@ -789,7 +789,7 @@ public static class ResultEndpoints
     /// reason as given, absent included.
     /// </summary>
     internal static void ApplyTransition(
-        SportsDbContext db, AuditService audit, Result result, ResultLifecycleState target,
+        CarnivalAppDbContext db, AuditService audit, Result result, ResultLifecycleState target,
         AuditActor actor, string? reason, string defaultReason)
     {
         var prior = MaterialValues(result);
@@ -809,7 +809,7 @@ public static class ResultEndpoints
     };
 
     private static async Task<IResult> SaveGuardingConcurrencyAsync(
-        SportsDbContext db, Result result, CancellationToken ct)
+        CarnivalAppDbContext db, Result result, CancellationToken ct)
     {
         try
         {

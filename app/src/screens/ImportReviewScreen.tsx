@@ -21,7 +21,7 @@ import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { showToast } from "../shell/toast";
 
-const LAST_BATCH_KEY = "sports.lastImportBatchId";
+const LAST_BATCH_KEY = "carnival.lastImportBatchId";
 
 export default function ImportReviewScreen() {
   const session = useSession();

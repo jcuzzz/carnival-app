@@ -123,7 +123,7 @@ public sealed class AutoFillLaneTests : IDisposable
         _factory.Race.ArmOnce(RaceEndpoints.CohortMintTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             // The race the create just minted and is about to place into.
             var minted = db.Races.Where(r => r.CarnivalId == seeded.CarnivalId)
@@ -415,7 +415,7 @@ public sealed class AutoFillLaneTests : IDisposable
         void ArmAgain() => _factory.Race.ArmOnce(RaceEndpoints.CohortMintTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.CarnivalEvents.Single(e => e.Id == seeded.EventId).Version++;
             db.SaveChanges();
@@ -453,7 +453,7 @@ public sealed class AutoFillLaneTests : IDisposable
         void ArmAgain() => _factory.Race.ArmOnce(RaceEndpoints.CohortMintTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.CarnivalEvents.Single(e => e.Id == seeded.EventId).Version++;
             db.SaveChanges();
@@ -487,7 +487,7 @@ public sealed class AutoFillLaneTests : IDisposable
         _factory.Race.ArmOnce(RaceEndpoints.CohortMintTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             var after = db.Races.Where(r => r.CarnivalId == seeded.CarnivalId).Max(r => r.SortOrder);
             db.Races.Add(new Race
@@ -704,7 +704,7 @@ public sealed class AutoFillLaneTests : IDisposable
         RelaySceneAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         var batch = new ImportBatch
         {

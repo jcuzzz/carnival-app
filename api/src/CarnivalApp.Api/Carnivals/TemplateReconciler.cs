@@ -74,7 +74,7 @@ internal sealed record TemplateReconcileSummary(
     IReadOnlyList<string> ExcludedCodes);
 
 // Never deletes, never deactivates a catalogue-only row, and never schedules anything.
-public sealed class TemplateReconciler(SportsDbContext db, AuditService audit)
+public sealed class TemplateReconciler(CarnivalAppDbContext db, AuditService audit)
 {
     public sealed record Plan(TemplateDiff Diff, IReadOnlyList<PlannedRow> Rows);
 

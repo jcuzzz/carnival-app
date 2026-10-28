@@ -16,20 +16,20 @@ namespace CarnivalApp.Api.Tests;
 public sealed class ImportPipelineSqliteTests : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly DbContextOptions<SportsDbContext> _options;
+    private readonly DbContextOptions<CarnivalAppDbContext> _options;
 
     public ImportPipelineSqliteTests()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        _options = new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options;
-        using var db = new SportsDbContext(_options);
+        _options = new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options;
+        using var db = new CarnivalAppDbContext(_options);
         db.Database.EnsureCreated();
     }
 
     public void Dispose() => _connection.Dispose();
 
-    private SportsDbContext NewDb() => new(_options);
+    private CarnivalAppDbContext NewDb() => new(_options);
 
     private static MemoryStream Csv(params string[] dataLines)
     {

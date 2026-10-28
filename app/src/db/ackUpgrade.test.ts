@@ -105,7 +105,7 @@ const queuedResult = {
 const seeded = [acceptedEntry, acceptedResult, acceptedMaterialise, parkedTeam, queuedResult];
 
 async function seedV7(): Promise<void> {
-  const legacy = new Dexie("sports-platform");
+  const legacy = new Dexie("carnival-app");
   legacy.version(7).stores(V7_STORES);
   await legacy.open();
   await legacy.table("outbox").bulkPut(seeded);

@@ -135,7 +135,7 @@ public sealed class RoleAssignmentClaimsTests
         Assert.Contains("Recorder", await RolesAsync(client));
 
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var row = await db.RoleAssignments.AsNoTracking().SingleAsync(a => a.Id == id);
         Assert.Equal("coach-oid-1", row.SubjectId);
 
@@ -183,7 +183,7 @@ public sealed class RoleAssignmentClaimsTests
         await RolesAsync(client);
 
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.Action == AuditActions.RoleAssignmentBind));
     }
 
@@ -240,7 +240,7 @@ public sealed class RoleAssignmentClaimsTests
         using var factory = Bootstrapped("principal@school.test");
         using (var scope = factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             db.RoleAssignments.Add(new RoleAssignment
             {
                 Id = Guid.NewGuid(),
@@ -378,7 +378,7 @@ public sealed class RoleAssignmentClaimsTests
     private static async Task DropAssignmentsTableAsync(ApiTestFactory factory)
     {
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         await db.Database.ExecuteSqlRawAsync("DROP TABLE \"RoleAssignments\";");
     }
 

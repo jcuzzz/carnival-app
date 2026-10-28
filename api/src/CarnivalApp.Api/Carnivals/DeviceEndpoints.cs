@@ -79,7 +79,7 @@ public static class DeviceEndpoints
 
     private static async Task<IResult> ReportSyncStatusAsync(
         Guid id, string deviceId, DeviceSyncStatusRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!IsWellFormedDeviceId(deviceId))
             return ApiError.BadRequest(ErrorCodes.DeviceIdInvalid,
@@ -144,7 +144,7 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> ListDevicesAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!await CarnivalGuards.CarnivalExistsAsync(db, id, ct))
             return CarnivalGuards.CarnivalNotFound();

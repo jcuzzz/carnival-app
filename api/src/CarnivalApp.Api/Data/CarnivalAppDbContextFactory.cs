@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace CarnivalApp.Api.Data;
 
 /// <summary>For `dotnet ef`; the connection string is a placeholder, never connected to.</summary>
-public sealed class SportsDbContextFactory : IDesignTimeDbContextFactory<SportsDbContext>
+public sealed class CarnivalAppDbContextFactory : IDesignTimeDbContextFactory<CarnivalAppDbContext>
 {
-    public SportsDbContext CreateDbContext(string[] args)
+    public CarnivalAppDbContext CreateDbContext(string[] args)
     {
-        var options = new DbContextOptionsBuilder<SportsDbContext>()
+        var options = new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseNpgsql("Host=localhost;Database=design_time_placeholder;Username=design;Password=design")
             .Options;
-        return new SportsDbContext(options);
+        return new CarnivalAppDbContext(options);
     }
 }

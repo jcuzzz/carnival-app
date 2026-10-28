@@ -382,7 +382,7 @@ public sealed class ContextRaceTests : IDisposable
         void ArmAgain() => _factory.Race.ArmOnce(RaceEndpoints.CohortMintTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.CarnivalEvents.Single(e => e.Id == seeded.EventId).Version++;
             db.SaveChanges();
@@ -489,7 +489,7 @@ public sealed class ContextRaceTests : IDisposable
         RelaySceneAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         var batch = new ImportBatch
         {

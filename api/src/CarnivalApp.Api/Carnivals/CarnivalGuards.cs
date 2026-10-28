@@ -10,19 +10,19 @@ namespace CarnivalApp.Api.Carnivals;
 internal static class CarnivalGuards
 {
     // Tracked: the mutation paths edit what they read.
-    public static Task<Carnival?> FindCarnivalAsync(SportsDbContext db, Guid id, CancellationToken ct) =>
+    public static Task<Carnival?> FindCarnivalAsync(CarnivalAppDbContext db, Guid id, CancellationToken ct) =>
         db.Carnivals.FirstOrDefaultAsync(c => c.Id == id, ct);
 
-    public static Task<bool> CarnivalExistsAsync(SportsDbContext db, Guid id, CancellationToken ct) =>
+    public static Task<bool> CarnivalExistsAsync(CarnivalAppDbContext db, Guid id, CancellationToken ct) =>
         db.Carnivals.AnyAsync(c => c.Id == id, ct);
 
     // Scoped to its carnival, so a wrong-carnival id is a 404 rather than a leak.
     public static Task<CarnivalEvent?> FindEventAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
         db.CarnivalEvents.FirstOrDefaultAsync(e => e.CarnivalId == carnivalId && e.Id == eventId, ct);
 
     public static Task<CarnivalEvent?> FindEventWithCarnivalAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
         db.CarnivalEvents
             .Include(e => e.Carnival)
             // Every event projection reads the measure; a missing include is a runtime 500.
@@ -30,7 +30,7 @@ internal static class CarnivalGuards
             .FirstOrDefaultAsync(e => e.CarnivalId == carnivalId && e.Id == eventId, ct);
 
     public static Task<bool> EventExistsAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, CancellationToken ct) =>
         db.CarnivalEvents.AnyAsync(e => e.CarnivalId == carnivalId && e.Id == eventId, ct);
 
     public static IResult CarnivalNotFound() =>
@@ -75,7 +75,7 @@ internal static class CarnivalGuards
         ApiError.Conflict(ErrorCodes.ConcurrencyConflict, detail);
 
     public static async Task<IResult?> SaveGuardingConcurrencyAsync(
-        SportsDbContext db, string subject, CancellationToken ct)
+        CarnivalAppDbContext db, string subject, CancellationToken ct)
     {
         try
         {

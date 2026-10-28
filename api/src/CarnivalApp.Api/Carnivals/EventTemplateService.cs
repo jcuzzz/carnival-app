@@ -11,7 +11,7 @@ namespace CarnivalApp.Api.Carnivals;
 // Re-applying never duplicates and never touches existing catalogue rows or scheduled events;
 // reconciling a template change is TemplateReconciler's job.
 public partial class EventTemplateService(
-    SportsDbContext db, AuditService audit, IConfiguration config, IHostEnvironment env,
+    CarnivalAppDbContext db, AuditService audit, IConfiguration config, IHostEnvironment env,
     ILogger<EventTemplateService> logger)
 {
     [GeneratedRegex("^[a-z0-9][a-z0-9-]*$")]

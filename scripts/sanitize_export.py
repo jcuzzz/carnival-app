@@ -26,7 +26,7 @@ Run this OUTSIDE any agentic workflow, on the raw file. Two modes:
 
 Usage:
   py scripts/sanitize_export.py <input.csv> <output.csv> [--minimise-only]
-  py "C:\Dev\Sports\scripts\sanitize_export.py" ST_0000.csv data/raw/ST_0000_deident.csv
+  py scripts/sanitize_export.py ST_0000.csv data/raw/ST_0000_deident.csv
 
 The tool prints a report of what was kept, transformed and dropped so the
 result can be eyeballed before use. Pure Python stdlib; no network access.

@@ -37,7 +37,7 @@
 
 | Item | How it works |
 |---|---|
-| Dumps at rest | The `backup` service (`deploy/Dockerfile.backup`: `postgres:17` plus `age`) dumps to a temporary file, encrypts it to `BACKUP_AGE_RECIPIENT` as `sports-<timestamp>.dump.age`, and deletes the plaintext. **It refuses to start without a valid recipient.** |
+| Dumps at rest | The `backup` service (`deploy/Dockerfile.backup`: `postgres:17` plus `age`) dumps to a temporary file, encrypts it to `BACKUP_AGE_RECIPIENT` as `carnival-app-<timestamp>.dump.age`, and deletes the plaintext. **It refuses to start without a valid recipient.** |
 | Escape hatch | `BACKUP_ENCRYPTION=off` writes plaintext dumps. It exists for a synthetic-data test host only, in the same class as `DEV_AUTH`: **never with real student data**. |
 | Key custody | Generate the `age` key pair on a trusted machine, not the server. The **public** key goes in `.env`; the **private** key stays off the server and is copied on only for a restore or drill. **Custodians: `[at least two named people]`. Escrow: `[arrangement]`.** A backup nobody can decrypt is not a backup. |
 | Retention | `BACKUP_RETENTION_DAYS` (default **14**). Pruning runs only after a cycle that wrote a dump, and always keeps the newest three, so a run of failed cycles cannot age the last good backup away. `.last-success` in the backup volume records the last good dump. |
@@ -65,7 +65,7 @@ With a target, the arrangement is two copies on two media with one away from the
 
 ## 5. Restore procedure
 
-**Drill (non-destructive), once a term:** `scripts/deploy/restore-drill.sh <age-identity-file>` decrypts the newest `*.dump.age`, restores it into a scratch database (`sports_drill`) with `pg_restore --no-owner`, compares row counts with the live tables, prints the wall time, then drops the scratch database and shreds the plaintext. It fails if the newest dump is older than twice the backup interval, or if a restored table falls well short of its live count. Copy the identity file onto the server for the drill and shred it afterwards ([Self-hosting §8](../admin/self-host.md#8-backups)).
+**Drill (non-destructive), once a term:** `scripts/deploy/restore-drill.sh <age-identity-file>` decrypts the newest `*.dump.age`, restores it into a scratch database (`carnival_drill`) with `pg_restore --no-owner`, compares row counts with the live tables, prints the wall time, then drops the scratch database and shreds the plaintext. It fails if the newest dump is older than twice the backup interval, or if a restored table falls well short of its live count. Copy the identity file onto the server for the drill and shred it afterwards ([Self-hosting §8](../admin/self-host.md#8-backups)).
 
 **Real restore (destructive):**
 

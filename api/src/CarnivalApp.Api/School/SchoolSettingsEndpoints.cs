@@ -59,7 +59,7 @@ public static class SchoolSettingsEndpoints
 
     private static async Task<IResult> GetAsync(
         [FromServices] SchoolSettingsProvider provider,
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         CancellationToken ct) =>
         Results.Ok(Project(await provider.GetAsync(ct), await ReferencedCodesAsync(db, ct)));
 
@@ -69,7 +69,7 @@ public static class SchoolSettingsEndpoints
     private static async Task<IResult> UpdateAsync(
         SchoolSettingsRequest request,
         HttpContext ctx,
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit,
         [FromServices] SchoolSettingsProvider provider,
         [FromServices] ILoggerFactory loggers,
@@ -198,7 +198,7 @@ public static class SchoolSettingsEndpoints
     // Shared by GET's inUse and PUT's refusal so they cannot disagree. Matched in memory:
     // provider-clean SQL cannot do a case-insensitive join.
     private static async Task<HashSet<string>> ReferencedCodesAsync(
-        SportsDbContext db, CancellationToken ct)
+        CarnivalAppDbContext db, CancellationToken ct)
     {
         var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         referenced.UnionWith(await db.RosterSnapshots.Select(r => r.HouseCode).Distinct().ToListAsync(ct));

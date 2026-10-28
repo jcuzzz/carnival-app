@@ -161,7 +161,7 @@ public static class EventDefinitionEndpoints
     /// SQLite and PostgreSQL.
     /// </summary>
     internal static async Task<Dictionary<Guid, EventDefinitionUsageDto>> UsageAsync(
-        SportsDbContext db, Guid? definitionId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid? definitionId, CancellationToken ct)
     {
         var divisions = await db.CarnivalEvents.AsNoTracking()
             .Where(e => definitionId == null || e.EventDefinitionId == definitionId)
@@ -200,7 +200,7 @@ public static class EventDefinitionEndpoints
     /// the exception handler, which answers a retryable 500.
     /// </summary>
     private static async Task<IResult> ListDefinitionsAsync(
-        [FromServices] SportsDbContext db, CancellationToken ct, [FromQuery] string? includeInactive = null)
+        [FromServices] CarnivalAppDbContext db, CancellationToken ct, [FromQuery] string? includeInactive = null)
     {
         var withInactive = false;
         if (includeInactive is not null && !bool.TryParse(includeInactive, out withInactive))
@@ -216,7 +216,7 @@ public static class EventDefinitionEndpoints
 
     private static async Task<IResult> CreateDefinitionAsync(
         DefinitionRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Code)
             || string.IsNullOrWhiteSpace(request.Name)
@@ -259,7 +259,7 @@ public static class EventDefinitionEndpoints
 
     private static async Task<IResult> UpdateDefinitionAsync(
         Guid id, DefinitionRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         // Guards other catalogue writers; a Read Committed result capture can still slip in.
         await using var transaction =
@@ -368,7 +368,7 @@ public static class EventDefinitionEndpoints
 
     private static async Task<IResult> DeactivateDefinitionAsync(
         Guid id, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var definition = await db.EventDefinitions.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (definition is null) return DefinitionNotFound();

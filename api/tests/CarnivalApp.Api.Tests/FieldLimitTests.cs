@@ -31,7 +31,7 @@ public sealed class FieldLimitTests : IDisposable
     private async Task<Guid> SeedCarnivalAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = new Carnival
         {
             Id = Guid.CreateVersion7(),

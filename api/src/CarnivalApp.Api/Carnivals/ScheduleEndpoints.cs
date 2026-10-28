@@ -107,7 +107,7 @@ public static class ScheduleEndpoints
             .Select(e => e.EventId)
             .ToList());
 
-    private static IQueryable<StreamRow> StreamRows(SportsDbContext db, Guid carnivalId) =>
+    private static IQueryable<StreamRow> StreamRows(CarnivalAppDbContext db, Guid carnivalId) =>
         db.ScheduleStreams.AsNoTracking()
             .Where(s => s.CarnivalId == carnivalId)
             .Select(s => new StreamRow(s.Id, s.Name, s.SortOrder, s.Slots
@@ -118,7 +118,7 @@ public static class ScheduleEndpoints
                 .ToList()));
 
     private static async Task<IResult> SlotResponseAsync(
-        SportsDbContext db, Guid slotId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid slotId, CancellationToken ct)
     {
         var slot = await db.ScheduleSlots.AsNoTracking()
             .Where(sl => sl.Id == slotId)
@@ -133,7 +133,7 @@ public static class ScheduleEndpoints
     // ---- Read ------------------------------------------------------------
 
     private static async Task<IResult> GetScheduleAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!await CarnivalGuards.CarnivalExistsAsync(db, id, ct)) return CarnivalGuards.CarnivalNotFound();
         return Results.Ok(Project(id, await StreamRows(db, id).ToListAsync(ct)));
@@ -143,7 +143,7 @@ public static class ScheduleEndpoints
 
     /// <summary>Finalised is the only refusal: a Closed program is still being tidied.</summary>
     private static async Task<(Carnival? Carnival, IResult? Refusal)> EditableCarnivalAsync(
-        SportsDbContext db, Guid id, string attempt, CancellationToken ct)
+        CarnivalAppDbContext db, Guid id, string attempt, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return (null, CarnivalGuards.CarnivalNotFound());
@@ -161,11 +161,11 @@ public static class ScheduleEndpoints
             "No schedule slot exists with that id in this carnival.");
 
     private static Task<ScheduleStream?> FindStreamAsync(
-        SportsDbContext db, Guid carnivalId, Guid streamId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid streamId, CancellationToken ct) =>
         db.ScheduleStreams.FirstOrDefaultAsync(s => s.CarnivalId == carnivalId && s.Id == streamId, ct);
 
     private static Task<ScheduleSlot?> FindSlotAsync(
-        SportsDbContext db, Guid carnivalId, Guid slotId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid slotId, CancellationToken ct) =>
         db.ScheduleSlots
             .Include(sl => sl.Stream)
             .FirstOrDefaultAsync(sl => sl.Id == slotId && sl.Stream.CarnivalId == carnivalId, ct);
@@ -182,7 +182,7 @@ public static class ScheduleEndpoints
     /// memory to stay provider-clean.
     /// </summary>
     private static async Task<bool> StreamNameTakenAsync(
-        SportsDbContext db, Guid carnivalId, string name, Guid? exceptId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, string name, Guid? exceptId, CancellationToken ct)
     {
         var names = await db.ScheduleStreams.AsNoTracking()
             .Where(s => s.CarnivalId == carnivalId && (exceptId == null || s.Id != exceptId))
@@ -193,7 +193,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> CreateStreamAsync(
         Guid id, StreamRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (carnival, refusal) = await EditableCarnivalAsync(db, id, "Schedule streams cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -225,7 +225,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> UpdateStreamAsync(
         Guid id, Guid streamId, StreamRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, "Schedule streams cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -260,7 +260,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> DeleteStreamAsync(
         Guid id, Guid streamId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, "Schedule streams cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -284,7 +284,7 @@ public static class ScheduleEndpoints
     }
 
     private static async Task<int> UnscheduleAsync(
-        SportsDbContext db, IReadOnlyCollection<Guid> slotIds, CancellationToken ct)
+        CarnivalAppDbContext db, IReadOnlyCollection<Guid> slotIds, CancellationToken ct)
     {
         if (slotIds.Count == 0) return 0;
         var placed = await db.CarnivalEvents
@@ -303,7 +303,7 @@ public static class ScheduleEndpoints
     /// database.
     /// </summary>
     private static async Task<int> DetachRacesAsync(
-        SportsDbContext db, IReadOnlyCollection<Guid> slotIds, CancellationToken ct)
+        CarnivalAppDbContext db, IReadOnlyCollection<Guid> slotIds, CancellationToken ct)
     {
         if (slotIds.Count == 0) return 0;
         var placed = await db.Races
@@ -352,7 +352,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> CreateSlotAsync(
         Guid id, Guid streamId, SlotRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (carnival, refusal) = await EditableCarnivalAsync(db, id, "Schedule slots cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -398,7 +398,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> UpdateSlotAsync(
         Guid id, Guid slotId, SlotRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (carnival, refusal) = await EditableCarnivalAsync(db, id, "Schedule slots cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -435,7 +435,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> DeleteSlotAsync(
         Guid id, Guid slotId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, "Schedule slots cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -462,7 +462,7 @@ public static class ScheduleEndpoints
     /// <summary>Placing an event already listed elsewhere moves it; that is not an error.</summary>
     private static async Task<IResult> PlaceEventAsync(
         Guid id, Guid slotId, PlaceEventRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, "The schedule cannot be changed", ct);
         if (refusal is not null) return refusal;
@@ -495,7 +495,7 @@ public static class ScheduleEndpoints
 
     private static async Task<IResult> RemoveEventAsync(
         Guid id, Guid slotId, Guid eventId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, "The schedule cannot be changed", ct);
         if (refusal is not null) return refusal;

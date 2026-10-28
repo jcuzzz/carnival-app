@@ -12,7 +12,7 @@ export interface SelectedCarnival {
   status: CarnivalStatus | null;
 }
 
-const STORAGE_KEY = "sports.carnival";
+const STORAGE_KEY = "carnival.carnival";
 
 function load(): SelectedCarnival | null {
   try {

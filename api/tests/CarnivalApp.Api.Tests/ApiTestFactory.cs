@@ -54,8 +54,8 @@ public class ApiTestFactory : WebApplicationFactory<Program>
             ["EventTemplates:Path"] = Fixtures.Path("event-templates"),
             // Never connected to (ConfigureServices swaps in SQLite), but present
             // so a host built as Production passes the startup configuration gate.
-            ["ConnectionStrings:SportsDb"] =
-                "Host=localhost;Port=5432;Database=sports-tests;Username=tests;Password=tests",
+            ["ConnectionStrings:CarnivalAppDb"] =
+                "Host=localhost;Port=5432;Database=carnival-tests;Username=tests;Password=tests",
             // Effectively off: the suite shares subjects across many exports, and
             // RateLimitingTests arms a real ceiling on its own host.
             [CarnivalApp.Api.Http.RateLimiting.PermitsPerMinuteKey] = "100000",
@@ -68,13 +68,13 @@ public class ApiTestFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(_settings));
         builder.ConfigureServices(services =>
         {
-            services.RemoveAll<DbContextOptions<SportsDbContext>>();
-            services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<SportsDbContext>>();
+            services.RemoveAll<DbContextOptions<CarnivalAppDbContext>>();
+            services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<CarnivalAppDbContext>>();
             _connection.Open();
-            services.AddDbContext<SportsDbContext>(o => o.UseSqlite(_connection).AddInterceptors(Race));
+            services.AddDbContext<CarnivalAppDbContext>(o => o.UseSqlite(_connection).AddInterceptors(Race));
 
             using var scope = services.BuildServiceProvider().CreateScope();
-            scope.ServiceProvider.GetRequiredService<SportsDbContext>().Database.EnsureCreated();
+            scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>().Database.EnsureCreated();
         });
     }
 

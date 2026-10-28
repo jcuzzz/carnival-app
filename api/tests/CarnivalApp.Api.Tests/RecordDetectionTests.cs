@@ -425,7 +425,7 @@ public sealed class RecordDetectionTests(ApiTestFactory factory) : IClassFixture
         _factory.Race.ArmOnce(CarnivalEndpoints.CarnivalGateRecheckTag, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             var student = new Student
             {

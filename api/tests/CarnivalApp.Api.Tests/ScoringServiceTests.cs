@@ -36,7 +36,7 @@ public sealed class ScoringServiceTests : IDisposable
         Guid carnivalId;
         using (var scope = _factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             var carnival = new Carnival
             {
                 Id = Guid.CreateVersion7(),
@@ -118,7 +118,7 @@ public sealed class ScoringServiceTests : IDisposable
         }
 
         using var readScope = _factory.Services.CreateScope();
-        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
         var standings = await scoring.ComputeAsync(carnivalId, default);
         Assert.NotNull(standings);
         Assert.True(standings!.Provisional); // Open carnival
@@ -385,7 +385,7 @@ public sealed class ScoringServiceTests : IDisposable
     public async Task Unknown_carnival_scores_null()
     {
         using var scope = _factory.Services.CreateScope();
-        var scoring = new ScoringService(scope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        var scoring = new ScoringService(scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
         Assert.Null(await scoring.ComputeAsync(Guid.NewGuid(), default));
     }
 
@@ -400,7 +400,7 @@ public sealed class ScoringServiceTests : IDisposable
         Guid carnivalId;
         using (var scope = _factory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             var now = DateTimeOffset.UtcNow;
             var carnival = new Carnival
             {
@@ -483,7 +483,7 @@ public sealed class ScoringServiceTests : IDisposable
         }
 
         using var readScope = _factory.Services.CreateScope();
-        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        var scoring = new ScoringService(readScope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
         var standings = await scoring.ComputeAsync(carnivalId, default);
         Assert.NotNull(standings);
         return standings!;

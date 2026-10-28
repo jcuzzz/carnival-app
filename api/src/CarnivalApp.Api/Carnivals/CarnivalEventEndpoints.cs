@@ -220,7 +220,7 @@ public static class CarnivalEventEndpoints
                 e.ScheduleSlot == null ? null : (int?)e.ScheduleSlot.SortOrder));
 
     private static async Task<IResult> ListEventsAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!await CarnivalGuards.CarnivalExistsAsync(db, id, ct)) return CarnivalGuards.CarnivalNotFound();
         // Ordered in memory to keep the query provider-clean; the list is small.
@@ -237,7 +237,7 @@ public static class CarnivalEventEndpoints
     }
 
     private static async Task<IResult> GetEventAsync(
-        Guid id, Guid eventId, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, Guid eventId, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var row = await EventRows(db.CarnivalEvents.Where(e => e.CarnivalId == id && e.Id == eventId))
             .FirstOrDefaultAsync(ct);
@@ -246,7 +246,7 @@ public static class CarnivalEventEndpoints
 
     private static async Task<IResult> ScheduleEventAsync(
         Guid id, ScheduleEventRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -303,7 +303,7 @@ public static class CarnivalEventEndpoints
     /// <summary>Idempotent, and one SaveChanges: a partial matrix is not a valid state.</summary>
     private static async Task<IResult> GenerateDivisionsAsync(
         Guid id, GenerateDivisionsRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -357,7 +357,7 @@ public static class CarnivalEventEndpoints
     /// <summary>A contested division is closed, never deleted.</summary>
     private static async Task<IResult> UnscheduleEventAsync(
         Guid id, Guid eventId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -389,7 +389,7 @@ public static class CarnivalEventEndpoints
 
     private static async Task<IResult> UpdateEventAsync(
         Guid id, Guid eventId, UpdateEventRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -451,7 +451,7 @@ public static class CarnivalEventEndpoints
 
     private static async Task<IResult> ChangeEventStatusAsync(
         Guid id, Guid eventId, StatusRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         if (!Enum.TryParse<CarnivalEventStatus>(request.Status, ignoreCase: true, out var target))
             return ApiError.BadRequest(ErrorCodes.UnknownStatus, $"Unknown status '{request.Status}'.");
@@ -481,7 +481,7 @@ public static class CarnivalEventEndpoints
     /// <summary>A Scheduled event takes a height: the opening one is set before it opens.</summary>
     private static async Task<IResult> RaiseBarAsync(
         Guid id, Guid eventId, RaiseBarRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -527,7 +527,7 @@ public static class CarnivalEventEndpoints
     /// <summary>Fixed once any card carries a mark judged against the old value.</summary>
     private static async Task<IResult> SetAttemptsPerHeightAsync(
         Guid id, Guid eventId, AttemptsPerHeightRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -568,7 +568,7 @@ public static class CarnivalEventEndpoints
     /// <summary>Idempotent: a second press opens and audits nothing.</summary>
     private static async Task<IResult> OpenScheduledEventsAsync(
         Guid id, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -600,7 +600,7 @@ public static class CarnivalEventEndpoints
 
     private static async Task<IResult> AssignOfficialsAsync(
         Guid id, Guid eventId, OfficialsRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await db.CarnivalEvents
             .Include(e => e.Officials)

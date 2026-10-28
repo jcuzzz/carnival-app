@@ -1,7 +1,7 @@
 import { uuidv7 } from "../sync/uuidv7";
 
 /** Sent as X-Device-Id so the server can attribute queue traffic per device. Not a credential. */
-const STORAGE_KEY = "sports.deviceId";
+const STORAGE_KEY = "carnival.deviceId";
 
 let cached: string | null = null;
 

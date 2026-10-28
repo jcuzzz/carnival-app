@@ -17,10 +17,10 @@ public static class Fixtures
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 
-    public static AuditService Audit(SportsDbContext db) => new(db, Config());
+    public static AuditService Audit(CarnivalAppDbContext db) => new(db, Config());
 
     /// <summary>Import service wired with a real AuditService on the same context.</summary>
-    public static RosterImportService ImportService(SportsDbContext db) => new(db, Audit(db));
+    public static RosterImportService ImportService(CarnivalAppDbContext db) => new(db, Audit(db));
 
     public static string Path(string name) =>
         System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", name);

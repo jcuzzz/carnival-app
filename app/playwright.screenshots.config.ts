@@ -26,7 +26,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: process.env.SPORTS_APP_URL ?? "http://localhost:5173",
+    baseURL: process.env.CARNIVAL_APP_URL ?? "http://localhost:5173",
     trace: "retain-on-failure",
     ...(FIXED ? { timezoneId: FIXED_TIMEZONE, locale: FIXED_LOCALE } : {}),
   },

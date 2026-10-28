@@ -41,7 +41,7 @@ public sealed class ReportEndpointsTests(ApiTestFactory factory) : IClassFixture
     private async Task SeedAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var now = DateTimeOffset.UtcNow;
         var n = Guid.NewGuid().ToString("N")[..8];
 

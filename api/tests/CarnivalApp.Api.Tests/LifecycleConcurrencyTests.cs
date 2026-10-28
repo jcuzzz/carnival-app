@@ -46,11 +46,11 @@ public sealed class LifecycleConcurrencyTests : IClassFixture<ApiTestFactory>
     /// the first command containing <paramref name="marker"/>, on whatever
     /// transaction the handler is already inside.
     /// </summary>
-    private void ArmCompetingWrite(string marker, Action<SportsDbContext> write) =>
+    private void ArmCompetingWrite(string marker, Action<CarnivalAppDbContext> write) =>
         _factory.Race.ArmOnce(marker, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             write(db);
             db.SaveChanges();
@@ -64,8 +64,8 @@ public sealed class LifecycleConcurrencyTests : IClassFixture<ApiTestFactory>
         var seeded = await CarnivalSeed.SeedAsync(_factory, CarnivalStatus.Draft);
         using var scopeA = _factory.Services.CreateScope();
         using var scopeB = _factory.Services.CreateScope();
-        var dbA = scopeA.ServiceProvider.GetRequiredService<SportsDbContext>();
-        var dbB = scopeB.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var dbA = scopeA.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+        var dbB = scopeB.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         // Both administrators read the Draft carnival before either commits.
         var a = await dbA.Carnivals.SingleAsync(c => c.Id == seeded.CarnivalId);
@@ -177,7 +177,7 @@ public sealed class LifecycleConcurrencyTests : IClassFixture<ApiTestFactory>
 
         // The second official read the division before the first raise committed.
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var stale = await db.CarnivalEvents.SingleAsync(e => e.Id == seeded.EventId);
 
         Assert.Equal(HttpStatusCode.OK, (await _official.PostAsJsonAsync(

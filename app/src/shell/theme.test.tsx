@@ -23,24 +23,24 @@ describe("the outdoor theme (ADR-0040 §6)", () => {
     applyTheme("outdoor");
     expect(root().getAttribute("data-theme")).toBe("outdoor");
     expect(currentTheme()).toBe("outdoor");
-    expect(localStorage.getItem("sports.theme")).toBe("outdoor");
+    expect(localStorage.getItem("carnival.theme")).toBe("outdoor");
 
     applyTheme("standard");
     expect(root().hasAttribute("data-theme")).toBe(false);
-    expect(localStorage.getItem("sports.theme")).toBe("standard");
+    expect(localStorage.getItem("carnival.theme")).toBe("standard");
   });
 
   it("applies the stored choice at boot, and nothing otherwise", () => {
     initTheme();
     expect(root().hasAttribute("data-theme")).toBe(false);
 
-    localStorage.setItem("sports.theme", "outdoor");
+    localStorage.setItem("carnival.theme", "outdoor");
     initTheme();
     expect(root().getAttribute("data-theme")).toBe("outdoor");
   });
 
   it("leaves the attribute off for a stored value it does not recognise", () => {
-    localStorage.setItem("sports.theme", "dark");
+    localStorage.setItem("carnival.theme", "dark");
     initTheme();
     expect(root().hasAttribute("data-theme")).toBe(false);
   });
@@ -75,7 +75,7 @@ describe("the outdoor toggle", () => {
   });
 
   it("opens pressed when the device is already on the outdoor theme", () => {
-    localStorage.setItem("sports.theme", "outdoor");
+    localStorage.setItem("carnival.theme", "outdoor");
     initTheme();
     render(<OutdoorToggle />);
     expect(screen.getByRole("button", { name: "Outdoor" }).getAttribute("aria-pressed")).toBe(

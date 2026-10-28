@@ -41,16 +41,16 @@ public class PostgresIntegrationTests
         }
     });
 
-    private static async Task WithPostgresAsync(Func<DbContextOptions<SportsDbContext>, Task> test)
+    private static async Task WithPostgresAsync(Func<DbContextOptions<CarnivalAppDbContext>, Task> test)
     {
         Skip.IfNot(DockerAvailable.Value, "Docker is not available on this machine.");
         // Image on the constructor: Testcontainers 4.14 obsoleted the parameterless one.
         await using var container = new PostgreSqlBuilder("postgres:17-alpine").Build();
         await container.StartAsync();
-        var options = new DbContextOptionsBuilder<SportsDbContext>()
+        var options = new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseNpgsql(container.GetConnectionString())
             .Options;
-        await using (var db = new SportsDbContext(options))
+        await using (var db = new CarnivalAppDbContext(options))
             await db.Database.MigrateAsync(); // migrations, not EnsureCreated — this is the migration test
         await test(options);
     }
@@ -60,7 +60,7 @@ public class PostgresIntegrationTests
     {
         await WithPostgresAsync(async options =>
         {
-            await using var db = new SportsDbContext(options);
+            await using var db = new CarnivalAppDbContext(options);
             var pending = await db.Database.GetPendingMigrationsAsync();
             Assert.Empty(pending);
             Assert.Equal(0, await db.Students.CountAsync());
@@ -88,18 +88,18 @@ public class PostgresIntegrationTests
         await WithPostgresAsync(async options =>
         {
             var blobbed = Guid.CreateVersion7();
-            await using (var db = new SportsDbContext(options))
+            await using (var db = new CarnivalAppDbContext(options))
             {
                 await db.GetService<IMigrator>().MigrateAsync(beforeTheMove);
                 db.Carnivals.Add(NewCarnival(blobbed, "Blob profile", legacyBlob));
                 await db.SaveChangesAsync();
             }
 
-            await using (var db = new SportsDbContext(options))
+            await using (var db = new CarnivalAppDbContext(options))
                 await db.Database.MigrateAsync();
 
             Guid rowsOnly;
-            await using (var db = new SportsDbContext(options))
+            await using (var db = new CarnivalAppDbContext(options))
             {
                 var rows = await db.CarnivalDivisions
                     .Where(d => d.CarnivalId == blobbed).OrderBy(d => d.SortOrder).ToListAsync();
@@ -131,10 +131,10 @@ public class PostgresIntegrationTests
                 await db.SaveChangesAsync();
             }
 
-            await using (var db = new SportsDbContext(options))
+            await using (var db = new CarnivalAppDbContext(options))
                 await db.GetService<IMigrator>().MigrateAsync(beforeTheMove);
 
-            await using (var verify = new SportsDbContext(options))
+            await using (var verify = new CarnivalAppDbContext(options))
             {
                 var restored = await verify.Carnivals.Where(c => c.Id == rowsOnly)
                     .Select(c => c.SettingsJson).SingleAsync();
@@ -186,7 +186,7 @@ public class PostgresIntegrationTests
     {
         await WithPostgresAsync(async options =>
         {
-            await using var db = new SportsDbContext(options);
+            await using var db = new CarnivalAppDbContext(options);
             db.AuditEvents.Add(new AuditEvent
             {
                 ActorSubject = "trigger-test",
@@ -204,7 +204,7 @@ public class PostgresIntegrationTests
             await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlRawAsync(
                 """DELETE FROM "AuditEvents" WHERE "Id" = {0}""", id));
 
-            await using var verify = new SportsDbContext(options);
+            await using var verify = new CarnivalAppDbContext(options);
             var row = await verify.AuditEvents.SingleAsync();
             Assert.Equal("original", row.Reason);
         });
@@ -215,7 +215,7 @@ public class PostgresIntegrationTests
     {
         await WithPostgresAsync(async options =>
         {
-            await using var db = new SportsDbContext(options);
+            await using var db = new CarnivalAppDbContext(options);
             var service = Fixtures.ImportService(db);
             await using var stream = File.OpenRead(Fixtures.Path("ST_CLEAN.csv"));
             var outcome = await service.StageAsync(
@@ -242,7 +242,7 @@ public class PostgresIntegrationTests
         {
             // Corrupt one staged row so promotion throws mid-way (missing
             // required snapshot data after approval), then verify no partial write.
-            await using (var db = new SportsDbContext(options))
+            await using (var db = new CarnivalAppDbContext(options))
             {
                 var service = Fixtures.ImportService(db);
                 var csv = "STKEY,SURNAME,FIRST_NAME,PREF_NAME,GENDER,HOUSE,STATUS,BIRTHDATE,HOME_GROUP,SCHOOL_YEAR\n" +
@@ -266,7 +266,7 @@ public class PostgresIntegrationTests
                 await Assert.ThrowsAnyAsync<Exception>(() => service.PromoteAsync(batch.Id, Fixtures.Importer));
             }
 
-            await using var verify = new SportsDbContext(options);
+            await using var verify = new CarnivalAppDbContext(options);
             Assert.Equal(0, await verify.Students.CountAsync());
             Assert.Equal(0, await verify.RosterSnapshots.CountAsync());
             Assert.Equal(ImportBatchStatus.Approved,

@@ -86,11 +86,11 @@ public sealed class PlacementConcurrencyTests : IDisposable
     /// first command containing <paramref name="marker"/>, on whatever transaction
     /// the handler is already inside (the keyed path opens one).
     /// </summary>
-    private void ArmCompetingWrite(string marker, Action<SportsDbContext> write) =>
+    private void ArmCompetingWrite(string marker, Action<CarnivalAppDbContext> write) =>
         _factory.Race.ArmOnce(marker, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             write(db);
             db.SaveChanges();

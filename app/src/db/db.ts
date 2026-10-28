@@ -60,14 +60,14 @@ export interface AppSetting {
 }
 
 // Unindexed optional fields (syncingAt, editedBy*, roster truncated) need no schema version bump.
-export class SportsDb extends Dexie {
+export class CarnivalAppDb extends Dexie {
   outbox!: Table<OutboxItem, string>;
   syncMeta!: Table<SyncMeta, string>;
   eventRosters!: Table<EventRosterRow, string>;
   appSettings!: Table<AppSetting, string>;
 
   constructor() {
-    super("sports-platform");
+    super("carnival-app");
     // An upgrade never deletes, re-statuses or re-payloads an outbox row: a queued capture lost
     // in a schema upgrade would be the worst bug this product could ship.
     this.version(1).stores({
@@ -161,4 +161,4 @@ function withoutCategory(value: unknown): unknown {
   return copy;
 }
 
-export const db = new SportsDb();
+export const db = new CarnivalAppDb();

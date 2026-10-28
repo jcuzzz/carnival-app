@@ -22,7 +22,7 @@ public static class IdempotencyBuffering
 
 /// <summary>
 /// The wrapped handler must return a JSON value result and mutate only through the request-scoped
-/// SportsDbContext, so its writes ride the idempotency transaction.
+/// CarnivalAppDbContext, so its writes ride the idempotency transaction.
 /// </summary>
 public class IdempotencyEndpointFilter(IdempotencyService idempotency) : IEndpointFilter
 {

@@ -110,7 +110,7 @@ public static class EntryEndpoints
     /// division on every retry.
     /// </summary>
     private static Task<SiblingEntry?> FindSiblingEntryAsync(
-        SportsDbContext db, CarnivalEvent carnivalEvent, Guid studentId, CancellationToken ct) =>
+        CarnivalAppDbContext db, CarnivalEvent carnivalEvent, Guid studentId, CancellationToken ct) =>
         db.Entries.AsNoTracking()
             .Where(e => e.StudentId == studentId
                 && e.CarnivalEventId != carnivalEvent.Id
@@ -182,7 +182,7 @@ public static class EntryEndpoints
 
     private static async Task<IResult> SearchEligibleStudentsAsync(
         Guid id, Guid eventId, string? search, string? house, int? yearLevel,
-        [FromServices] SportsDbContext db, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -252,7 +252,7 @@ public static class EntryEndpoints
     }
 
     private static async Task<IResult> ListEntriesAsync(
-        Guid id, Guid eventId, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, Guid eventId, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var carnivalEvent = await CarnivalGuards.FindEventWithCarnivalAsync(db, id, eventId, ct);
         if (carnivalEvent is null) return CarnivalGuards.EventNotFound();
@@ -270,7 +270,7 @@ public static class EntryEndpoints
     /// </summary>
     private static Task<IResult> CreateEntryAsync(
         Guid id, Guid eventId, CreateEntryRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
             (clientEntryId, innerCt) =>
@@ -279,7 +279,7 @@ public static class EntryEndpoints
 
     private static async Task<IResult> CreateEntryCoreAsync(
         Guid id, Guid eventId, Guid? clientEntryId, CreateEntryRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         var carnivalEvent = await db.CarnivalEvents
             .Include(e => e.Carnival)
@@ -402,7 +402,7 @@ public static class EntryEndpoints
     /// a 409 the outbox parks, not a retryable 500. No re-read: PostgreSQL aborted the transaction.
     /// </summary>
     private static async Task<IResult?> SaveGuardingDuplicateAsync(
-        SportsDbContext db, string code, string detail, CancellationToken ct)
+        CarnivalAppDbContext db, string code, string detail, CancellationToken ct)
     {
         try
         {
@@ -421,7 +421,7 @@ public static class EntryEndpoints
     /// </summary>
     private static async Task<EntryDto> PlacedAsync(
         Guid id, Guid eventId, Guid? contextRaceId, Entry entry, CarnivalEvent carnivalEvent,
-        HttpContext ctx, SportsDbContext db, AuditService audit, CancellationToken ct)
+        HttpContext ctx, CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         // Projected first: a failed attempt's edits stay on the detached instance.
         var created = Project(entry);
@@ -439,7 +439,7 @@ public static class EntryEndpoints
 
     private static Task<IResult> CreateTeamEntryAsync(
         Guid id, Guid eventId, TeamEntryRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, [FromServices] SchoolSettingsProvider school,
         CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
@@ -449,7 +449,7 @@ public static class EntryEndpoints
 
     private static async Task<IResult> CreateTeamEntryCoreAsync(
         Guid id, Guid eventId, Guid? clientEntryId, TeamEntryRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, SchoolSettingsProvider school, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, SchoolSettingsProvider school, CancellationToken ct)
     {
         var carnivalEvent = await db.CarnivalEvents
             .Include(e => e.Carnival)
@@ -625,7 +625,7 @@ public static class EntryEndpoints
 
     private static async Task<IResult> RemoveEntryAsync(
         Guid id, Guid eventId, Guid entryId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var entry = await db.Entries
             .Include(e => e.CarnivalEvent).ThenInclude(ce => ce.Carnival)
@@ -650,7 +650,7 @@ public static class EntryEndpoints
 
     private static async Task<IResult> SetCategoryOverrideAsync(
         Guid id, Guid eventId, Guid entryId, CategoryOverrideRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var entry = await db.Entries
             .Include(e => e.CarnivalEvent).ThenInclude(ce => ce.Carnival)

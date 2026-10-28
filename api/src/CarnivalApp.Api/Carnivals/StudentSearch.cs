@@ -19,7 +19,7 @@ public static class StudentSearch
         .Replace("_", "\\_");
 
     public static IQueryable<RosterSnapshot> WhereNameMatches(
-        this IQueryable<RosterSnapshot> snapshots, SportsDbContext db, string term)
+        this IQueryable<RosterSnapshot> snapshots, CarnivalAppDbContext db, string term)
     {
         if (db.Database.IsNpgsql())
         {
@@ -40,7 +40,7 @@ public static class StudentSearch
 
     // Stored house codes keep whatever casing the source system exported.
     public static IQueryable<RosterSnapshot> WhereHouseMatches(
-        this IQueryable<RosterSnapshot> snapshots, SportsDbContext db, string house)
+        this IQueryable<RosterSnapshot> snapshots, CarnivalAppDbContext db, string house)
     {
         if (db.Database.IsNpgsql())
         {

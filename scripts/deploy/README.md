@@ -83,7 +83,7 @@ scripted from the VM and a green CI run is not a substitute (§4.1 A).
 | Script | Runs | Does |
 |---|---|---|
 | `push-backups.sh` | on the VM, cron-able | rsyncs `*.dump.age` from the `db-backups` volume to `BACKUP_PUSH_TARGET`; clean no-op while that is unset. Never copies plaintext. A short stage copy or a zero-length ciphertext fails the run, and `--checksum` re-sends a file whose bytes differ from the target's copy. |
-| `restore-drill.sh <age-identity-file>` | on the VM, once a term | decrypts the newest dump, restores into a scratch `sports_drill`, prints row counts and wall time, then drops and shreds. Record the row in runbook §5.5. **FAILs** on a dump older than 2 × `BACKUP_INTERVAL_SECONDS`, on any of the four tables restoring 0 rows, and on a count under 90% of that table's live count read in the same run. |
+| `restore-drill.sh <age-identity-file>` | on the VM, once a term | decrypts the newest dump, restores into a scratch `carnival_drill`, prints row counts and wall time, then drops and shreds. Record the row in runbook §5.5. **FAILs** on a dump older than 2 × `BACKUP_INTERVAL_SECONDS`, on any of the four tables restoring 0 rows, and on a count under 90% of that table's live count read in the same run. |
 
 ## Rollback
 

@@ -49,7 +49,7 @@ SCREENSHOTS_FIXED=1 npm run screenshots  # pixel-reproducible captures, for diff
 
 `playwright.config.ts` starts the whole dev loop itself — the API on the
 throwaway SQLite database with the synthetic seed, and Vite — and reuses either
-if it is already running (`scripts/dev-run.ps1`). **Set `SPORTS_APP_URL` if port
+if it is already running (`scripts/dev-run.ps1`). **Set `CARNIVAL_APP_URL` if port
 5173 is taken by another project** — `reuseExistingServer` will otherwise adopt and
 drive whatever is there; the Vite port is derived from that URL. Profiles: iPad landscape and
 iPhone (WebKit), Pixel and desktop (Chromium). The specs seed a carnival of

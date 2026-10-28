@@ -1,4 +1,4 @@
-const KEY = "sports.theme";
+const KEY = "carnival.theme";
 const ATTR = "data-theme";
 
 export type Theme = "standard" | "outdoor";

@@ -29,7 +29,7 @@ public static class DevelopmentSeeder
 
     public static async Task SeedAsync(IServiceProvider services, CancellationToken ct = default)
     {
-        var db = services.GetRequiredService<SportsDbContext>();
+        var db = services.GetRequiredService<CarnivalAppDbContext>();
         // The school row is the bootstrap's; a roster or carnival means seeded, or a real dataset.
         if (await db.Students.AnyAsync(ct) || await db.Carnivals.AnyAsync(ct))
             return;

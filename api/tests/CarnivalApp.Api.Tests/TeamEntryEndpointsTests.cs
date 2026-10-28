@@ -44,7 +44,7 @@ public sealed class TeamEntryEndpointsTests : IDisposable
     private async Task<TeamScene> SeedAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         var batch = new ImportBatch
         {

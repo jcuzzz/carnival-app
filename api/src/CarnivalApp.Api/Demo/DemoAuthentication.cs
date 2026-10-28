@@ -11,7 +11,7 @@ namespace CarnivalApp.Api.Demo;
 public static class DemoAuthentication
 {
     public const string Scheme = "DemoSession";
-    public const string CookieName = "sports_demo";
+    public const string CookieName = "carnival_demo";
     public const string ExpiresAtClaim = "demo_expires_at";
 
     public static CookieOptions CookieOptions(DateTimeOffset expiresAt) => new()

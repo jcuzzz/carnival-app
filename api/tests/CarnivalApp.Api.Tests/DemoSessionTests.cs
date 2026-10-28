@@ -78,7 +78,7 @@ public sealed class DemoSessionTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData("sports_demo=not-a-token")]
+    [InlineData("carnival_demo=not-a-token")]
     public async Task Without_a_live_session_the_session_check_is_401(string? cookie)
     {
         using var host = new DemoHost();

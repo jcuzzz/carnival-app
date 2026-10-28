@@ -10,7 +10,7 @@ public static class StandingHouses
 {
     // A finalised carnival is history: a house configured after it did not take part.
     public static async Task<IReadOnlyList<string>> ListAsync(
-        SportsDbContext db, Guid carnivalId, CarnivalStatus status, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CarnivalStatus status, CancellationToken ct)
     {
         var configured = await db.ConfiguredHouseCodesAsync(ct);
         if (status != CarnivalStatus.Finalised) return configured;

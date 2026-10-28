@@ -7,13 +7,13 @@
 
 -- psql does not interpolate :variables inside dollar-quoted bodies, so the two
 -- values are handed to the DO blocks as session settings instead.
-SELECT set_config('sports.app_user', :'app_user', false) AS app_user;
-SELECT set_config('sports.app_password', :'app_password', false) IS NOT NULL AS password_loaded;
+SELECT set_config('carnival.app_user', :'app_user', false) AS app_user;
+SELECT set_config('carnival.app_password', :'app_password', false) IS NOT NULL AS password_loaded;
 
 DO $$
 DECLARE
-  app_user     text := current_setting('sports.app_user');
-  app_password text := current_setting('sports.app_password');
+  app_user     text := current_setting('carnival.app_user');
+  app_password text := current_setting('carnival.app_password');
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = app_user) THEN
     EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', app_user, app_password);
@@ -25,7 +25,7 @@ $$;
 
 DO $$
 DECLARE
-  app_user text := current_setting('sports.app_user');
+  app_user text := current_setting('carnival.app_user');
   owner    text := current_user;
 BEGIN
   EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), app_user);
@@ -43,7 +43,7 @@ $$;
 -- C7) stays as the second lock.
 DO $$
 DECLARE
-  app_user text := current_setting('sports.app_user');
+  app_user text := current_setting('carnival.app_user');
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'AuditEvents') THEN
     EXECUTE format('REVOKE UPDATE, DELETE ON public."AuditEvents" FROM %I', app_user);
@@ -58,7 +58,7 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
 DO $$
 DECLARE
-  app_user text := current_setting('sports.app_user');
+  app_user text := current_setting('carnival.app_user');
 BEGIN
   EXECUTE format('ALTER ROLE %I SET statement_timeout = ''60s''', app_user);
   EXECUTE format('ALTER ROLE %I SET idle_in_transaction_session_timeout = ''60s''', app_user);

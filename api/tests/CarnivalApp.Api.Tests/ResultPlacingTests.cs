@@ -40,7 +40,7 @@ public sealed class ResultPlacingTests(ApiTestFactory factory) : IClassFixture<A
     private async Task<Seeded> SeedAsync(params EventSpec[] specs)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var now = DateTimeOffset.UtcNow;
         var carnival = new Carnival
         {

@@ -72,7 +72,7 @@ public static class RoleAssignmentEndpoints
             RevocationReason: null));
 
     private static async Task<IResult> ListAsync(
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         [FromServices] IConfiguration configuration,
         CancellationToken ct)
     {
@@ -88,7 +88,7 @@ public static class RoleAssignmentEndpoints
     private static async Task<IResult> GrantAsync(
         GrantRoleRequest request,
         HttpContext ctx,
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit,
         [FromServices] RoleAssignmentProvider provider,
         CancellationToken ct)
@@ -142,7 +142,7 @@ public static class RoleAssignmentEndpoints
     }
 
     private static Task<bool> IsActiveAsync(
-        SportsDbContext db, string upn, PlatformRole role, CancellationToken ct) =>
+        CarnivalAppDbContext db, string upn, PlatformRole role, CancellationToken ct) =>
         db.RoleAssignments.AsNoTracking()
             .AnyAsync(row => row.SubjectUpn == upn && row.Role == role && row.RevokedAtUtc == null, ct);
 
@@ -151,7 +151,7 @@ public static class RoleAssignmentEndpoints
         // Explicit: a minimal-API DELETE never infers a body.
         [FromBody] RevokeRoleRequest? request,
         HttpContext ctx,
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit,
         [FromServices] RoleAssignmentProvider provider,
         CancellationToken ct)

@@ -14,7 +14,7 @@ public sealed record IdempotencyOutcome(int StatusCode, string Body, bool Replay
 /// Any other outcome rolls back and leaves the key unburned: refusals
 /// are state-dependent, and a burnt key would strand queued work.
 /// </summary>
-public class IdempotencyService(SportsDbContext db)
+public class IdempotencyService(CarnivalAppDbContext db)
 {
     public const string HeaderName = "Idempotency-Key";
 

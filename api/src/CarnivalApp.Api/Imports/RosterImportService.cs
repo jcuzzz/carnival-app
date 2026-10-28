@@ -12,7 +12,7 @@ namespace CarnivalApp.Api.Imports;
 /// Only ACTV rows promote; others stay inactive identity references with no house validation
 /// (legacy codes exist only on departed students). The birthdate is never stored.
 /// </summary>
-public class RosterImportService(SportsDbContext db, AuditService audit)
+public class RosterImportService(CarnivalAppDbContext db, AuditService audit)
 {
     public const int MinYearLevel = 7;
     public const int MaxYearLevel = 12;

@@ -99,7 +99,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "short=$short" >> "$GITHUB_OUTPUT"
           for r in api web web_demo backup; do
-            repo="sports-${r//_/-}"
+            repo="carnival-app-${r//_/-}"
             t="ghcr.io/${OWNER}/${repo}:sha-${short}"
             if [ "$IS_MAIN" = "true" ]; then t="$t,ghcr.io/${OWNER}/${repo}:main"; fi
             if [ -n "$v" ]; then t="$t,ghcr.io/${OWNER}/${repo}:$v"; fi

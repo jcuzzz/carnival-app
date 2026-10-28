@@ -14,7 +14,7 @@ public static class SchoolConfigurationQuery
 
     // On the caller's context; SchoolSettingsProvider is the read that logs an unreadable blob.
     public static async Task<IReadOnlyList<string>> ConfiguredHouseCodesAsync(
-        this SportsDbContext db, CancellationToken ct)
+        this CarnivalAppDbContext db, CancellationToken ct)
     {
         var row = await db.SchoolConfigurations.AsNoTracking().TheSchool().FirstOrDefaultAsync(ct);
         return row is null

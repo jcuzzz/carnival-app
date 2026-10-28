@@ -36,7 +36,7 @@ public sealed class EntryCreateRaceTests : IDisposable
         _factory.Race.ArmOnce(EntryInsert, transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             var snapshot = db.RosterSnapshots.Single(r => r.StudentId == studentId && r.IsCurrent);
             db.Entries.Add(new Entry

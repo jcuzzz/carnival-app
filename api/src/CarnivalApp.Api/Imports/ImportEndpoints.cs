@@ -189,7 +189,7 @@ public static class ImportEndpoints
         ApiError.Internal(ErrorCodes.ImportMappingUnavailable, load.Problem);
 
     private static async Task<IResult> GetDefaultsAsync(
-        IConfiguration config, [FromServices] SportsDbContext db, CancellationToken ct)
+        IConfiguration config, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var load = LoadMapping(config);
         if (load.Mapping is not { } mapping) return MappingUnavailable(load);
@@ -202,7 +202,7 @@ public static class ImportEndpoints
 
     private static async Task<IResult> StageAsync(
         HttpContext ctx, [FromServices] RosterImportService service, IConfiguration config,
-        [FromServices] SchoolSettingsProvider school, [FromServices] SportsDbContext db,
+        [FromServices] SchoolSettingsProvider school, [FromServices] CarnivalAppDbContext db,
         CancellationToken ct)
     {
         if (!ctx.Request.HasFormContentType)
@@ -255,7 +255,7 @@ public static class ImportEndpoints
             summary));
     }
 
-    private static async Task<IResult> ListAsync([FromServices] SportsDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListAsync([FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         // Ordered in memory: SQLite cannot ORDER BY a DateTimeOffset.
         var batches = await db.ImportBatches.AsNoTracking().ToListAsync(ct);
@@ -268,7 +268,7 @@ public static class ImportEndpoints
             .ToList());
     }
 
-    private static async Task<IResult> GetValidationAsync(Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetValidationAsync(Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var batch = await db.ImportBatches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id, ct);
         if (batch is null) return BatchNotFound();
@@ -296,7 +296,7 @@ public static class ImportEndpoints
         catch (JsonException) { return null; }
     }
 
-    private static async Task<IResult> GetReconciliationAsync(Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetReconciliationAsync(Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var batch = await db.ImportBatches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id, ct);
         if (batch is null) return BatchNotFound();

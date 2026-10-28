@@ -21,7 +21,7 @@ A capture is:
 
 ## The outbox store
 
-IndexedDB through Dexie, database `sports-platform`, table `outbox`, primary key `id`, indexed on `status`, `capturedAt`, `[status+syncedAt]` and `[status+resolvedAt]`.
+IndexedDB through Dexie, database `carnival-app`, table `outbox`, primary key `id`, indexed on `status`, `capturedAt`, `[status+syncedAt]` and `[status+resolvedAt]`.
 
 | Field | Meaning |
 |---|---|

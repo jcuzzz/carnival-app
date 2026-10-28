@@ -13,8 +13,8 @@ namespace CarnivalApp.Api.Tests;
 /// </summary>
 public sealed class DatabaseConnectionStringTests
 {
-    private const string App = "Host=db;Database=sports;Username=sports_app;Password=a";
-    private const string Owner = "Host=db;Database=sports;Username=sports;Password=o";
+    private const string App = "Host=db;Database=carnival;Username=carnival_app;Password=a";
+    private const string Owner = "Host=db;Database=carnival;Username=carnival;Password=o";
 
     private static IConfiguration Config(params (string Key, string Value)[] values) =>
         new ConfigurationBuilder()
@@ -24,7 +24,7 @@ public sealed class DatabaseConnectionStringTests
     [Fact]
     public void Migrations_fall_back_to_the_application_string_when_none_is_configured()
     {
-        var config = Config(("ConnectionStrings:SportsDb", App));
+        var config = Config(("ConnectionStrings:CarnivalAppDb", App));
         Assert.Null(DatabaseConnectionStrings.MigrationsOverride(config));
         Assert.Equal(App, DatabaseConnectionStrings.Migrations(config));
         Assert.Equal(App, DatabaseConnectionStrings.Application(config));
@@ -34,8 +34,8 @@ public sealed class DatabaseConnectionStringTests
     public void Migrations_string_is_preferred_and_leaves_the_application_string_alone()
     {
         var config = Config(
-            ("ConnectionStrings:SportsDb", App),
-            ("ConnectionStrings:SportsDbMigrations", Owner));
+            ("ConnectionStrings:CarnivalAppDb", App),
+            ("ConnectionStrings:CarnivalAppDbMigrations", Owner));
         Assert.Equal(Owner, DatabaseConnectionStrings.MigrationsOverride(config));
         Assert.Equal(Owner, DatabaseConnectionStrings.Migrations(config));
         Assert.Equal(App, DatabaseConnectionStrings.Application(config));
@@ -44,7 +44,7 @@ public sealed class DatabaseConnectionStringTests
     [Fact]
     public void A_blank_migrations_string_is_treated_as_absent()
     {
-        var config = Config(("ConnectionStrings:SportsDb", App), ("ConnectionStrings:SportsDbMigrations", "  "));
+        var config = Config(("ConnectionStrings:CarnivalAppDb", App), ("ConnectionStrings:CarnivalAppDbMigrations", "  "));
         Assert.Null(DatabaseConnectionStrings.MigrationsOverride(config));
         Assert.Equal(App, DatabaseConnectionStrings.Migrations(config));
     }
@@ -66,7 +66,7 @@ public sealed class DatabaseConnectionStringTests
 /// </summary>
 public sealed class MigrationContextOptionsTests
 {
-    private const string Owner = "Host=db;Database=sports;Username=sports;Password=o";
+    private const string Owner = "Host=db;Database=carnival;Username=carnival;Password=o";
 
     [Fact]
     public void The_migrations_context_logs_through_the_host_logger_factory()

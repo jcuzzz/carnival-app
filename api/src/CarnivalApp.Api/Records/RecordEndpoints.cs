@@ -76,7 +76,7 @@ public static class RecordEndpoints
             r.VoidReason));
 
     private static async Task<IResult> ListRecordsAsync(
-        [FromQuery] string? sport, [FromServices] SportsDbContext db, CancellationToken ct)
+        [FromQuery] string? sport, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         // The same standing predicate record detection applies.
         var query = db.SchoolRecords.AsNoTracking()
@@ -104,7 +104,7 @@ public static class RecordEndpoints
 
     // What stands plus every voided row with its reason; superseded rows left the ordinary way.
     private static async Task<IResult> ListForAdministrationAsync(
-        [FromQuery] string? sport, [FromServices] SportsDbContext db, CancellationToken ct)
+        [FromQuery] string? sport, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var query = db.SchoolRecords.AsNoTracking()
             .Where(r => (r.Status == SchoolRecordStatus.Ratified && r.EffectiveTo == null)
@@ -134,7 +134,7 @@ public static class RecordEndpoints
     // Void, never delete: the row and its evidence stay.
     private static async Task<IResult> VoidRecordAsync(
         Guid id, VoidRecordRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var reason = request.Reason?.Trim();
         if (string.IsNullOrWhiteSpace(reason))
@@ -198,7 +198,7 @@ public static class RecordEndpoints
 
     // Reads the database, not the tracked graph.
     private static Task<bool> StandingElsewhereAsync(
-        SportsDbContext db, SchoolRecord voided, SchoolRecord reinstated, CancellationToken ct) =>
+        CarnivalAppDbContext db, SchoolRecord voided, SchoolRecord reinstated, CancellationToken ct) =>
         db.SchoolRecords.AsNoTracking().AnyAsync(
             r => r.EventDefinitionId == voided.EventDefinitionId
                  && r.AgeGroup == voided.AgeGroup
@@ -212,7 +212,7 @@ public static class RecordEndpoints
     // Puts back the nearest live record the voided one superseded; an empty category would let the
     // next carnival seed a record slower than one that legitimately stood.
     private static async Task<SchoolRecord?> ReinstateAsync(
-        SportsDbContext db, SchoolRecord voided, CancellationToken ct)
+        CarnivalAppDbContext db, SchoolRecord voided, CancellationToken ct)
     {
         if (voided.Status != SchoolRecordStatus.Ratified || voided.EffectiveTo is not null)
             return null;

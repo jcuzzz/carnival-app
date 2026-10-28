@@ -52,13 +52,13 @@ public static class CarnivalEndpoints
     private static CarnivalDto Project(Carnival c) => new(
         c.Id, c.Name, c.Type, c.Date, c.Venue, c.Status, c.RuleVersion, c.OwnerSubject, c.Version);
 
-    private static async Task<IResult> ListCarnivalsAsync([FromServices] SportsDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListCarnivalsAsync([FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var carnivals = await db.Carnivals.AsNoTracking().OrderByDescending(c => c.Date).ToListAsync(ct);
         return Results.Ok(carnivals.Select(Project));
     }
 
-    private static async Task<IResult> GetCarnivalAsync(Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetCarnivalAsync(Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
         return carnival is null ? CarnivalGuards.CarnivalNotFound() : Results.Ok(Project(carnival));
@@ -66,7 +66,7 @@ public static class CarnivalEndpoints
 
     private static async Task<IResult> CreateCarnivalAsync(
         CarnivalRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return ApiError.BadRequest(ErrorCodes.ValidationFailed, "name is required.");
@@ -105,7 +105,7 @@ public static class CarnivalEndpoints
 
     private static async Task<IResult> UpdateCarnivalAsync(
         Guid id, CarnivalRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -144,7 +144,7 @@ public static class CarnivalEndpoints
 
     private static async Task<IResult> ChangeCarnivalStatusAsync(
         Guid id, StatusRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         if (!Enum.TryParse<CarnivalStatus>(request.Status, ignoreCase: true, out var target))
             return ApiError.BadRequest(ErrorCodes.UnknownStatus, $"Unknown status '{request.Status}'.");
@@ -165,7 +165,7 @@ public static class CarnivalEndpoints
 
     private static async Task<IResult> ApplyCarnivalStatusAsync(
         Carnival carnival, CarnivalStatus target, StatusRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         var prior = carnival.Status;
         carnival.Status = target;
@@ -190,7 +190,7 @@ public static class CarnivalEndpoints
     /// </summary>
     private static async Task<IResult> FinaliseCarnivalAsync(
         Carnival carnival, StatusRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         var id = carnival.Id;
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -266,7 +266,7 @@ public static class CarnivalEndpoints
     private const int BlockedSampleLimit = 20;
 
     private static async Task<IResult?> OwingEntriesAsync(
-        SportsDbContext db, IReadOnlyCollection<Guid> owingEventIds, CancellationToken ct)
+        CarnivalAppDbContext db, IReadOnlyCollection<Guid> owingEventIds, CancellationToken ct)
     {
         var owing = db.Entries.Where(e => owingEventIds.Contains(e.CarnivalEventId)
                                           && !e.Results.AsQueryable().Any(JumpCard.Recorded));
@@ -294,7 +294,7 @@ public static class CarnivalEndpoints
     /// <summary>Idempotent: re-applying skips whatever already exists.</summary>
     private static async Task<IResult> ApplyTemplateAsync(
         Guid id, ApplyTemplateRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] EventTemplateService templates,
+        [FromServices] CarnivalAppDbContext db, [FromServices] EventTemplateService templates,
         CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);

@@ -43,14 +43,14 @@ public static class ReportEndpoints
     }
 
     private static async Task<IResult> GetResultsAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var report = await ResultsBook.BuildAsync(db, id, ct);
         return report is null ? CarnivalGuards.CarnivalNotFound() : Results.Ok(report);
     }
 
     private static async Task<IResult> ExportStandingsAsync(
-        Guid id, HttpContext ctx, [FromServices] SportsDbContext db,
+        Guid id, HttpContext ctx, [FromServices] CarnivalAppDbContext db,
         [FromServices] ScoringService scoring, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -74,7 +74,7 @@ public static class ReportEndpoints
     }
 
     private static async Task<IResult> ExportResultsAsync(
-        Guid id, HttpContext ctx, [FromServices] SportsDbContext db,
+        Guid id, HttpContext ctx, [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -89,7 +89,7 @@ public static class ReportEndpoints
     // The only gated export: it leaves the school, and a
     // selection process cannot see a later correction.
     private static async Task<IResult> ExportDistrictAsync(
-        Guid id, HttpContext ctx, [FromServices] SportsDbContext db,
+        Guid id, HttpContext ctx, [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -106,7 +106,7 @@ public static class ReportEndpoints
     }
 
     private static async Task RecordExportAsync(
-        HttpContext ctx, SportsDbContext db, AuditService audit, Carnival carnival,
+        HttpContext ctx, CarnivalAppDbContext db, AuditService audit, Carnival carnival,
         string report, int rows, CancellationToken ct)
     {
         audit.Record(SessionActor.From(ctx), AuditActions.ReportExport,

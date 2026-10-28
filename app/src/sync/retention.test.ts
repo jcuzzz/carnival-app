@@ -63,7 +63,7 @@ beforeEach(async () => {
   await db.outbox.clear();
   await db.syncMeta.clear();
   await db.eventRosters.clear();
-  localStorage.removeItem("sports.deviceClearPending");
+  localStorage.removeItem("carnival.deviceClearPending");
   // Date only: fake-indexeddb drives its transactions off setImmediate, so
   // faking the timer functions would deadlock every Dexie call in this file.
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -263,13 +263,13 @@ describe("roster cache sweep (ADR-0026 §3)", () => {
   it("finishes a sign-out whose clear failed, instead of ageing rosters normally", async () => {
     // The device was signed out but could not be cleared; the fresh-looking
     // roster below is the previous official's and must go anyway.
-    localStorage.setItem("sports.deviceClearPending", "1");
+    localStorage.setItem("carnival.deviceClearPending", "1");
     await roster("ev-fresh", 1);
 
     await pruneResolvedOutboxItems();
 
     expect(await db.eventRosters.count()).toBe(0);
-    expect(localStorage.getItem("sports.deviceClearPending")).toBeNull();
+    expect(localStorage.getItem("carnival.deviceClearPending")).toBeNull();
   });
 
   it("still prunes the outbox when roster upkeep throws", async () => {

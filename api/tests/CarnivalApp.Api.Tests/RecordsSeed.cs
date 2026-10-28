@@ -95,7 +95,7 @@ public sealed class RecordsSeed
         var n = Interlocked.Increment(ref _sequence);
         var now = DateTimeOffset.UtcNow;
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         var carnival = new Carnival
         {

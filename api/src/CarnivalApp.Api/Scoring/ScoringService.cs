@@ -7,7 +7,7 @@ using CarnivalApp.Api.School;
 namespace CarnivalApp.Api.Scoring;
 
 // Computed on read from current results; each Time-event heat is its own competition for points.
-public class ScoringService(SportsDbContext db)
+public class ScoringService(CarnivalAppDbContext db)
 {
     // Rank: equal totals share a rank and the next skips (1, 1, 3); computed here so the Dashboard
     // and the reports table cannot disagree.

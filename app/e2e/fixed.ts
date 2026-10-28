@@ -68,7 +68,7 @@ export async function stabilise(page: Page, context: BrowserContext): Promise<vo
   await context.addInitScript(
     ({ css, deviceId }) => {
       try {
-        localStorage.setItem("sports.deviceId", deviceId);
+        localStorage.setItem("carnival.deviceId", deviceId);
       } catch {
         // An opaque origin before the first navigation has no storage.
       }

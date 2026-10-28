@@ -59,7 +59,7 @@ public static class TemplateReconcileEndpoints
         HttpContext ctx,
         [FromServices] EventTemplateService templates,
         [FromServices] TemplateReconciler reconciler,
-        [FromServices] SportsDbContext db,
+        [FromServices] CarnivalAppDbContext db,
         CancellationToken ct)
     {
         var lookup = templates.Lookup(templateId);

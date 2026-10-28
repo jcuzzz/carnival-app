@@ -15,13 +15,13 @@ namespace CarnivalApp.Api.Tests;
 public sealed class CompetitionYearDefaultTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
-    private readonly SportsDbContext _db;
+    private readonly CarnivalAppDbContext _db;
 
     public CompetitionYearDefaultTests()
     {
         _connection.Open();
-        _db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        _db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         _db.Database.EnsureCreated();
     }
 

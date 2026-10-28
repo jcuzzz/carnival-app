@@ -53,7 +53,7 @@ public static class ResultsBook
         string? AttemptsJson, int? AttemptsPerHeight);
 
     public static async Task<ResultsReport?> BuildAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == carnivalId, ct);
@@ -61,7 +61,7 @@ public static class ResultsBook
     }
 
     public static async Task<ResultsReport> BuildAsync(
-        SportsDbContext db, Carnival carnival, CancellationToken ct)
+        CarnivalAppDbContext db, Carnival carnival, CancellationToken ct)
     {
         var carnivalId = carnival.Id;
         // A cleared high-jump card prints as the entry with no result it is: not at all.

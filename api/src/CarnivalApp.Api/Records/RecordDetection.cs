@@ -19,7 +19,7 @@ public static class RecordDetection
 
     // Stages rows and audit events on the caller's DbContext; its transaction commits them.
     public static async Task<int> MintAsync(
-        SportsDbContext db, AuditService audit, Carnival carnival, AuditActor actor,
+        CarnivalAppDbContext db, AuditService audit, Carnival carnival, AuditActor actor,
         string? reason, DateTimeOffset finalisedAtUtc, CancellationToken ct)
     {
         var ladder = await EventLadder.BuildAsync(db, carnival.Id, ct);

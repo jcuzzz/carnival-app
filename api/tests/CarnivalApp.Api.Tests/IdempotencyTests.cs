@@ -28,23 +28,23 @@ namespace CarnivalApp.Api.Tests;
 public sealed class IdempotencyServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly DbContextOptions<SportsDbContext> _options;
+    private readonly DbContextOptions<CarnivalAppDbContext> _options;
 
     public IdempotencyServiceTests()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        _options = new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options;
-        using var db = new SportsDbContext(_options);
+        _options = new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options;
+        using var db = new CarnivalAppDbContext(_options);
         db.Database.EnsureCreated();
     }
 
     public void Dispose() => _connection.Dispose();
 
-    private SportsDbContext NewDb() => new(_options);
+    private CarnivalAppDbContext NewDb() => new(_options);
 
     private static Func<CancellationToken, Task<(int, string)>> CreateStudent(
-        SportsDbContext db, string key, Func<int>? counter = null) => async _ =>
+        CarnivalAppDbContext db, string key, Func<int>? counter = null) => async _ =>
     {
         counter?.Invoke();
         db.Students.Add(new Student
@@ -235,12 +235,12 @@ public sealed class IdempotencyServiceTests : IDisposable
         var key = Guid.NewGuid();
         var hash = IdempotencyService.HashPayload("payload-1");
 
-        var winnerOptions = new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(connectionString).Options;
-        var loserOptions = new DbContextOptionsBuilder<SportsDbContext>()
+        var winnerOptions = new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(connectionString).Options;
+        var loserOptions = new DbContextOptionsBuilder<CarnivalAppDbContext>()
             .UseSqlite(connectionString)
             .AddInterceptors(new CommitRivalBeforeTransaction(async () =>
             {
-                await using var winner = new SportsDbContext(winnerOptions);
+                await using var winner = new CarnivalAppDbContext(winnerOptions);
                 winner.IdempotencyKeys.Add(new IdempotencyKey
                 {
                     Key = key,
@@ -257,11 +257,11 @@ public sealed class IdempotencyServiceTests : IDisposable
 
         try
         {
-            await using (var create = new SportsDbContext(winnerOptions))
+            await using (var create = new CarnivalAppDbContext(winnerOptions))
                 await create.Database.EnsureCreatedAsync();
 
             var runs = 0;
-            await using var db = new SportsDbContext(loserOptions);
+            await using var db = new CarnivalAppDbContext(loserOptions);
             var loser = await new IdempotencyService(db).ExecuteAsync(key, hash, "official-1", "device-loser",
                 async ct =>
                 {
@@ -358,12 +358,12 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
-        builder.Services.AddDbContext<SportsDbContext>(o => o.UseSqlite(_connection));
+        builder.Services.AddDbContext<CarnivalAppDbContext>(o => o.UseSqlite(_connection));
         builder.Services.AddScoped<IdempotencyService>();
 
         _app = builder.Build();
         _app.UseIdempotencyBuffering();
-        _app.MapPost("/demo", async (DemoSubmission submission, SportsDbContext db) =>
+        _app.MapPost("/demo", async (DemoSubmission submission, CarnivalAppDbContext db) =>
         {
             db.Students.Add(new Student
             {
@@ -376,7 +376,7 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
         }).AddEndpointFilter<IdempotencyEndpointFilter>();
 
         // Stands in for a state-dependent business refusal (event not open yet).
-        _app.MapPost("/demo-gated", async (DemoSubmission submission, SportsDbContext db) =>
+        _app.MapPost("/demo-gated", async (DemoSubmission submission, CarnivalAppDbContext db) =>
         {
             if (!_gateOpen)
                 return ApiError.Conflict(ErrorCodes.EventNotOpen, "The event is not open for results.");
@@ -392,7 +392,7 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
 
         await _app.StartAsync();
         using (var scope = _app.Services.CreateScope())
-            scope.ServiceProvider.GetRequiredService<SportsDbContext>().Database.EnsureCreated();
+            scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>().Database.EnsureCreated();
         _client = _app.GetTestClient();
     }
 
@@ -432,7 +432,7 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
         Assert.Equal(await first.Content.ReadAsStringAsync(), await retry.Content.ReadAsStringAsync());
 
         using var scope = _app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Single(await db.Students.Where(s => s.ExternalStudentId == "D1").ToListAsync());
     }
 
@@ -462,7 +462,7 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
         Assert.Equal("true", replay.Headers.GetValues("Idempotency-Replayed").Single());
 
         using var scope = _app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Single(await db.Students.Where(s => s.ExternalStudentId == "D3").ToListAsync());
     }
 
@@ -477,7 +477,7 @@ public sealed class IdempotencyEndpointFilterTests : IAsyncLifetime
         await clash.AssertErrorAsync(ErrorCodes.IdempotencyPayloadMismatch);
 
         using var scope = _app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Empty(await db.Students.Where(s => s.ExternalStudentId == "D2-CHANGED").ToListAsync());
     }
 }

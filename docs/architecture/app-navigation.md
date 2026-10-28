@@ -59,7 +59,7 @@ The Outbox is reached from the header indicator, never from behind a role-gated 
 
 The carnival a device is working in is **device-local context** ([ADR-0024](../adr/0024-carnival-context-and-primary-navigation.md)), not a server-side preference: two officials on one shared tablet would fight over a per-account setting, and the venue may have no uplink.
 
-- It is stored in `localStorage` under the key **`sports.carnival`** as `{ id, name, date, status }`. Name, date and status are a display cache, refreshed whenever the carnival is read.
+- It is stored in `localStorage` under the key **`carnival.carnival`** as `{ id, name, date, status }`. Name, date and status are a display cache, refreshed whenever the carnival is read.
 - A `storage` event listener keeps two copies of the app on one device (the installed PWA and a browser tab) on the same selection.
 - If storage is unavailable, the selection holds for the current tab only.
 
@@ -100,7 +100,7 @@ The school's name and brand colour are school settings ([configuration](../admin
 
 ## Outdoor (high-contrast) mode
 
-The **Outdoor** toggle in the header switches to high-contrast tokens for bright sun on the pool deck. It sets `data-theme="outdoor"` on the root element and is remembered per device in `localStorage` (`sports.theme`). It lives in the app's chrome because borrowed school tablets never get their OS accessibility settings changed. A device that already asks for more contrast (`prefers-contrast: more`) gets the same overrides without the toggle. See the [design system](../development/design-system.md).
+The **Outdoor** toggle in the header switches to high-contrast tokens for bright sun on the pool deck. It sets `data-theme="outdoor"` on the root element and is remembered per device in `localStorage` (`carnival.theme`). It lives in the app's chrome because borrowed school tablets never get their OS accessibility settings changed. A device that already asks for more contrast (`prefers-contrast: more`) gets the same overrides without the toggle. See the [design system](../development/design-system.md).
 
 ## Role gating in the UI
 
@@ -125,7 +125,7 @@ Screens read server state through TanStack Query and fold in this device's undel
 
 - `app/src/router.ts`, `app/src/App.tsx`: routing, Home, redirects, deep-link adoption
 - `app/src/shell/AppShell.tsx`: header, primary navigation, banners; `shell/OutdoorToggle.tsx`, `shell/theme.ts`
-- `app/src/carnivals/`: `selectedCarnival.ts` (the `sports.carnival` store), `landing.ts` (landing rule, active tab), `useCarnivalContext.ts` (sync and 404 drop), `switcherModel.ts`
+- `app/src/carnivals/`: `selectedCarnival.ts` (the `carnival.carnival` store), `landing.ts` (landing rule, active tab), `useCarnivalContext.ts` (sync and 404 drop), `switcherModel.ts`
 - `app/src/screens/CarnivalsScreen.tsx`: switcher and auto-selection
 - `app/src/branding/branding.ts`; the `/branding` endpoint in `api/src/CarnivalApp.Api/Program.cs`
 - `app/src/features/ui/SignInOffer.tsx`: `useAccessGate`

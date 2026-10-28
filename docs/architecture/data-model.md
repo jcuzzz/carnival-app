@@ -264,7 +264,7 @@ A `SchoolRecord` is one record for one (event definition, age group, category).
 
 - `api/src/CarnivalApp.Api/Data/Entities/`: the entities and enums
 - `api/src/CarnivalApp.Api/Data/Configurations/`: keys, indexes, constraints, delete behaviour
-- `api/src/CarnivalApp.Api/Data/SportsDbContext.cs`
+- `api/src/CarnivalApp.Api/Data/CarnivalAppDbContext.cs`
 - `api/src/CarnivalApp.Api/Carnivals/EligibilityService.cs`, `EntryEndpoints.cs`, `RaceEndpoints.cs`, `DivisionProfile.cs`, `AgeScope.cs`
 - `api/src/CarnivalApp.Api/Imports/RosterImportService.cs`, `CompetitionDerivation.cs`
 - `api/src/CarnivalApp.Api/Records/RecordDetection.cs`

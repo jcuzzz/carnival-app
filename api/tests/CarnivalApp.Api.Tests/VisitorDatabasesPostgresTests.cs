@@ -43,8 +43,8 @@ public sealed class VisitorDatabasesPostgresTests
         await command.ExecuteNonQueryAsync();
     }
 
-    private static SportsDbContext Open(string connectionString) =>
-        new(new DbContextOptionsBuilder<SportsDbContext>().UseNpgsql(connectionString).Options);
+    private static CarnivalAppDbContext Open(string connectionString) =>
+        new(new DbContextOptionsBuilder<CarnivalAppDbContext>().UseNpgsql(connectionString).Options);
 
     [SkippableFact]
     public async Task Clones_carry_the_template_and_stay_apart()
@@ -54,8 +54,8 @@ public sealed class VisitorDatabasesPostgresTests
         await container.StartAsync();
         var server = container.GetConnectionString();
 
-        await ExecuteAsync(server, "CREATE DATABASE sports_demo_template");
-        var templateString = new NpgsqlConnectionStringBuilder(server) { Database = "sports_demo_template", Pooling = false }
+        await ExecuteAsync(server, "CREATE DATABASE carnival_demo_template");
+        var templateString = new NpgsqlConnectionStringBuilder(server) { Database = "carnival_demo_template", Pooling = false }
             .ConnectionString;
         await using (var template = Open(templateString))
         {
@@ -66,11 +66,11 @@ public sealed class VisitorDatabasesPostgresTests
             });
             await template.SaveChangesAsync();
         }
-        await ExecuteAsync(server, "ALTER DATABASE sports_demo_template IS_TEMPLATE true");
+        await ExecuteAsync(server, "ALTER DATABASE carnival_demo_template IS_TEMPLATE true");
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:SportsDb"] = server,
+            ["ConnectionStrings:CarnivalAppDb"] = server,
             [$"ConnectionStrings:{DemoMode.ControlConnectionName}"] = server,
         }).Build();
         var databases = new PostgresVisitorDatabases(configuration);

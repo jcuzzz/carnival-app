@@ -11,7 +11,7 @@ using CarnivalApp.Api.Data;
 
 namespace CarnivalApp.Api.Migrations
 {
-    [DbContext(typeof(SportsDbContext))]
+    [DbContext(typeof(CarnivalAppDbContext))]
     [Migration("20260810065818_AddRacesLanesAndVenueLaneCount")]
     partial class AddRacesLanesAndVenueLaneCount
     {

@@ -82,7 +82,7 @@ describe("sign-out clears the device", () => {
   });
 
   it("lowers the pending flag once a clear succeeds", async () => {
-    localStorage.setItem("sports.deviceClearPending", "1");
+    localStorage.setItem("carnival.deviceClearPending", "1");
 
     expect(await clearDeviceCaches()).toBe(true);
 

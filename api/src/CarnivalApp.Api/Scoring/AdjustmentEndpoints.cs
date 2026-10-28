@@ -97,7 +97,7 @@ public static class AdjustmentEndpoints
 
     // Drops codes no division may carry (a birthdate past the cut-off derives "-12"), so the editor
     // cannot offer an age the PUT would refuse.
-    private static async Task<RosterFacts> ReadRosterAsync(SportsDbContext db, CancellationToken ct)
+    private static async Task<RosterFacts> ReadRosterAsync(CarnivalAppDbContext db, CancellationToken ct)
     {
         var groups = await db.RosterSnapshots.AsNoTracking()
             .Where(s => s.IsCurrent && s.Student.IsActive)
@@ -124,13 +124,13 @@ public static class AdjustmentEndpoints
     }
 
     private static async Task<DivisionProfile?> ReadProfileAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct) =>
         DivisionProfile.FromRows(await db.CarnivalDivisions.AsNoTracking()
             .Where(d => d.CarnivalId == carnivalId)
             .ToListAsync(ct));
 
     private static async Task<IResult> GetSettingsAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -150,7 +150,7 @@ public static class AdjustmentEndpoints
 
     private static async Task<IResult> UpdateSettingsAsync(
         Guid id, SettingsRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -269,7 +269,7 @@ public static class AdjustmentEndpoints
         a.RecordedBySubject, a.RecordedAtUtc, a.Voided, a.VoidReason);
 
     private static async Task<IResult> ListAdjustmentsAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!await CarnivalGuards.CarnivalExistsAsync(db, id, ct)) return CarnivalGuards.CarnivalNotFound();
         var adjustments = await db.HousePointsAdjustments.AsNoTracking()
@@ -283,7 +283,7 @@ public static class AdjustmentEndpoints
 
     private static Task<IResult> CreateAdjustmentAsync(
         Guid id, AdjustmentRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, [FromServices] SchoolSettingsProvider school,
         CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
@@ -293,7 +293,7 @@ public static class AdjustmentEndpoints
 
     private static async Task<IResult> CreateAdjustmentCoreAsync(
         Guid id, Guid? clientId, AdjustmentRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, SchoolSettingsProvider school, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, SchoolSettingsProvider school, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -356,7 +356,7 @@ public static class AdjustmentEndpoints
 
     private static async Task<IResult> VoidAdjustmentAsync(
         Guid id, Guid adjustmentId, VoidRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var adjustment = await db.HousePointsAdjustments
             .FirstOrDefaultAsync(a => a.Id == adjustmentId && a.CarnivalId == id, ct);

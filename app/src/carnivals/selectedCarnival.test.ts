@@ -45,14 +45,14 @@ describe("the selected carnival (ADR-0024 §1)", () => {
     selectCarnival(carnival());
     // The module reads localStorage at import; assert the write is what a
     // fresh load would find.
-    expect(JSON.parse(localStorage.getItem("sports.carnival")!)).toMatchObject({ id: "c-1" });
+    expect(JSON.parse(localStorage.getItem("carnival.carnival")!)).toMatchObject({ id: "c-1" });
   });
 
   it("clears", () => {
     selectCarnival(carnival());
     clearSelectedCarnival();
     expect(getSelectedCarnival()).toBeNull();
-    expect(localStorage.getItem("sports.carnival")).toBeNull();
+    expect(localStorage.getItem("carnival.carnival")).toBeNull();
   });
 });
 

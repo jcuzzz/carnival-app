@@ -776,7 +776,7 @@ public sealed class TemplateScheduleSeedingTests : IDisposable
         Assert.Empty(template.Streams);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = new Carnival
         {
             Id = Guid.CreateVersion7(),
@@ -939,7 +939,7 @@ public sealed class TemplateExpectationTests : IDisposable
         Assert.Equal(["SY-DEFERRED"], TemplateExpectation.InactiveCodes(template));
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = new Carnival
         {
             Id = Guid.CreateVersion7(),
@@ -1086,7 +1086,7 @@ public sealed class TemplateDivisionsTests : IDisposable
             """));
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var service = scope.ServiceProvider.GetRequiredService<EventTemplateService>();
         var carnival = await CarnivalAsync(db);
         var actor = new AuditActor("divisions-test", "CarnivalAdministrator");
@@ -1224,7 +1224,7 @@ public sealed class TemplateDivisionsTests : IDisposable
         ApplyForCatalogueAsync(EventTemplate template)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = await CarnivalAsync(db);
         await scope.ServiceProvider.GetRequiredService<EventTemplateService>().ApplyAsync(
             carnival, template, new AuditActor("divisions-test", "CarnivalAdministrator"), default);
@@ -1236,7 +1236,7 @@ public sealed class TemplateDivisionsTests : IDisposable
                 .ToListAsync());
     }
 
-    private static async Task<Carnival> CarnivalAsync(SportsDbContext db)
+    private static async Task<Carnival> CarnivalAsync(CarnivalAppDbContext db)
     {
         var carnival = new Carnival
         {

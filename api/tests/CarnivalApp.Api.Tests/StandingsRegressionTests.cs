@@ -46,7 +46,7 @@ public sealed class StandingsRegressionTests : IDisposable
     {
         var carnivalId = await SeedAsync();
         using var scope = _factory.Services.CreateScope();
-        var scoring = new ScoringService(scope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        var scoring = new ScoringService(scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
         var standings = await scoring.ComputeAsync(carnivalId, default);
         Assert.NotNull(standings);
         Assert.Equal(Canonical(Expected), Canonical(Serialise(standings!)));
@@ -71,7 +71,7 @@ public sealed class StandingsRegressionTests : IDisposable
     {
         var carnivalId = await SeedAsync();
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var scoring = new ScoringService(db);
 
         var before = await scoring.ComputeAsync(carnivalId, default);
@@ -133,7 +133,7 @@ public sealed class StandingsRegressionTests : IDisposable
     private async Task<Guid> SeedAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var now = DateTimeOffset.UtcNow;
 
         var carnival = new Carnival

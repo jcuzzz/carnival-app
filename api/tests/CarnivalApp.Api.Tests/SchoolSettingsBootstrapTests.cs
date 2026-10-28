@@ -25,8 +25,8 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        using var db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        using var db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         db.Database.EnsureCreated();
     }
 
@@ -45,7 +45,7 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
             .AddInMemoryCollection(config.ToDictionary(entry => entry.Key, entry => entry.Value))
             .Build());
-        services.AddDbContext<SportsDbContext>(options =>
+        services.AddDbContext<CarnivalAppDbContext>(options =>
         {
             options.UseSqlite(connection);
             tune?.Invoke(options);
@@ -67,8 +67,8 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
 
     private async Task<SchoolSettings> ReadAsync()
     {
-        await using var db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        await using var db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         return SchoolSettings.From(
             await db.SchoolConfigurations.AsNoTracking().SingleAsync(), NullLogger.Instance);
     }
@@ -103,8 +103,8 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
         using var host = Host(("School:Name", configured), ("School:Timezone", configured));
         await SchoolSettingsBootstrap.EnsureAsync(host);
 
-        await using var db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        await using var db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         var row = await db.SchoolConfigurations.SingleAsync();
         Assert.Equal("(unconfigured)", row.Name);
         Assert.Equal("Australia/Melbourne", row.Timezone);
@@ -121,8 +121,8 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
             : FourHouses((SchoolSettingsBootstrap.IdentifierKey, configured)));
         await SchoolSettingsBootstrap.EnsureAsync(host);
 
-        await using var db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        await using var db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         Assert.Equal(expected, (await db.SchoolConfigurations.SingleAsync()).SchoolIdentifier);
     }
 
@@ -132,8 +132,8 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
         using var host = Host(FourHouses(("School:Identifier", "0000")));
         await SchoolSettingsBootstrap.EnsureAsync(host, "DEV-SYNTH");
 
-        await using var db = new SportsDbContext(
-            new DbContextOptionsBuilder<SportsDbContext>().UseSqlite(_connection).Options);
+        await using var db = new CarnivalAppDbContext(
+            new DbContextOptionsBuilder<CarnivalAppDbContext>().UseSqlite(_connection).Options);
         Assert.Equal("DEV-SYNTH", (await db.SchoolConfigurations.SingleAsync()).SchoolIdentifier);
     }
 

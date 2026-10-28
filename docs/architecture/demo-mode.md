@@ -13,12 +13,12 @@ flowchart LR
     API["api<br/>Demo:Enabled=true<br/>Identity:Provider=Demo"]
     subgraph PG["PostgreSQL"]
       C[("control database<br/>DemoSessions")]
-      T[("template<br/>sports_demo_template")]
+      T[("template<br/>carnival_demo_template")]
       D1[("demo_v_… (visitor A)")]
       D2[("demo_v_… (visitor B)")]
     end
   end
-  V -- "cookie sports_demo" --> API
+  V -- "cookie carnival_demo" --> API
   API -- "session lookup" --> C
   API -- "CREATE DATABASE … TEMPLATE" --> T
   API -- "this visitor's requests" --> D1
@@ -28,14 +28,14 @@ flowchart LR
 
 `POST /api/v1/demo/sessions` (anonymous):
 
-1. A live `sports_demo` cookie: `200` with the existing session's expiry.
+1. A live `carnival_demo` cookie: `200` with the existing session's expiry.
 2. Otherwise, under one lock shared with eviction and cleanup: check capacity, run `CREATE DATABASE "demo_v_<id>" TEMPLATE "<template>"`, write the session row, set the cookie, `201` with the expiry.
 
 `GET /api/v1/demo/sessions/me` returns the expiry, or `401 DEMO_SESSION_REQUIRED`.
 
 | Property | Value |
 |---|---|
-| Cookie | `sports_demo`: a random 256-bit token, `HttpOnly`, `Secure`, `SameSite=Strict`, path `/`, expires at the absolute limit. `SameSite=Strict` is the CSRF control; the demo has no cross-site sign-in callback. |
+| Cookie | `carnival_demo`: a random 256-bit token, `HttpOnly`, `Secure`, `SameSite=Strict`, path `/`, expires at the absolute limit. `SameSite=Strict` is the CSRF control; the demo has no cross-site sign-in callback. |
 | Stored | The control database's `DemoSessions` table holds the token's SHA-256 (never the token), the database name, created and last-seen times. |
 | Identity | Subject `demo-<session id>`, name "Demo visitor", role **SystemAdministrator** in their own database, so every screen can be shown. |
 | Expiry | 24 hours after creation or 2 hours after last use, whichever comes first. Last-seen is written at most once a minute. |
@@ -58,7 +58,7 @@ Database creation ignores request cancellation, so a visitor leaving mid-provisi
 
 ## Per-request database
 
-In demo mode, `SportsDbContext` gets its connection string per request from `VisitorDatabase`:
+In demo mode, `CarnivalAppDbContext` gets its connection string per request from `VisitorDatabase`:
 
 - The name must match `^demo_v_[0-9a-f]{32}$` before it reaches a connection string or SQL, so a session row can never steer a request to another database.
 - With no visitor database selected, resolution throws. It never falls back to the configured database.
@@ -69,7 +69,7 @@ Creating and dropping databases runs on a separate connection, `ConnectionString
 
 ## The template
 
-The template database (`Demo:TemplateDatabase`, default `sports_demo_template`) holds the demonstration school: houses and branding, a promoted synthetic roster, a record book and a swimming carnival part-way through the day. A demo host never migrates or bootstraps databases at startup: the template is migrated and seeded when it is built, and a schema change reaches visitors only by rebuilding the template and redeploying. The scripts that build the template and deploy a demo host are not yet in this repository.
+The template database (`Demo:TemplateDatabase`, default `carnival_demo_template`) holds the demonstration school: houses and branding, a promoted synthetic roster, a record book and a swimming carnival part-way through the day. A demo host never migrates or bootstraps databases at startup: the template is migrated and seeded when it is built, and a schema change reaches visitors only by rebuilding the template and redeploying. The scripts that build the template and deploy a demo host are not yet in this repository.
 
 Before a visitor has a session, `GET /api/v1/branding` answers from `Demo:SchoolName` (default "Example Synthetic College") without opening any database, so the landing page can paint and the template is never connected to.
 

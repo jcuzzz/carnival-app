@@ -5,7 +5,7 @@
 ## Now
 
 - **Pre-release, private on GitHub** (`jcuzzz/carnival-app`, one squashed initial commit, 2026-10-21). Ported from the maintainer's private pilot repository: same behaviour, renamed, school details removed. The carnival workflow (import → setup → live capture → house points → records → reports) is complete.
-- **Name:** `Carnival App` / `carnival-app` / `CarnivalApp`, kept for now (maintainer, 2026-10-21); renaming later goes through the port script's `--name/--slug/--namespace`.
+- **Name:** `Carnival App` / `carnival-app` / `CarnivalApp`, kept for now (maintainer, 2026-10-21); renaming later goes through the port script's `--name/--slug/--namespace/--prefix` (the prefix names databases, roles, cookies and storage keys: `carnival`, `carnival_app`, `carnival.*`).
 - **Licence:** AGPL-3.0 with dual licensing (commercial licences for closed integration). Dependencies are permissive only, checked per push by `scripts/check_licences.py` (MS-PL allowed in the test project, OFL for the bundled font). **No CLA and no outside pull requests** (maintainer, 2026-10-21: no lawyer); if contributions are wanted later, adopt an established CLA text unmodified.
 - **Docs:** the current-state tree in `docs/README.md` is the primary documentation (architecture, admin, development); ADRs are short decision records (`docs/adr/README.md`). The staff guide pages are still planned.
 - **Gates:** API 2012 passed / 6 skipped (Testcontainers without Docker) · app tsc, lint, vitest 1612 / 116 files, build clean.
@@ -36,11 +36,9 @@ Open defects and debt: `docs/BACKLOG.md`.
 
 ## Open decisions (maintainer)
 
-- Whether commits in this repository carry AI attribution (the private repository's rule forbids it; `docs/development/agent-practices.md` no longer states it).
 - ADR-0056 (high-jump heights ladder): confirm Accepted.
 
 ## Constraints
 
 - Synthetic data only, in every environment, fixture and capture.
 - No outside pull requests (no CLA). Issues only.
-- Internal runtime identifiers keep the `sports` prefix on purpose (IndexedDB `sports-platform`, localStorage `sports.*`, database and role names, backup file names); renaming them breaks existing installs.

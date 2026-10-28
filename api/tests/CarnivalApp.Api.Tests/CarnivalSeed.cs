@@ -48,7 +48,7 @@ public static class CarnivalSeed
         var primaryAgeGroup = $"A{n}";
         var juniorAgeGroup = $"B{n}";
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
 
         var batch = new ImportBatch
         {
@@ -162,7 +162,7 @@ public static class CarnivalSeed
         EventTier tier = EventTier.Competitive, string? ageGroup = null)
     {
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnivalEvent = new CarnivalEvent
         {
             Id = Guid.CreateVersion7(),
@@ -188,7 +188,7 @@ public static class CarnivalSeed
         ApiTestFactory factory, Guid eventId, Guid studentId)
     {
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var student = await db.Students.SingleAsync(s => s.Id == studentId);
         var snapshot = await db.RosterSnapshots
             .SingleAsync(r => r.StudentId == studentId && r.IsCurrent);
@@ -212,10 +212,10 @@ public static class CarnivalSeed
     }
 
     /// <summary>Run an action against the factory's DbContext (fresh scope).</summary>
-    public static async Task<T> QueryAsync<T>(ApiTestFactory factory, Func<SportsDbContext, Task<T>> query)
+    public static async Task<T> QueryAsync<T>(ApiTestFactory factory, Func<CarnivalAppDbContext, Task<T>> query)
     {
         using var scope = factory.Services.CreateScope();
-        return await query(scope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        return await query(scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
     }
 
     /// <summary>
@@ -223,10 +223,10 @@ public static class CarnivalSeed
     /// principally a pre-ADR-0017 <c>Provisional</c> result, which every capture
     /// path now creates as <c>Verified</c>.
     /// </summary>
-    public static async Task MutateAsync(ApiTestFactory factory, Action<SportsDbContext> mutate)
+    public static async Task MutateAsync(ApiTestFactory factory, Action<CarnivalAppDbContext> mutate)
     {
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         mutate(db);
         await db.SaveChangesAsync();
     }

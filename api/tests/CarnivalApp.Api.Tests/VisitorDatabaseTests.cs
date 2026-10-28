@@ -32,7 +32,7 @@ public sealed class VisitorDatabaseTests : IDisposable
         services.AddSingleton<IHttpContextAccessor>(_accessor);
         services.AddSingleton<VisitorDatabase>();
         services.AddSingleton<IDatabaseKey>(sp => sp.GetRequiredService<VisitorDatabase>());
-        services.AddDbContext<SportsDbContext>((sp, options) =>
+        services.AddDbContext<CarnivalAppDbContext>((sp, options) =>
             options.UseSqlite(_databases[sp.GetRequiredService<VisitorDatabase>().Selected!]));
         services.AddSingleton<SchoolSettingsProvider>();
         services.AddSingleton<RoleAssignmentProvider>();
@@ -73,11 +73,11 @@ public sealed class VisitorDatabaseTests : IDisposable
         _accessor.HttpContext = context;
     }
 
-    private void Use(string name, Action<SportsDbContext> act)
+    private void Use(string name, Action<CarnivalAppDbContext> act)
     {
         Select(name);
         using var scope = _services.CreateScope();
-        act(scope.ServiceProvider.GetRequiredService<SportsDbContext>());
+        act(scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>());
     }
 
     private void Rename(string name, string schoolName) => Use(name, db =>
@@ -156,9 +156,9 @@ public sealed class VisitorDatabaseTests : IDisposable
     [InlineData("demo_v_0123456789abcdef0123456789abcdef", true)]
     [InlineData("demo_v_0123456789ABCDEF0123456789abcdef", false)]
     [InlineData("demo_v_0123456789abcdef", false)]
-    [InlineData("sports", false)]
-    [InlineData("sports_demo_template", false)]
-    [InlineData("demo_v_0123456789abcdef0123456789abcdef;Database=sports", false)]
+    [InlineData("carnival", false)]
+    [InlineData("carnival_demo_template", false)]
+    [InlineData("demo_v_0123456789abcdef0123456789abcdef;Database=carnival", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
     public void Only_generated_visitor_names_are_accepted(string? name, bool valid)
@@ -178,7 +178,7 @@ public sealed class VisitorDatabaseTests : IDisposable
     public void The_connection_string_names_the_visitor_database_with_a_small_draining_pool()
     {
         var built = new NpgsqlConnectionStringBuilder(VisitorDatabase.ForDatabase(
-            "Host=db;Database=sports_demo_control;Username=app;Password=x", _a, poolSize: 3));
+            "Host=db;Database=carnival_demo_control;Username=app;Password=x", _a, poolSize: 3));
 
         Assert.Equal(_a, built.Database);
         Assert.Equal("db", built.Host);
@@ -192,7 +192,7 @@ public sealed class VisitorDatabaseTests : IDisposable
         _accessor.HttpContext = new DefaultHttpContext();
         var visitor = _services.GetRequiredService<VisitorDatabase>();
 
-        Assert.Throws<InvalidOperationException>(() => visitor.ConnectionString("Host=db;Database=sports", 3));
+        Assert.Throws<InvalidOperationException>(() => visitor.ConnectionString("Host=db;Database=carnival", 3));
         Assert.Equal("", visitor.Current);
     }
 

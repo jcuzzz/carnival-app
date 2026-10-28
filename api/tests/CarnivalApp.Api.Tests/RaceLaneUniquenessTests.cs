@@ -37,7 +37,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
     private async Task<Seeded> SeedAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var now = DateTimeOffset.UtcNow;
 
         var carnival = new Carnival
@@ -90,7 +90,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
     private async Task AddEntryAsync(Guid eventId, Guid? raceId, int? lane)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var now = DateTimeOffset.UtcNow;
         var student = new Student
         {
@@ -136,7 +136,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
         await AddEntryAsync(seeded.EventId, seeded.RaceB, lane: 4);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(2, await db.Entries.CountAsync(e => e.Lane == 4));
     }
 
@@ -154,7 +154,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
             await AddEntryAsync(seeded.EventId, raceId: null, lane: null);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(5, await db.Entries.CountAsync(e => e.RaceId == null && e.Lane == null));
     }
 
@@ -168,7 +168,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
         await AddEntryAsync(seeded.EventId, seeded.RaceA, lane: null);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(2, await db.Entries.CountAsync(e => e.RaceId == seeded.RaceA && e.Lane == null));
     }
 
@@ -184,7 +184,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
         await AddEntryAsync(seeded.EventId, raceId: null, lane: 4);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         Assert.Equal(2, await db.Entries.CountAsync(e => e.RaceId == null && e.Lane == 4));
     }
 
@@ -203,7 +203,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
         // index over nullable columns. A filter written here would be handed
         // verbatim to all three, in one dialect's quoting.
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var entry = db.Model.FindEntityType(typeof(Entry))!;
         var index = Assert.Single(entry.GetIndexes(),
             i => i.IsUnique && i.Properties.Select(p => p.Name)
@@ -223,7 +223,7 @@ public sealed class RaceLaneUniquenessTests : IDisposable
         // gating, so nothing about racing may require a program to exist.
         var seeded = await SeedAsync();
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var race = await db.Races.SingleAsync(r => r.Id == seeded.RaceA);
         Assert.Null(race.ScheduleSlotId);
         Assert.Equal(seeded.CarnivalId, race.CarnivalId);

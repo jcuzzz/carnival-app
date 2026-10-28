@@ -118,7 +118,7 @@ afterEach(() => signOut());
 
 describe("ImportReviewScreen", () => {
   it("renders the batch list and, once a batch is picked, both reports", async () => {
-    localStorage.setItem("sports.lastImportBatchId", BATCH);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen />);
     await screen.findByText("ST_SYNTH.csv");
     await screen.findByText(/Reconciliation preview/);
@@ -200,7 +200,7 @@ describe("ImportReviewScreen", () => {
   });
 
   it("states the day the staged ages are as at", async () => {
-    localStorage.setItem("sports.lastImportBatchId", BATCH);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen />);
     const heading = await screen.findByText(/Reconciliation preview — competition year 2026/);
     expect(heading.nextElementSibling?.textContent).toBe("Ages as at 31 December 2026.");
@@ -228,7 +228,7 @@ describe("ImportReviewScreen", () => {
         ],
       }),
     );
-    localStorage.setItem("sports.lastImportBatchId", BATCH);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen />);
 
     await screen.findByText(/2 row\(s\) carry DUPLICATE_STKEY \/ MISSING_HOUSE exceptions/);
@@ -247,7 +247,7 @@ describe("ImportReviewScreen", () => {
         "/api/v1/imports/x/reconciliation",
       ),
     );
-    localStorage.setItem("sports.lastImportBatchId", BATCH);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen />);
 
     const notices = await screen.findAllByText(/This batch expired.*Upload the file again\./);
@@ -267,7 +267,7 @@ describe("ImportReviewScreen", () => {
       status: "Rejected",
       validation: null,
     });
-    localStorage.setItem("sports.lastImportBatchId", BATCH);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen />);
 
     await screen.findByText(/discarded when this batch was rejected/);

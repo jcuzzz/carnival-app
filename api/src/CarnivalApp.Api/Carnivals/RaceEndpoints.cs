@@ -86,12 +86,12 @@ public static class RaceEndpoints
 
     /// <summary>Without its entries: the placement path calls this on every tap.</summary>
     private static Task<Race?> FindRaceAsync(
-        SportsDbContext db, Guid carnivalId, Guid raceId, CancellationToken ct) =>
+        CarnivalAppDbContext db, Guid carnivalId, Guid raceId, CancellationToken ct) =>
         db.Races.FirstOrDefaultAsync(r => r.CarnivalId == carnivalId && r.Id == raceId, ct);
 
     /// <summary>Finalised is the only refusal: races are still tidied once Closed.</summary>
     private static async Task<(Carnival? Carnival, IResult? Refusal)> EditableCarnivalAsync(
-        SportsDbContext db, Guid id, CancellationToken ct)
+        CarnivalAppDbContext db, Guid id, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return (null, CarnivalGuards.CarnivalNotFound());
@@ -111,7 +111,7 @@ public static class RaceEndpoints
     // ---- Read ---------------------------------------------------------------
 
     private static async Task<IResult> ListRacesAsync(
-        Guid id, [FromServices] SportsDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
     {
         if (!await CarnivalGuards.CarnivalExistsAsync(db, id, ct)) return CarnivalGuards.CarnivalNotFound();
 
@@ -143,7 +143,7 @@ public static class RaceEndpoints
     /// at another carnival's program.
     /// </summary>
     private static async Task<IResult?> ValidateSlotAsync(
-        SportsDbContext db, Guid carnivalId, Guid? slotId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, Guid? slotId, CancellationToken ct)
     {
         if (slotId is null) return null;
         var slot = await db.ScheduleSlots
@@ -165,7 +165,7 @@ public static class RaceEndpoints
     /// <summary>The optional idempotency key becomes the race id.</summary>
     private static Task<IResult> CreateRaceAsync(
         Guid id, RaceRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
             (clientRaceId, innerCt) =>
@@ -174,7 +174,7 @@ public static class RaceEndpoints
 
     private static async Task<IResult> CreateRaceCoreAsync(
         Guid id, Guid? clientRaceId, RaceRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         var (carnival, refusal) = await EditableCarnivalAsync(db, id, ct);
         if (refusal is not null) return refusal;
@@ -226,7 +226,7 @@ public static class RaceEndpoints
 
     private static async Task<IResult> UpdateRaceAsync(
         Guid id, Guid raceId, RaceRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, ct);
         if (refusal is not null) return refusal;
@@ -251,7 +251,7 @@ public static class RaceEndpoints
 
     private static async Task<IResult> DeleteRaceAsync(
         Guid id, Guid raceId, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
     {
         var (_, refusal) = await EditableCarnivalAsync(db, id, ct);
         if (refusal is not null) return refusal;
@@ -301,7 +301,7 @@ public static class RaceEndpoints
 
     private static Task<IResult> AssignPlacementAsync(
         Guid id, Guid eventId, Guid entryId, PlacementRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
             (_, innerCt) =>
@@ -326,7 +326,7 @@ public static class RaceEndpoints
     /// </summary>
     private static async Task<IResult> AssignPlacementCoreAsync(
         Guid id, Guid eventId, Guid entryId, PlacementRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -350,7 +350,7 @@ public static class RaceEndpoints
     /// <summary><paramref name="autoFilled"/> only labels the audit row.</summary>
     private static async Task<PlacementOutcome> PlaceOnceAsync(
         Guid id, Guid eventId, Guid entryId, PlacementRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, bool autoFilled, CancellationToken ct,
+        CarnivalAppDbContext db, AuditService audit, bool autoFilled, CancellationToken ct,
         bool contextRace = false)
     {
         var entry = await db.Entries
@@ -503,7 +503,7 @@ public static class RaceEndpoints
     /// </summary>
     private static async Task<(int? Heat, bool OpensNewField, IResult? Refusal)> DeriveHeatAsync(
         Entry entry, Race race, IReadOnlyList<MarshalledRow> context,
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var coHeats = context
             .Where(r => r.RaceId == race.Id && r.CarnivalEventId == entry.CarnivalEventId && r.Heat != null)
@@ -535,7 +535,7 @@ public static class RaceEndpoints
 
     /// <summary>Must order exactly as the deck orders a division's races.</summary>
     private static async Task<int> DivisionOrdinalAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, Guid raceId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, Guid raceId, CancellationToken ct)
     {
         var ordered = await db.Races.AsNoTracking()
             .Where(r => r.CarnivalId == carnivalId
@@ -564,7 +564,7 @@ public static class RaceEndpoints
     /// </summary>
     private static Task<IResult> MaterialiseAsync(
         Guid id, MaterialiseRequest request, HttpContext ctx,
-        [FromServices] SportsDbContext db, [FromServices] AuditService audit,
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
         [FromServices] IdempotencyService idempotency, CancellationToken ct) =>
         OptionalIdempotency.ExecuteAsync(ctx, idempotency,
             (clientRaceId, innerCt) => MaterialiseCoreAsync(id, clientRaceId, request, ctx, db, audit, innerCt),
@@ -572,7 +572,7 @@ public static class RaceEndpoints
 
     private static async Task<IResult> MaterialiseCoreAsync(
         Guid id, Guid? clientRaceId, MaterialiseRequest request, HttpContext ctx,
-        SportsDbContext db, AuditService audit, CancellationToken ct)
+        CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         if (request.EventId == Guid.Empty)
             return ApiError.BadRequest(ErrorCodes.ValidationFailed, "eventId must name an event.");
@@ -616,7 +616,7 @@ public static class RaceEndpoints
     private static async Task<(Race Race, List<Entry> Joining, List<string> Warnings)> MintRaceCoreAsync(
         Guid id, Carnival carnival, Guid eventId, Guid? clientRaceId,
         Guid? scheduleSlotId, Guid? requestedSlotId, string? label, bool sweep, bool autoFilled,
-        HttpContext ctx, SportsDbContext db, AuditService audit, CancellationToken ct)
+        HttpContext ctx, CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         // Already-raced entries stay put, which makes a replay safe.
         var joining = sweep
@@ -697,7 +697,7 @@ public static class RaceEndpoints
     /// </summary>
     internal static async Task<Entry?> PlaceUnrequestedAsync(
         Guid id, Guid eventId, Guid entryId, Carnival carnival, int? laneCount, int? heat,
-        HttpContext ctx, SportsDbContext db, AuditService audit, CancellationToken ct)
+        HttpContext ctx, CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         List<Guid> mintedIds = [];
         Entry? placed = null;
@@ -746,7 +746,7 @@ public static class RaceEndpoints
     /// competitor has since joined is kept.
     /// </summary>
     private static async Task DiscardEmptyMintsAsync(
-        List<Guid> mintedIds, HttpContext ctx, SportsDbContext db, AuditService audit, CancellationToken ct)
+        List<Guid> mintedIds, HttpContext ctx, CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         if (mintedIds.Count == 0) return;
         var empty = await db.Races
@@ -776,7 +776,7 @@ public static class RaceEndpoints
     /// heat that already swam.
     /// </summary>
     private static async Task<(Guid RaceId, int? Lane)?> NextUnrequestedSlotAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, int? laneCount, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, int? laneCount, CancellationToken ct)
     {
         // Stamp or membership: unstamped races (legacy, multi-event admin create) still count.
         var latest = await db.Races
@@ -796,7 +796,7 @@ public static class RaceEndpoints
     }
 
     private static async Task<int?> FreeLaneAsync(
-        SportsDbContext db, Guid raceId, int laneCount, CancellationToken ct)
+        CarnivalAppDbContext db, Guid raceId, int laneCount, CancellationToken ct)
     {
         var taken = await db.Entries
             .Where(e => e.RaceId == raceId && e.Lane != null)
@@ -814,7 +814,7 @@ public static class RaceEndpoints
     /// rather than land elsewhere.
     /// </summary>
     internal static async Task<IResult?> RefuseContextRaceAsync(
-        SportsDbContext db, Guid carnivalId, Guid eventId, Guid raceId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, Guid eventId, Guid raceId, CancellationToken ct)
     {
         var found = await db.Races.AsNoTracking()
             .Where(r => r.CarnivalId == carnivalId && r.Id == raceId)
@@ -841,7 +841,7 @@ public static class RaceEndpoints
     /// </summary>
     internal static async Task<Entry?> PlaceInContextRaceAsync(
         Guid id, Guid eventId, Guid entryId, Guid raceId, Carnival carnival, int? laneCount, int? heat,
-        HttpContext ctx, SportsDbContext db, AuditService audit, CancellationToken ct)
+        HttpContext ctx, CarnivalAppDbContext db, AuditService audit, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -870,7 +870,7 @@ public static class RaceEndpoints
             id, eventId, entryId, carnival, laneCount, heat, ctx, db, audit, ct);
     }
 
-    private static Task<Entry?> ReadEntryAsync(SportsDbContext db, Guid entryId, CancellationToken ct) =>
+    private static Task<Entry?> ReadEntryAsync(CarnivalAppDbContext db, Guid entryId, CancellationToken ct) =>
         db.Entries.Include(e => e.RelayLegs).FirstOrDefaultAsync(e => e.Id == entryId, ct);
 
     private static string? NullIfEmpty(string value) =>

@@ -44,7 +44,7 @@ public static class EventLadder
     // Safe inside the finalisation transaction: the sweep only moves LifecycleState to Final,
     // and Draft is the sole state excluded here.
     public static async Task<IReadOnlyList<LadderDivision>> BuildAsync(
-        SportsDbContext db, Guid carnivalId, CancellationToken ct)
+        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct)
     {
         var swims = await db.Results.AsNoTracking()
             .Where(r => r.Entry.CarnivalEvent.CarnivalId == carnivalId

@@ -295,7 +295,7 @@ public sealed class RaceEndpointsTests : IDisposable
         _factory.Race.ArmOnce("DELETE FROM \"Races\"", transaction =>
         {
             using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SportsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
             if (transaction is not null) db.Database.UseTransaction(transaction);
             db.Entries.Single(e => e.Id == entry).RaceId = race;
             db.SaveChanges();
