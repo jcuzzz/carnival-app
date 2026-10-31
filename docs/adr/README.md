@@ -36,7 +36,7 @@ ADRs record *why* a significant design decision was taken: its context, the deci
 | [0030](0030-lane-swap.md) | Swapping two swimmers' lanes | Accepted |
 | [0031](0031-shared-device-hygiene.md) | Shared-device hygiene | Accepted |
 | [0032](0032-staged-rosters-are-not-kept.md) | A promoted import keeps counts, not a roster | Accepted; partly superseded by [0062](0062-retention-windows-for-operational-data.md) |
-| [0033](0033-the-real-shape-fixture-is-generated.md) | The real-shape roster fixture is generated, never sanitised | Accepted; §1 to be superseded by [0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md) (Proposed) |
+| [0033](0033-the-real-shape-fixture-is-generated.md) | The real-shape roster fixture is generated, never sanitised | Accepted; §1 superseded by [0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md) |
 | [0034](0034-organiser-queue-visibility.md) | Organiser queue visibility | Accepted |
 | [0035](0035-records-administration.md) | Records administration — a record is voided, never deleted | Accepted |
 | [0036](0036-the-deck-shows-placings.md) | The deck shows placings | Accepted |
@@ -67,4 +67,4 @@ ADRs record *why* a significant design decision was taken: its context, the deci
 | [0061](0061-demo-showcase-per-visitor-instances.md) | Demo showcase with a database per visitor | Accepted (API and app built; template build and demo deployment not in this repository) |
 | [0062](0062-retention-windows-for-operational-data.md) | Retention windows for operational data | Accepted |
 | [0063](0063-standings-list-every-house.md) | Standings list every house | Accepted |
-| [0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md) | The roster import reads a canonical CSV, and test rosters are built in code | Proposed |
+| [0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md) | The roster import reads generic input data, and test rosters are built in code | Accepted |
