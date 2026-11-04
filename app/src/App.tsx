@@ -1,12 +1,13 @@
-import { Suspense, lazy, useEffect, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, type ReactNode } from "react";
 import AppShell from "./shell/AppShell";
 import { isDemoBuild } from "./api/client";
 import {
-  entraAuthEnabled,
   previousSessionHasEnded,
   serverSessionEnabled,
+  serverSignInEnabled,
   useEntraSessionSettled,
 } from "./auth/entra";
+import { holdSetupToken } from "./auth/localAccounts";
 import { hasRole, useSession } from "./auth/session";
 import { PRODUCT_NAME, useBranding } from "./branding/branding";
 import { landingPath } from "./carnivals/landing";
@@ -30,16 +31,19 @@ const EventResultsScreen = lazy(() => import("./screens/EventResultsScreen"));
 const EventSetupScreen = lazy(() => import("./screens/EventSetupScreen"));
 const ImportReviewScreen = lazy(() => import("./screens/ImportReviewScreen"));
 const ManageScreen = lazy(() => import("./screens/ManageScreen"));
+const MyAccountScreen = lazy(() => import("./screens/MyAccountScreen"));
 const NewEventScreen = lazy(() => import("./screens/NewEventScreen"));
 const OutboxScreen = lazy(() => import("./screens/OutboxScreen"));
 const ProgramScreen = lazy(() => import("./screens/ProgramScreen"));
 const RecordsAdminScreen = lazy(() => import("./screens/RecordsAdminScreen"));
 const ReportsScreen = lazy(() => import("./screens/ReportsScreen"));
 const ScheduleBuilderScreen = lazy(() => import("./screens/ScheduleBuilderScreen"));
+const SchoolPeopleScreen = lazy(() => import("./screens/SchoolPeopleScreen"));
 const SchoolRolesScreen = lazy(() => import("./screens/SchoolRolesScreen"));
 const SchoolScreen = lazy(() => import("./screens/SchoolScreen"));
 const SchoolSettingsScreen = lazy(() => import("./screens/SchoolSettingsScreen"));
 const SchoolTemplatesScreen = lazy(() => import("./screens/SchoolTemplatesScreen"));
+const SetupScreen = lazy(() => import("./screens/SetupScreen"));
 
 export default function App() {
   const path = usePath();
@@ -66,9 +70,22 @@ export default function App() {
   } else if (path === "/carnivals") {
     screen = <CarnivalsScreen />;
     screenName = "Carnivals";
+  } else if (import.meta.env.DEV && path === "/dev/sign-in") {
+    // The screenshot pass's view of the real sign-in box; the dev server's /login is the picker.
+    screen = <SignInScreen />;
+    screenName = "Sign in";
+  } else if (!isDemoBuild() && (params = matchPath("/setup/:token", path))) {
+    screen = <SetupLinkIntake token={params.token!} />;
+    screenName = "Set up your account";
+  } else if (!isDemoBuild() && path === "/setup") {
+    screen = <SetupScreen />;
+    screenName = "Set up your account";
+  } else if (!isDemoBuild() && path === "/account") {
+    screen = <MyAccountScreen />;
+    screenName = "My account";
   } else if (path === "/login") {
     // A demo build has one identity per visitor, so there is nobody to switch to.
-    screen = entraAuthEnabled() ? (
+    screen = serverSignInEnabled() ? (
       <SignInScreen />
     ) : isDemoBuild() && serverSessionEnabled() ? (
       <Redirect to="/" />
@@ -86,6 +103,9 @@ export default function App() {
     // Not the gate: the API refuses anyone but a SystemAdministrator.
     screen = <SchoolSettingsScreen />;
     screenName = "School settings";
+  } else if (!isDemoBuild() && path === "/school/people") {
+    screen = <SchoolPeopleScreen />;
+    screenName = "People";
   } else if (path === "/school/roles") {
     screen = <SchoolRolesScreen />;
     screenName = "Roles";
@@ -231,6 +251,15 @@ function RecordsAdminRoute() {
       <p>Sign in to administer the school record book.</p>
     </SignInOffer>
   );
+}
+
+// Before paint, so the token leaves the address bar and the history entry before anything else.
+function SetupLinkIntake({ token }: { token: string }) {
+  useLayoutEffect(() => {
+    holdSetupToken(token);
+    navigate("/setup", { replace: true });
+  }, [token]);
+  return <p>Loading…</p>;
 }
 
 // The redirect runs after paint, never in render.

@@ -1,19 +1,20 @@
 import type { ReactNode } from "react";
-import { entraAuthEnabled, loginHref, useEntraSessionSettled } from "../../auth/entra";
+import { signInHref, useEntraSessionSettled } from "../../auth/entra";
 import { useSession } from "../../auth/session";
-import { href } from "../../router";
+import { useUrl } from "../../router";
 
 /**
  * Signed out is not the same as wrong role: a role-named refusal is
  * unanswerable advice to somebody whose session simply lapsed.
  */
 export function SignInOffer({ title, children }: { title: string; children: ReactNode }) {
+  const returnTo = useUrl();
   return (
     <>
       <h1>{title}</h1>
       {children}
       <p>
-        <a href={entraAuthEnabled() ? loginHref() : href("/login")}>Sign in</a>
+        <a href={signInHref(returnTo)}>Sign in</a>
       </p>
     </>
   );

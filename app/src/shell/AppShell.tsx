@@ -9,10 +9,10 @@ import {
 } from "lucide-react";
 import { isDemoBuild } from "../api/client";
 import {
-  entraAuthEnabled,
-  loginHref,
   logoutHref,
   serverSessionEnabled,
+  serverSignInEnabled,
+  signInHref,
   signOutAndClear,
 } from "../auth/entra";
 import { useIdleGuard } from "../auth/idleGuard";
@@ -21,7 +21,7 @@ import { hasRole, useSession } from "../auth/session";
 import { PRODUCT_NAME, PRODUCT_SHORT_NAME, useBranding } from "../branding/branding";
 import { activeTab, tabPath, type CarnivalTab } from "../carnivals/landing";
 import { useSelectedCarnival } from "../carnivals/selectedCarnival";
-import { href, usePath } from "../router";
+import { href, usePath, useUrl } from "../router";
 import type { OutboxHealth } from "../sync/stuckOutbox";
 import IdleOverlay from "./IdleOverlay";
 import OutboxIndicator from "./OutboxIndicator";
@@ -39,7 +39,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePath();
   const connectivity = useConnectivity();
   const health = useOutboxHealth();
-  const entra = entraAuthEnabled();
+  const serverSignIn = serverSignInEnabled();
+  const returnTo = useUrl();
   const demo = isDemoBuild() && serverSessionEnabled();
   const carnival = useSelectedCarnival();
   const branding = useBranding();
@@ -112,9 +113,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <strong>{session.displayName}</strong>{" "}
                   <span className="shell-roles">({session.roles.join(", ") || "no roles"})</span>
                 </span>
-                {/* Real auth: a full-page navigation, so the server clears the cookie and
-                    IdP session. */}
-                {demo ? null : entra ? (
+                {session.localAccount && <a href={href("/account")}>My account</a>}
+                {/* Real auth: a full-page navigation, so the server clears the cookie (and the
+                    IdP session, for a provider sign-in). */}
+                {demo ? null : serverSignIn ? (
                   <a
                     href={logoutHref()}
                     onClick={(e) => {
@@ -128,10 +130,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <a href={href("/login")}>Switch</a>
                 )}
               </>
-            ) : demo ? null : entra ? (
-              <a href={loginHref()}>Sign in</a>
-            ) : (
-              <a href={href("/login")}>Sign in</a>
+            ) : demo ? null : (
+              <a href={signInHref(returnTo)}>Sign in</a>
             )}
             <OutdoorToggle />
           </div>

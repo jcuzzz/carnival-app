@@ -5,6 +5,7 @@ import {
   loginHref,
   logoutHref,
   previousSessionHasEnded,
+  signInHref,
 } from "./entra";
 import { getSession, signIn, signOut } from "./session";
 
@@ -21,6 +22,18 @@ afterEach(() => {
   signOut();
 });
 
+describe("signInHref", () => {
+  it("is the dev picker on the dev server, whatever it is asked to return to", () => {
+    expect(signInHref("/#/outbox")).toBe("#/login");
+  });
+
+  it("carries the return address to the sign-in box in a real build", () => {
+    vi.stubEnv("DEV", false);
+    expect(signInHref("/#/carnivals/c-1")).toBe("#/login?returnUrl=%2F%23%2Fcarnivals%2Fc-1");
+    expect(signInHref()).toBe("#/login");
+  });
+});
+
 describe("loginHref / logoutHref", () => {
   it("point at the server's cookie/BFF endpoints, same-origin by default", () => {
     expect(loginHref()).toBe("/api/v1/auth/login?returnUrl=%2F");
@@ -28,6 +41,12 @@ describe("loginHref / logoutHref", () => {
       "/api/v1/auth/login?returnUrl=%2Fcarnivals%2F1%2Fstandings",
     );
     expect(logoutHref()).toBe("/api/v1/auth/logout");
+  });
+
+  it("passes the typed name on to the provider so it is not typed twice", () => {
+    expect(loginHref("/", "jo@example.org")).toBe(
+      "/api/v1/auth/login?returnUrl=%2F&loginHint=jo%40example.org",
+    );
   });
 
   it("honour VITE_API_BASE for the dev loop's cross-origin API", () => {
@@ -54,7 +73,24 @@ describe("fetchMe", () => {
       subject: "oid-123",
       displayName: "Jordan Teacher",
       roles: ["SystemAdministrator"],
+      localAccount: false,
     });
+  });
+
+  it("marks a local account's session, so the shell can offer My account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          subject: "local:7",
+          displayName: "Backup Admin",
+          roles: ["SystemAdministrator"],
+          localAccount: true,
+        }),
+      ),
+    );
+
+    expect((await fetchMe())?.localAccount).toBe(true);
   });
 
   it("returns null on 401 (not signed in) rather than throwing", async () => {

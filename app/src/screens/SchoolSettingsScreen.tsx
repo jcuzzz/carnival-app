@@ -7,11 +7,16 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
-import { ApiError } from "../api/client";
+import { ApiError, isDemoBuild } from "../api/client";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
 import { getSchoolSettings, putSchoolSettings } from "../api/resources";
-import type { HouseSettingRequest, SchoolSettings } from "../api/types";
+import type {
+  HouseSettingRequest,
+  LocalAccountAccess,
+  SchoolSettingsWithSignIn,
+  SchoolSettingsWithSignInRequest,
+} from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
 import {
@@ -56,12 +61,16 @@ interface FormState {
   name: string;
   brandColour: string;
   houses: HouseRow[];
+  requireAuthenticator: boolean;
+  localAccounts: LocalAccountAccess;
 }
 
 let rowKeySeed = 0;
 
-function formOf(settings: SchoolSettings): FormState {
+function formOf(settings: SchoolSettingsWithSignIn): FormState {
   return {
+    requireAuthenticator: settings.requireAuthenticator ?? false,
+    localAccounts: settings.localAccounts ?? "SystemAdministrators",
     name: settings.name,
     brandColour: settings.brandColour ?? "",
     houses: settings.houses.map((house) => ({
@@ -80,6 +89,8 @@ function signatureOf(form: FormState): string {
     form.name.trim(),
     form.brandColour.trim().toLowerCase(),
     form.houses.map((h) => [h.code.trim(), h.name.trim(), h.colour.trim().toLowerCase()]),
+    form.requireAuthenticator,
+    form.localAccounts,
   ]);
 }
 
@@ -125,7 +136,7 @@ export default function SchoolSettingsScreen() {
   const offline = connectivity !== "connected";
   const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: isAdmin });
   const invalidate = useInvalidate();
-  const [baseline, setBaseline] = useState<SchoolSettings | null>(null);
+  const [baseline, setBaseline] = useState<SchoolSettingsWithSignIn | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [serverError, setServerError] = useState<ServerFieldError | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +146,7 @@ export default function SchoolSettingsScreen() {
   const wantsReload = useRef(false);
   const focusRow = useRef<string | null>(null);
 
-  const adopt = useCallback((data: SchoolSettings) => {
+  const adopt = useCallback((data: SchoolSettingsWithSignIn) => {
     wantsReload.current = false;
     adopted.current = data.updatedAtUtc;
     setBaseline(data);
@@ -217,7 +228,7 @@ export default function SchoolSettingsScreen() {
     setError(null);
     setStale(false);
     try {
-      const saved = await putSchoolSettings({
+      const request: SchoolSettingsWithSignInRequest = {
         name: form.name.trim(),
         brandColour: blankToNull(form.brandColour),
         houses: form.houses.map((row): HouseSettingRequest => ({
@@ -225,8 +236,12 @@ export default function SchoolSettingsScreen() {
           name: blankToNull(row.name),
           colour: blankToNull(row.colour),
         })),
+        // Null keeps the stored value: a demo build never shows these controls.
+        requireAuthenticator: isDemoBuild() ? null : form.requireAuthenticator,
+        localAccounts: isDemoBuild() ? null : form.localAccounts,
         updatedAtUtc: baseline.updatedAtUtc,
-      });
+      };
+      const saved = await putSchoolSettings(request);
       adopt(saved);
       showToast("School settings saved");
       invalidate(keys.houses());
@@ -280,8 +295,8 @@ export default function SchoolSettingsScreen() {
       </p>
       <h1>School settings</h1>
       <p className="row-sub">
-        The school's name, its brand colour and its houses. Saving repaints the app for every
-        device the next time it reaches the server.
+        The school's name, its brand colour, its houses and how local accounts sign in. Saving
+        repaints the app for every device the next time it reaches the server.
       </p>
 
       {offline && (
@@ -372,6 +387,14 @@ export default function SchoolSettingsScreen() {
             </button>
           </div>
 
+          {!isDemoBuild() && (
+            <SignInSettings
+              form={form}
+              providerConfigured={baseline?.providerConfigured === true}
+              onChange={change}
+            />
+          )}
+
           <div className="button-row">
             <button className="primary" type="submit" disabled={saving || !dirty || offline}>
               {saving ? "Saving…" : "Save"}
@@ -383,6 +406,60 @@ export default function SchoolSettingsScreen() {
         </form>
       )}
     </>
+  );
+}
+
+function SignInSettings({
+  form,
+  providerConfigured,
+  onChange,
+}: {
+  form: FormState;
+  providerConfigured: boolean;
+  onChange: (next: FormState) => void;
+}) {
+  return (
+    <section aria-labelledby="sign-in-heading">
+      <h2 id="sign-in-heading">Sign-in</h2>
+      <p className="row-sub">
+        For accounts that sign in with a username and password here (School → People).
+      </p>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={form.requireAuthenticator}
+          onChange={(e) => onChange({ ...form, requireAuthenticator: e.target.checked })}
+        />
+        Require an authenticator app
+      </label>
+      <p className="row-sub">
+        When on, anyone without an authenticator app must set one up at their next sign-in.
+        Sessions already open run to their end. Turn it on if the school must meet ST4S's top
+        tier or Essential Eight.
+      </p>
+      {providerConfigured && (
+        <>
+          <label className="field wide">
+            <span id="local-access-label">Who may use a local account</span>
+            <select
+              aria-labelledby="local-access-label"
+              value={form.localAccounts}
+              onChange={(e) =>
+                onChange({ ...form, localAccounts: e.target.value as LocalAccountAccess })
+              }
+            >
+              <option value="SystemAdministrators">System administrators only</option>
+              <option value="Everyone">Everyone</option>
+            </select>
+          </label>
+          <p className="row-sub">
+            Everyone else signs in with the school's own account. Keeping local accounts to
+            system administrators leaves a backup way in when the school's sign-in is down.
+            Narrowing it signs other local accounts out at their next request.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 

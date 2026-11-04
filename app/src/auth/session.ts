@@ -6,6 +6,8 @@ export interface Session {
   subject: string;
   displayName: string;
   roles: PlatformRole[];
+  /** Signed in with a username and password here rather than through the school's provider. */
+  localAccount?: boolean;
 }
 
 const STORAGE_KEY = "carnival.session";

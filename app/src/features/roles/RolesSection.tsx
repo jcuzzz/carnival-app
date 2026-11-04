@@ -2,13 +2,14 @@ import { Fragment, useState, type FormEvent } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../../api/errorText";
 import { keys } from "../../api/queryKeys";
 import { grantRole, listRoleAssignments, revokeRole } from "../../api/resources";
-import type { PlatformRole, RoleAssignment } from "../../api/types";
+import type { PlatformRole, RoleAssignmentWithLocal as RoleAssignment } from "../../api/types";
 import { useApiQuery, useInvalidate } from "../../api/useApiQuery";
 import { showToast } from "../../shell/toast";
 
 /**
- * Assignment takes a UPN because a department-tenant administrator cannot look up an object id.
- * Layered over the Entra group mapping: a group-derived role is not a row here.
+ * Assignment takes a UPN because a department-tenant administrator cannot look up an object id,
+ * or a local account's username (ADR-0065). Layered over the Entra group mapping: a group-derived
+ * role is not a row here.
  */
 
 const ROLES: readonly { value: PlatformRole; label: string; note: string }[] = [
@@ -114,13 +115,15 @@ export default function RolesSection({ offline }: { offline: boolean }) {
         <h2>Assign a role</h2>
         <div className="form-grid">
           <label className="field wide">
-            <span>Sign-in address (UPN or email)</span>
+            <span>Username or school email</span>
             <input
               id="role-upn"
               value={upn}
               maxLength={256}
               autoComplete="off"
-              placeholder="name@school.vic.edu.au"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="jsmith or name@example.org"
               onChange={(e) => setUpn(e.target.value)}
             />
           </label>
@@ -154,8 +157,8 @@ export default function RolesSection({ offline }: { offline: boolean }) {
           />
         </label>
         <p className="row-sub">
-          The person does not need to have signed in yet. Their account is matched the first
-          time they do.
+          A school email does not need to have signed in yet: the account is matched the first
+          time it does. A username must already be a local account under School → People.
         </p>
         <div className="button-row">
           <button className="primary" type="submit" disabled={saving || !complete || offline}>
@@ -236,6 +239,7 @@ function RoleRow({
           )}
         </span>
         <span className="role-status">
+          {row.localAccount && <span className="badge muted">local account</span>}
           {row.bootstrap && <span className="badge muted">from configuration</span>}
           {revoked && <span className="badge muted">revoked</span>}
           {!row.bootstrap && !revoked && !row.boundToSubject && (

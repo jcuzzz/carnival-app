@@ -1296,3 +1296,238 @@ test("the public demo's landing page, fresh and after an expiry", async ({ page 
   await settled(page.getByText(/previous demo has ended/));
   for (const width of WIDTHS) await capture(page, "demo-landing-expired", width);
 });
+
+/**
+ * Built-in local accounts (ADR-0065). The dev server signs in through the header picker, so
+ * every local-account answer here is a `page.route` stand-in for the API's: the real path is
+ * `npm run test:e2e:accounts`. The sign-in box is shot through its dev-only route.
+ */
+const LOCAL_ME = {
+  subject: "local:screens-1",
+  displayName: "Backup Admin",
+  roles: ["SystemAdministrator"],
+  localAccount: true,
+};
+const ENROLMENT = {
+  secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+  otpauthUri:
+    "otpauth://totp/Example%20Synthetic%20College:backup-admin" +
+    "?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Example%20Synthetic%20College",
+};
+const RECOVERY_CODES = [
+  "k7qf-3mzp", "x2bn-9wte", "r4hd-6cja", "m8vs-1gku", "p3ny-7fqe",
+  "t9wc-2hlx", "b6ze-4rdm", "f1ju-8snv", "h5ka-0pyt", "w2gl-3xqc",
+];
+
+async function localSession(page: Page): Promise<void> {
+  await page.addInitScript((session) => {
+    localStorage.setItem("carnival.session", JSON.stringify(session));
+  }, LOCAL_ME);
+}
+
+test("sign-in: the username, password, code and enrolment steps", async ({ page }) => {
+  await page.route("**/api/v1/auth/methods", (route) => route.fulfill({ json: { provider: null } }));
+  await page.route("**/api/v1/auth/identify", (route) =>
+    route.fulfill({ json: { method: "password" } }),
+  );
+  const answers: object[] = [
+    { status: "codeRequired" },
+    { status: "enrolmentRequired", ...ENROLMENT },
+    { status: "signedIn", me: LOCAL_ME, recoveryCodes: RECOVERY_CODES },
+  ];
+  await page.route("**/api/v1/auth/local", (route) => route.fulfill({ json: answers.shift() }));
+
+  await page.goto("/#/dev/sign-in");
+  await settled(page.getByLabel("Username", { exact: true }));
+  for (const width of WIDTHS) await capture(page, "sign-in-username", width);
+
+  await page.getByLabel("Username", { exact: true }).fill("backup-admin");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await settled(page.getByLabel("Password", { exact: true }));
+  for (const width of WIDTHS) await capture(page, "sign-in-password", width);
+
+  await page.getByLabel("Password", { exact: true }).fill("lantern orchard quietly ticking");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await settled(page.getByLabel("The 6-digit code from your authenticator app"));
+  for (const width of WIDTHS) await capture(page, "sign-in-code", width);
+
+  // A school that requires an authenticator, met by an account without one.
+  await page.getByRole("button", { name: "Not you?" }).click();
+  await page.getByLabel("Username", { exact: true }).fill("backup-admin");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Password", { exact: true }).fill("lantern orchard quietly ticking");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await settled(page.getByRole("img", { name: /QR code/ }));
+  for (const width of WIDTHS) await capture(page, "sign-in-enrol", width);
+
+  await page.getByLabel("The 6-digit code the app now shows").fill("123456");
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await settled(page.getByRole("list", { name: "Recovery codes" }));
+  for (const width of WIDTHS) await capture(page, "sign-in-recovery-codes", width);
+});
+
+test("setup: the first administrator's form and the authenticator offer", async ({ page }) => {
+  await page.route("**/api/v1/auth/setup/inspect", (route) =>
+    route.fulfill({
+      json: {
+        kind: "firstAdministrator",
+        username: null,
+        displayName: null,
+        expiresAtUtc: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        requireAuthenticator: false,
+      },
+    }),
+  );
+  await page.route("**/api/v1/auth/setup/complete", (route) =>
+    route.fulfill({ json: { status: "signedIn", me: LOCAL_ME } }),
+  );
+
+  await page.goto("/#/setup/screens-token");
+  await expect(page).toHaveURL(/#\/setup$/);
+  await settled(page.getByText(/first system administrator/));
+  await page.getByLabel("Username").fill("backup-admin");
+  await page.getByLabel("Display name").fill("Backup Admin");
+  await page.getByLabel("Password", { exact: true }).fill("lantern orchard");
+  for (const width of WIDTHS) await capture(page, "setup-first-admin", width);
+
+  await page.getByLabel("Password", { exact: true }).fill("lantern orchard quietly ticking");
+  await page.getByLabel("Type it again").fill("lantern orchard quietly ticking");
+  await page.getByRole("button", { name: "Save password" }).click();
+  await settled(page.getByRole("button", { name: "Set up an authenticator app (recommended)" }));
+  for (const width of WIDTHS) await capture(page, "setup-offer", width);
+});
+
+test("People: every account state, and a new person's one-time link", async ({ page }) => {
+  const day = (offsetHours: number) => new Date(Date.now() + offsetHours * 3600_000).toISOString();
+  const account = (overrides: object) => ({
+    authenticatorEnrolled: false,
+    isSystemAdministrator: false,
+    lockedOut: false,
+    lastSignInAtUtc: null,
+    setupLink: null,
+    createdAtUtc: day(-72),
+    status: "Active",
+    ...overrides,
+  });
+  const accounts = [
+    account({
+      id: "screens-1", username: "backup-admin", displayName: "Backup Admin",
+      isSystemAdministrator: true, authenticatorEnrolled: true, lastSignInAtUtc: day(-1),
+      setupLink: { expiresAtUtc: day(-48), usedAtUtc: day(-70), usedFromAddress: "10.20.0.14" },
+    }),
+    account({
+      id: "screens-2", username: "helper1", displayName: "Helper One", lastSignInAtUtc: day(-3),
+      setupLink: { expiresAtUtc: day(-24), usedAtUtc: day(-40), usedFromAddress: "10.20.3.88" },
+    }),
+    account({
+      id: "screens-3", username: "timing-desk", displayName: "Timing Desk", status: "AwaitingSetup",
+      setupLink: { expiresAtUtc: day(20), usedAtUtc: null, usedFromAddress: null },
+    }),
+    account({
+      id: "screens-4", username: "pool-marshal", displayName: "Pool Marshal", lockedOut: true,
+      lastSignInAtUtc: day(-26),
+    }),
+    account({ id: "screens-5", username: "left-2025", displayName: "Former Helper", status: "Disabled" }),
+  ];
+  await page.route("**/api/v1/admin/local-accounts", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 201,
+          json: {
+            account: account({
+              id: "screens-6", username: "jsmith", displayName: "Jo Smith", status: "AwaitingSetup",
+            }),
+            setupToken: "screens-setup-token-0123456789abcdef",
+            expiresAtUtc: day(24),
+          },
+        })
+      : route.fulfill({ json: accounts }),
+  );
+
+  // Signed in as screens-1, so its row is the "(you)" one with no actions.
+  await localSession(page);
+  await page.goto("/#/school/people");
+  await settled(page.getByText("awaiting setup"));
+  await expect(page.getByText(/\(you\)/)).toBeVisible();
+  for (const width of WIDTHS) await capture(page, "school-people", width);
+
+  await page.getByLabel("Username").fill("jsmith");
+  await page.getByLabel("Display name").fill("Jo Smith");
+  await page.getByRole("button", { name: "Add person" }).click();
+  await settled(page.getByRole("img", { name: /QR code of the setup link/ }));
+  for (const width of WIDTHS) await capture(page, "school-people-link", width);
+});
+
+test("School settings' Sign-in section beside a provider, and a local role grant", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/school/settings", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const body = (await response.json()) as object;
+    await route.fulfill({
+      json: {
+        ...body,
+        requireAuthenticator: true,
+        localAccounts: "SystemAdministrators",
+        providerConfigured: true,
+      },
+    });
+  });
+  await page.route("**/api/v1/admin/role-assignments", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const rows = (await response.json()) as object[];
+    await route.fulfill({
+      json: [
+        {
+          id: "01900000-0000-7000-8000-00000000a001", upn: "helper1", displayName: "Helper One",
+          role: "Recorder", bootstrap: false, boundToSubject: true, localAccount: true,
+          reason: "Carnival-day helper with no school account.", assignedBySubject: "local:screens-1",
+          assignedAtUtc: new Date().toISOString(), revokedAtUtc: null, revokedBySubject: null,
+          revocationReason: null,
+        },
+        ...rows,
+      ],
+    });
+  });
+
+  await signIn(page);
+  await page.goto("/#/school/settings");
+  const section = page.locator("section[aria-labelledby=sign-in-heading]");
+  await settled(section.getByLabel("Who may use a local account"));
+  for (const width of WIDTHS) await captureRegion(page, section, "school-settings-sign-in", width);
+
+  await page.goto("/#/school/roles");
+  await settled(page.getByText("local account", { exact: true }));
+  for (const width of WIDTHS) await capture(page, "school-roles-local", width);
+});
+
+test("My account, the School page's reminder and enrolling from My account", async ({ page }) => {
+  await localSession(page);
+  await page.route("**/api/v1/account", (route) =>
+    route.fulfill({
+      json: {
+        username: "backup-admin",
+        displayName: "Backup Admin",
+        authenticatorEnrolled: false,
+        recoveryCodesLeft: 0,
+        requireAuthenticator: false,
+      },
+    }),
+  );
+  await page.route("**/api/v1/account/authenticator", (route) => route.fulfill({ json: ENROLMENT }));
+
+  await page.goto("/#/school");
+  await settled(page.getByText(/has no authenticator app/));
+  for (const width of WIDTHS) await capture(page, "school-hub-reminder", width);
+
+  await page.goto("/#/account");
+  await settled(page.getByRole("heading", { name: "Change password" }));
+  for (const width of WIDTHS) await capture(page, "my-account", width);
+
+  await page.getByLabel("Your password, to confirm it's you").fill("lantern orchard quietly ticking");
+  await page.getByRole("button", { name: "Set up an authenticator app" }).click();
+  await settled(page.getByRole("img", { name: /QR code/ }));
+  for (const width of WIDTHS) await capture(page, "my-account-enrol", width);
+});

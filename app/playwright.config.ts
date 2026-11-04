@@ -23,7 +23,9 @@ export default defineConfig({
   // journey: it produces screenshots for a human to look at, and it must not be
   // able to fail (or lengthen) the gate. It runs from its own config —
   // playwright.screenshots.config.ts, `npm run screenshots`.
-  testIgnore: /screenshots\.spec\.ts$/,
+  // The local-accounts journey runs against a production build and an API of its own
+  // (playwright.local-accounts.config.ts, `npm run test:e2e:accounts`).
+  testIgnore: [/screenshots\.spec\.ts$/, /local-accounts\.spec\.ts$/],
   // One writer at a time: the dev loop is a single API over a single SQLite
   // file, so parallel workers would race each other's seed, not find bugs.
   workers: 1,

@@ -199,3 +199,101 @@ export type ApiErrorBody = Partial<Schemas["ApiErrorBody"]> & {
   title?: string;
   [key: string]: unknown;
 };
+
+// ---- Local accounts (ADR-0065) ------------------------------------------
+
+// Hand-written from the package contract until `npm run generate:types` picks up the API's routes.
+
+export type LocalAccountAccess = "SystemAdministrators" | "Everyone";
+
+export type MeResponse = Schemas["MeResponse"] & { localAccount?: boolean };
+
+export type SchoolSettingsWithSignIn = SchoolSettings & {
+  requireAuthenticator?: boolean;
+  localAccounts?: LocalAccountAccess;
+  providerConfigured?: boolean;
+};
+
+export type SchoolSettingsWithSignInRequest = SchoolSettingsRequest & {
+  requireAuthenticator: boolean | null;
+  localAccounts: LocalAccountAccess | null;
+};
+
+export type RoleAssignmentWithLocal = RoleAssignment & { localAccount?: boolean };
+
+export interface IdentifyRequest {
+  username: string;
+  returnUrl: string | null;
+}
+
+export type IdentifyResponse = { method: "password" } | { method: "provider"; loginUrl: string };
+
+export interface LocalSignInRequest {
+  username: string;
+  password: string;
+  code?: string;
+  recoveryCode?: string;
+  enrolmentCode?: string;
+}
+
+export type LocalSignInResponse =
+  | { status: "signedIn"; me: MeResponse; recoveryCodes?: string[] | null }
+  | { status: "codeRequired" }
+  | { status: "enrolmentRequired"; secret: string; otpauthUri: string };
+
+export interface SetupLinkInspection {
+  kind: "firstAdministrator" | "account";
+  username: string | null;
+  displayName: string | null;
+  expiresAtUtc: string;
+  requireAuthenticator: boolean;
+}
+
+export interface SetupCompleteRequest {
+  token: string;
+  username?: string;
+  displayName?: string;
+  password: string;
+}
+
+export interface MyAccount {
+  username: string;
+  displayName: string;
+  authenticatorEnrolled: boolean;
+  recoveryCodesLeft: number;
+  requireAuthenticator: boolean;
+}
+
+export interface StartAuthenticatorRequest {
+  currentPassword: string;
+}
+
+export interface AuthenticatorEnrolment {
+  secret: string;
+  otpauthUri: string;
+}
+
+export type LocalAccountStatus = "AwaitingSetup" | "Active" | "Disabled";
+
+export interface LocalAccount {
+  id: string;
+  username: string;
+  displayName: string;
+  status: LocalAccountStatus;
+  authenticatorEnrolled: boolean;
+  isSystemAdministrator: boolean;
+  lockedOut: boolean;
+  lastSignInAtUtc: string | null;
+  setupLink: {
+    expiresAtUtc: string;
+    usedAtUtc: string | null;
+    usedFromAddress: string | null;
+  } | null;
+  createdAtUtc: string;
+}
+
+export interface IssuedSetupLink {
+  account: LocalAccount;
+  setupToken: string;
+  expiresAtUtc: string;
+}

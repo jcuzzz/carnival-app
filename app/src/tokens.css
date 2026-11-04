@@ -135,6 +135,8 @@
     --size-field: 11rem;
     --size-colour-picker: 11rem;
     --size-control-min: 12rem;
+    --size-qr: 12rem;
+    --size-code-column: 8rem;
     --size-text-min: 14rem;
     --size-tile: 15rem;
     --size-text-wide: 16rem;

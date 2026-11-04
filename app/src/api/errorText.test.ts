@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./client";
-import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText, NETWORK_ERROR_TEXT } from "./errorText";
+import {
+  DIRECT_WRITE_NETWORK_ERROR_TEXT,
+  errorText,
+  NETWORK_ERROR_TEXT,
+  SIGN_IN_FAILED_TEXT,
+} from "./errorText";
 
 describe("errorText", () => {
   it("shows the server's own message for an ApiError", () => {
@@ -87,5 +92,42 @@ describe("errorText", () => {
   it("falls back to the message of any other Error, and to String() otherwise", () => {
     expect(errorText(new Error("Quota exceeded"))).toBe("Quota exceeded");
     expect(errorText("something odd")).toBe("something odd");
+  });
+
+  // ADR-0065: whichever check refused, a sign-in failure reads the same.
+  it("gives every sign-in refusal one sentence, whatever the server's detail says", () => {
+    for (const detail of ["Unknown user.", "Wrong password.", "Locked out.", "Disabled."]) {
+      const failure = new ApiError(401, { error: "SIGN_IN_FAILED", detail }, "/api/v1/auth/local");
+      expect(errorText(failure)).toBe(SIGN_IN_FAILED_TEXT);
+    }
+  });
+
+  it("has plain-English copy for every local-account code", () => {
+    const codes = [
+      "CODE_INVALID",
+      "LOCAL_SIGN_IN_NOT_ALLOWED",
+      "SETUP_LINK_INVALID",
+      "PASSWORD_TOO_SHORT",
+      "PASSWORD_TOO_LONG",
+      "PASSWORD_TOO_COMMON",
+      "PASSWORD_TOO_PREDICTABLE",
+      "CURRENT_PASSWORD_WRONG",
+      "ACCOUNT_USERNAME_INVALID",
+      "ACCOUNT_USERNAME_RESERVED",
+      "ACCOUNT_USERNAME_TAKEN",
+      "ACCOUNT_DISPLAY_NAME_INVALID",
+      "ACCOUNT_DISABLED",
+      "ACCOUNT_SELF_CHANGE",
+      "ACCOUNT_NOT_FOUND",
+      "NOT_A_LOCAL_ACCOUNT",
+      "AUTHENTICATOR_ALREADY_ENROLLED",
+      "ROLE_LOCAL_ACCOUNT_UNKNOWN",
+      "CROSS_SITE_REQUEST_REFUSED",
+    ];
+    for (const code of codes) {
+      const text = errorText(new ApiError(400, { error: code, detail: "LOG-ONLY" }, "/x"));
+      expect(text, code).not.toBe("LOG-ONLY");
+      expect(text, code).not.toContain(code);
+    }
   });
 });

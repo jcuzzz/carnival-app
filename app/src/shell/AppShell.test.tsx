@@ -53,6 +53,30 @@ describe("AppShell", () => {
     expect(screen.getByText(/\((Recorder)\)/)).toBeTruthy();
   });
 
+  it("offers My account to a local account only (ADR-0065)", () => {
+    signIn({ subject: "oid-1", displayName: "Jordan Teacher", roles: ["Recorder"] });
+    const { unmount } = render(<AppShell>content</AppShell>);
+    expect(screen.queryByRole("link", { name: "My account" })).toBeNull();
+    unmount();
+
+    signIn({ subject: "local:1", displayName: "Helper One", roles: ["Recorder"], localAccount: true });
+    render(<AppShell>content</AppShell>);
+    expect(screen.getByRole("link", { name: "My account" }).getAttribute("href")).toBe("#/account");
+  });
+
+  it("signs a local session out through the server, as it does a provider session", () => {
+    vi.stubEnv("DEV", false);
+    try {
+      signIn({ subject: "local:1", displayName: "Helper One", roles: ["Recorder"], localAccount: true });
+      render(<AppShell>content</AppShell>);
+      expect(screen.getByRole("link", { name: "Sign out" }).getAttribute("href")).toBe(
+        "/api/v1/auth/logout",
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("offers sign-in when no official is active", () => {
     render(<AppShell>content</AppShell>);
     expect(screen.getByText("Sign in")).toBeTruthy();

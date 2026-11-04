@@ -263,6 +263,8 @@ describe("SchoolSettingsScreen", () => {
         { code: "WATTLE", name: "Waratah", colour: "#b42318" },
         { code: "MOUNTAIN ASH", name: "Mountain Ash", colour: "#1a7f37" },
       ],
+      requireAuthenticator: false,
+      localAccounts: "SystemAdministrators",
       updatedAtUtc: STAMP,
     });
     await waitFor(() => expect(refreshBranding).toHaveBeenCalled());
@@ -274,6 +276,60 @@ describe("SchoolSettingsScreen", () => {
         true,
       ),
     );
+  });
+
+  it("offers the authenticator switch, off, and no access choice without a provider", async () => {
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    expect(await screen.findByRole("heading", { name: "Sign-in", level: 2 })).toBeTruthy();
+    const require = screen.getByLabelText("Require an authenticator app") as HTMLInputElement;
+    expect(require.checked).toBe(false);
+    expect(screen.queryByLabelText("Who may use a local account")).toBeNull();
+  });
+
+  it("shows the access choice only beside a provider, and saves both sign-in settings", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue({
+      ...settings(),
+      requireAuthenticator: false,
+      localAccounts: "SystemAdministrators",
+      providerConfigured: true,
+    } as SchoolSettings);
+    vi.mocked(putSchoolSettings).mockResolvedValue(settings());
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    const access = (await screen.findByLabelText("Who may use a local account")) as HTMLSelectElement;
+    expect(access.value).toBe("SystemAdministrators");
+    fireEvent.click(screen.getByLabelText("Require an authenticator app"));
+    fireEvent.change(access, { target: { value: "Everyone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(putSchoolSettings).toHaveBeenCalled());
+    expect(vi.mocked(putSchoolSettings).mock.calls[0]![0]).toMatchObject({
+      requireAuthenticator: true,
+      localAccounts: "Everyone",
+    });
+  });
+
+  it("has no Sign-in section in a demo build, and leaves its settings as stored", async () => {
+    vi.stubEnv("VITE_DEMO_MODE", "true");
+    try {
+      vi.mocked(putSchoolSettings).mockResolvedValue(settings());
+      renderWithQuery(<SchoolSettingsScreen />);
+
+      const name = await screen.findByLabelText("School name");
+      expect(screen.queryByRole("heading", { name: "Sign-in" })).toBeNull();
+      expect(screen.queryByLabelText("Require an authenticator app")).toBeNull();
+      fireEvent.change(name, { target: { value: "Demo College" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => expect(putSchoolSettings).toHaveBeenCalled());
+      expect(vi.mocked(putSchoolSettings).mock.calls[0]![0]).toMatchObject({
+        requireAuthenticator: null,
+        localAccounts: null,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("restores the loaded values on Cancel", async () => {

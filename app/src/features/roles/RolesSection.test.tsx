@@ -113,6 +113,19 @@ describe("RolesSection", () => {
     expect(screen.getAllByRole("button", { name: /^Revoke / })).toHaveLength(1);
   });
 
+  it("badges a grant to a local account, which is bound from the start (ADR-0065)", async () => {
+    vi.mocked(listRoleAssignments).mockResolvedValue([
+      Object.assign(assignment({ upn: "helper1", displayName: "Helper One", boundToSubject: true }), {
+        localAccount: true,
+      }),
+    ]);
+    renderWithQuery(<RolesSection offline={false} />);
+
+    expect(await screen.findByText("Helper One · Recorder")).toBeTruthy();
+    expect(screen.getByText("local account")).toBeTruthy();
+    expect(screen.queryByText("has not signed in yet")).toBeNull();
+  });
+
   it("shows a revoked row with its reason, and offers no second revoke", async () => {
     vi.mocked(listRoleAssignments).mockResolvedValue([
       assignment({
@@ -133,7 +146,7 @@ describe("RolesSection", () => {
     renderWithQuery(<RolesSection offline={false} />);
     await screen.findByRole("heading", { name: "Assign a role" });
 
-    fill("Sign-in address (UPN or email)", "  Coach@School.test  ");
+    fill("Username or school email", "  Coach@School.test  ");
     fireEvent.change(screen.getByLabelText("Role"), { target: { value: "CarnivalAdministrator" } });
     fill(/^Reason \(recorded/, "  Runs the athletics carnival.  ");
     fireEvent.click(screen.getByRole("button", { name: "Assign role" }));
@@ -153,13 +166,13 @@ describe("RolesSection", () => {
     renderWithQuery(<RolesSection offline={false} />);
     await screen.findByRole("heading", { name: "Assign a role" });
 
-    fill("Sign-in address (UPN or email)", "coach@school.test");
+    fill("Username or school email", "coach@school.test");
     fill(/^Reason \(recorded/, "Timing desk.");
     fireEvent.click(screen.getByRole("button", { name: "Assign role" }));
 
     await waitFor(() =>
       expect(
-        (screen.getByLabelText("Sign-in address (UPN or email)") as HTMLInputElement).value,
+        (screen.getByLabelText("Username or school email") as HTMLInputElement).value,
       ).toBe(""),
     );
   });
@@ -171,7 +184,7 @@ describe("RolesSection", () => {
     })) as HTMLButtonElement;
     expect(assign.disabled).toBe(true);
 
-    fill("Sign-in address (UPN or email)", "coach@school.test");
+    fill("Username or school email", "coach@school.test");
     expect(assign.disabled).toBe(true);
     fill(/^Reason \(recorded/, "Timing desk.");
     expect(assign.disabled).toBe(false);
@@ -185,7 +198,7 @@ describe("RolesSection", () => {
     renderWithQuery(<RolesSection offline={false} />);
     await screen.findByRole("heading", { name: "Assign a role" });
 
-    fill("Sign-in address (UPN or email)", "not-an-address");
+    fill("Username or school email", "not-an-address");
     fill(/^Reason \(recorded/, "Timing desk.");
     fireEvent.click(screen.getByRole("button", { name: "Assign role" }));
 
@@ -203,7 +216,7 @@ describe("RolesSection", () => {
     renderWithQuery(<RolesSection offline={false} />);
     await screen.findByRole("heading", { name: "Assign a role" });
 
-    fill("Sign-in address (UPN or email)", "coach@school.test");
+    fill("Username or school email", "coach@school.test");
     fill(/^Reason \(recorded/, "Again.");
     fireEvent.click(screen.getByRole("button", { name: "Assign role" }));
 

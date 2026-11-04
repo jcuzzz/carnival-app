@@ -19,12 +19,20 @@ vi.mock("./api/resources", () => ({
   getRecordsForAdministration: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("./auth/localAccounts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./auth/localAccounts")>()),
+  getAuthMethods: vi.fn().mockResolvedValue({ provider: null }),
+  getMyAccount: vi.fn(),
+  inspectSetupLink: vi.fn(),
+}));
+
 vi.mock("./api/syncSetup", () => ({
   syncWorker: { start: vi.fn(), stop: vi.fn(), syncNow: vi.fn() },
   resumeAfterSignIn: vi.fn(),
 }));
 
 import App from "./App";
+import { dropSetupToken, getMyAccount, inspectSetupLink, setupToken } from "./auth/localAccounts";
 
 beforeEach(async () => {
   cleanup();
@@ -132,6 +140,7 @@ describe("the School hub (ADR-0055 §1)", () => {
     const rows = [...document.querySelectorAll(".row-list .row-link .row-title")];
     expect(rows.map((row) => row.textContent)).toEqual([
       "School settings",
+      "People",
       "Roles",
       "Roster import",
       "Event templates",
@@ -142,6 +151,7 @@ describe("the School hub (ADR-0055 §1)", () => {
       [...document.querySelectorAll<HTMLAnchorElement>(".row-list .row-link")].map((a) => a.hash),
     ).toEqual([
       "#/school/settings",
+      "#/school/people",
       "#/school/roles",
       "#/import",
       "#/school/templates",
@@ -215,6 +225,25 @@ describe("the demo build", () => {
     expect(screen.queryByRole("button", { name: "Start demo" })).toBeNull();
   });
 
+  it("has no People row, People screen or My account: a sandbox has no local accounts", async () => {
+    signIn({ subject: "demo-1", displayName: "Demo visitor", roles: ["SystemAdministrator"] });
+    location.hash = "#/school";
+    renderWithQuery(<App />);
+
+    await screen.findByRole("heading", { name: "School", level: 1 });
+    expect(screen.getByRole("link", { name: /School settings/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /^People/ })).toBeNull();
+
+    act(() => {
+      location.hash = "#/school/people";
+    });
+    expect(await screen.findByRole("heading", { name: "Not found" })).toBeTruthy();
+    act(() => {
+      location.hash = "#/account";
+    });
+    await waitFor(() => expect(screen.getByText("/account")).toBeTruthy());
+  });
+
   it("has no Switch screen to pick another identity on", async () => {
     signIn({ subject: "demo-1", displayName: "Demo visitor", roles: ["SystemAdministrator"] });
     location.hash = "#/login";
@@ -222,5 +251,86 @@ describe("the demo build", () => {
 
     await waitFor(() => expect(location.hash).toBe("#/"));
     expect(screen.queryByText("Alex Admin")).toBeNull();
+  });
+});
+
+/** ADR-0065: the setup token is a credential, so it leaves the address and history at once. */
+describe("a setup link", () => {
+  afterEach(() => dropSetupToken());
+
+  it("takes the token out of the address, keeping it in memory only", async () => {
+    vi.mocked(inspectSetupLink).mockResolvedValue({
+      kind: "firstAdministrator",
+      username: null,
+      displayName: null,
+      expiresAtUtc: "2026-11-05T09:00:00Z",
+      requireAuthenticator: false,
+    });
+    const before = history.length;
+    location.hash = "#/setup/Xk3-secret-token";
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/setup"));
+    expect(history.length).toBe(before + 1);
+    await waitFor(() => expect(inspectSetupLink).toHaveBeenCalledWith("Xk3-secret-token"));
+    expect(setupToken()).toBe("Xk3-secret-token");
+    expect(JSON.stringify({ ...localStorage })).not.toContain("Xk3-secret-token");
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain("Xk3-secret-token");
+    expect(await screen.findByText(/first system administrator/)).toBeTruthy();
+  });
+});
+
+describe("sign-in on the dev server", () => {
+  it("keeps the official picker at /login", async () => {
+    location.hash = "#/login";
+    renderWithQuery(<App />);
+
+    expect(await screen.findByRole("button", { name: /Alex Admin/ })).toBeTruthy();
+  });
+
+  it("shows the real sign-in box at /dev/sign-in for the screenshot pass", async () => {
+    location.hash = "#/dev/sign-in";
+    renderWithQuery(<App />);
+
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Alex Admin/ })).toBeNull();
+  });
+});
+
+describe("the authenticator reminder on the School page", () => {
+  beforeEach(() => {
+    location.hash = "#/school";
+  });
+
+  it("asks a local system administrator without an authenticator to set one up", async () => {
+    vi.mocked(getMyAccount).mockResolvedValue({
+      username: "backup-admin",
+      displayName: "Backup Admin",
+      authenticatorEnrolled: false,
+      recoveryCodesLeft: 0,
+      requireAuthenticator: false,
+    });
+    signIn({
+      subject: "local:1",
+      displayName: "Backup Admin",
+      roles: ["SystemAdministrator"],
+      localAccount: true,
+    });
+    renderWithQuery(<App />);
+
+    expect(await screen.findByText(/has no authenticator app/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set one up on My account" }).getAttribute("href")).toBe(
+      "#/account",
+    );
+  });
+
+  it("says nothing to a provider account, whose MFA is the school's", async () => {
+    vi.mocked(getMyAccount).mockClear();
+    signIn({ subject: "oid-1", displayName: "Sam Sysadmin", roles: ["SystemAdministrator"] });
+    renderWithQuery(<App />);
+
+    await screen.findByRole("heading", { name: "School", level: 1 });
+    expect(screen.queryByText(/has no authenticator app/)).toBeNull();
+    expect(getMyAccount).not.toHaveBeenCalled();
   });
 });

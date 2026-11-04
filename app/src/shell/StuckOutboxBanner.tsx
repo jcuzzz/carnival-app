@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { entraAuthEnabled, loginHref } from "../auth/entra";
+import { signInHref } from "../auth/entra";
 import { href, useUrl } from "../router";
 import { PARKED_STATUSES, UNDELIVERED_STATUSES } from "../sync/outbox";
 import { deriveOutboxHealth, stuckBanner, type OutboxHealth } from "../sync/stuckOutbox";
@@ -37,17 +37,12 @@ function useNow(intervalMs: number): number {
 
 // Keyed on the cause by the caller: a new cause replaces the live region rather than mutating it.
 export default function StuckOutboxBanner({ health }: { health: OutboxHealth }) {
-  // Signing in is a full-page trip to the IdP: without a returnTo the marshal
+  // A provider sign-in is a full-page trip to the IdP: without a returnTo the marshal
   // comes back to the carnival list, not the deck row they were capturing.
   const returnTo = useUrl();
   const banner = stuckBanner(health);
   if (!banner) return null;
-  const target =
-    banner.action === "sign-in"
-      ? entraAuthEnabled()
-        ? loginHref(returnTo)
-        : href("/login")
-      : href("/outbox");
+  const target = banner.action === "sign-in" ? signInHref(returnTo) : href("/outbox");
   // A lapsed session is seconds old and stops everything behind it; the other
   // two are true by age, so interrupting a capture buys nothing.
   const assertive = health.cause === "paused";

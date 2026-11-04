@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from "react";
 import { api, ApiError, apiBase, isDemoBuild } from "../api/client";
-import type { PlatformRole } from "../api/types";
+import type { MeResponse, PlatformRole } from "../api/types";
+import { href } from "../router";
 import { getSession, signIn, signOut, type Session } from "./session";
 
-/** Never the Vite dev server nor a demo build: those have no OIDC sign-in. */
-export function entraAuthEnabled(): boolean {
+/** Never the Vite dev server nor a demo build: those have the dev picker or the demo's session. */
+export function serverSignInEnabled(): boolean {
   return !import.meta.env.DEV && !isDemoBuild();
 }
 
@@ -13,14 +14,25 @@ export function serverSessionEnabled(): boolean {
   return !import.meta.env.DEV;
 }
 
-interface MeResponse {
-  subject: string;
-  displayName: string;
-  roles: PlatformRole[];
+/** The provider's own sign-in; `/auth/identify` hands back the same address with the hint. */
+export function loginHref(returnTo = "/", hint?: string): string {
+  const loginHint = hint ? `&loginHint=${encodeURIComponent(hint)}` : "";
+  return `${apiBase()}/api/v1/auth/login?returnUrl=${encodeURIComponent(returnTo)}${loginHint}`;
 }
 
-export function loginHref(returnTo = "/"): string {
-  return `${apiBase()}/api/v1/auth/login?returnUrl=${encodeURIComponent(returnTo)}`;
+/** The sign-in box, told where to come back to. */
+export function signInHref(returnTo?: string): string {
+  if (!serverSignInEnabled()) return href("/login");
+  return returnTo ? href(`/login?returnUrl=${encodeURIComponent(returnTo)}`) : href("/login");
+}
+
+export function sessionOf(me: MeResponse): Session {
+  return {
+    subject: me.subject,
+    displayName: me.displayName,
+    roles: me.roles as PlatformRole[],
+    localAccount: me.localAccount === true,
+  };
 }
 
 export function logoutHref(): string {
@@ -30,8 +42,7 @@ export function logoutHref(): string {
 /** A 401 is null, the expected answer before login; any other failure propagates. */
 export async function fetchMe(): Promise<Session | null> {
   try {
-    const me = await api<MeResponse>("/me");
-    return { subject: me.subject, displayName: me.displayName, roles: me.roles };
+    return sessionOf(await api<MeResponse>("/me"));
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;

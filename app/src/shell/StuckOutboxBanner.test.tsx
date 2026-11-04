@@ -8,13 +8,6 @@ import { enqueue, pauseQueue, resumeQueue, transition } from "../sync/outbox";
 import { STUCK_AFTER_MS } from "../sync/stuckOutbox";
 import { _resetUuidv7StateForTests } from "../sync/uuidv7";
 
-/** Flipped by the one test that needs the real-auth (Entra) sign-in target. */
-let entraOn = false;
-vi.mock("../auth/entra", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../auth/entra")>()),
-  entraAuthEnabled: () => entraOn,
-}));
-
 /**
  * The wiring, as AppShell renders it (ADR-0029): observables in, one banner
  * out, keyed on the cause so a change replaces the live region.
@@ -35,7 +28,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  entraOn = false;
+  vi.unstubAllEnvs();
   location.hash = "";
 });
 
@@ -80,10 +73,10 @@ describe("the stuck-outbox banner", () => {
     );
   });
 
-  it("brings the marshal back to the row they were on after the IdP round trip", async () => {
-    // A full-page sign-in with no returnTo lands on the carnival list, three
+  it("brings the marshal back to the row they were on after signing in", async () => {
+    // A sign-in with no returnTo lands on the carnival list, three
     // taps from the deck the swimmers are still standing on.
-    entraOn = true;
+    vi.stubEnv("DEV", false);
     location.hash = "#/carnivals/c-1/events/ev-1";
     await capture(5_000);
     await pauseQueue("Authentication expired");
@@ -91,7 +84,7 @@ describe("the stuck-outbox banner", () => {
 
     const link = await waitFor(() => screen.getByRole("link", { name: "Sign in to resume" }));
     expect(link.getAttribute("href")).toBe(
-      "/api/v1/auth/login?returnUrl=%2F%23%2Fcarnivals%2Fc-1%2Fevents%2Fev-1",
+      "#/login?returnUrl=%2F%23%2Fcarnivals%2Fc-1%2Fevents%2Fev-1",
     );
   });
 

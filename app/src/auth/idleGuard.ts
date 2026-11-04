@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiBase } from "../api/client";
-import { entraAuthEnabled, signOutAndClear } from "./entra";
+import { serverSignInEnabled, signOutAndClear } from "./entra";
 import { clearDeviceCaches, signOut } from "./session";
 
 /**
@@ -38,9 +38,9 @@ export async function probeServerReachable(): Promise<boolean> {
   }
 }
 
-/** Entra ends the cookie session too, or the next launch silently re-adopts it. */
+/** The server ends the cookie session too (local or provider), or the next launch re-adopts it. */
 function defaultSignOut(): void {
-  if (entraAuthEnabled()) {
+  if (serverSignInEnabled()) {
     void signOutAndClear(clearDeviceCaches, (href) => location.assign(href));
   } else {
     signOut();
