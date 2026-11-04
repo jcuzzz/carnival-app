@@ -29,7 +29,7 @@ Nice to have at launch: README screenshots (synthetic data only) and a live demo
 
 1. **Generic roster import** ([ADR-0064](adr/0064-canonical-roster-csv-and-test-rosters-built-in-code.md), accepted): the importer reads generic fields through the mapping file; CASES21 becomes a preset mapping; status, gender and year-level values move into the mapping; test rosters are built by a seeded C# builder and only a small sample roster is committed. Blocker: `RosterImportService` hard-codes the CASES21 column names and ignores `maps_to`.
 2. **Records toggle**: a per-school `recordsEnabled` setting, enforced server-side.
-3. **Generic OIDC**: one standard OIDC provider (Google Workspace, Okta, Keycloak…) behind the ADR-0065 sign-in box, replacing the Entra/ADFS-specific paths.
+3. **Generic OIDC**: one standard OIDC provider (Google Workspace, Okta, Keycloak…) behind the ADR-0065 sign-in box, replacing the Entra/ADFS-specific paths. With it, **sign-in settings move into the app** (BACKLOG; needs its own plan and ADR).
 4. **School deployment template** (configuration only, pinned to a release) and a self-host guide pass for a tech-capable teacher (`docs/admin/self-host.md` exists).
 5. **Staff guide** pages listed as planned in `docs/README.md`.
 
