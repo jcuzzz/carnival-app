@@ -76,15 +76,19 @@ services:
       # configured, and refused outright on a demo host. Keep false. The public
       # demo does not use it — it runs its own session-cookie identity (ADR-0061).
       Identity__DevAuth__Enabled: ${DEV_AUTH:-false}
+      # The host name in the first-admin and setup links the host command prints.
+      Site__Address: ${SITE_ADDRESS:-localhost}
       # Entra ID (config-only; keys match what the API reads — AzureAd + Identity).
-      # Empty = auth inactive (endpoints return 401) until the app registration exists.
+      # Empty = local accounts only (ADR-0065); with Entra set, the backup
+      # administrator is still a local account.
       # Instance is REQUIRED by Microsoft.Identity.Web (IDW10106 if absent); it
       # defaults to the public cloud and is overridable for sovereign clouds.
       AzureAd__Instance: ${ENTRA_INSTANCE:-https://login.microsoftonline.com/}
       AzureAd__TenantId: ${ENTRA_TENANT_ID}
       AzureAd__ClientId: ${ENTRA_CLIENT_ID}
       AzureAd__ClientSecret: ${ENTRA_CLIENT_SECRET}
-      # ADR-0048 §3: lockout recovery and the department-tenant bootstrap; empty is fine while group mapping grants SystemAdministrator.
+      # ADR-0048 §3: provider (Entra/ADFS) accounts only; local accounts never match it.
+      # Empty is fine while group mapping grants SystemAdministrator.
       # Comma-separate several UPNs or subject ids in the one variable.
       Identity__BootstrapAdministrators__0: ${BOOTSTRAP_ADMIN_UPN:-}
     depends_on:

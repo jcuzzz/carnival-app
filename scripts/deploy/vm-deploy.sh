@@ -70,7 +70,12 @@ restore_pin_comment() {
   set_pin_comment "$PREV_PIN_LINE" || true
   echo "   .env's deployed-commit comment put back: $OLD_SHA is still the last commit that passed smoke"
 }
-trap restore_pin_comment EXIT
+ERR_FILE=""
+on_exit() {
+  [ -z "$ERR_FILE" ] || rm -f "$ERR_FILE"
+  restore_pin_comment
+}
+trap on_exit EXIT
 
 on_err() {
   [ "$SUPPRESS_ROLLBACK" = "1" ] && exit 1
@@ -546,7 +551,7 @@ digest_check api "$API_IMAGE"
 digest_check proxy "$WEB_IMAGE"
 digest_check backup "$BACKUP_IMAGE"
 
-# (h) The same four checks every "Last deploy" row records. Unauthenticated only — anything
+# (h) The checks every "Last deploy" row records. Unauthenticated only — anything
 # behind the cookie is a browser job.
 step "Smoke checks"
 HEALTH="$("${CURL[@]}" "$BASE/health" || true)"
@@ -555,8 +560,41 @@ case "$HEALTH" in Healthy*) pass "/health contains Healthy" ;; *) fail "/health 
 ME="$("${CURL[@]}" -o /dev/null -w '%{http_code}' -H 'Accept: */*' "$BASE/api/v1/me" || true)"
 [ "$ME" = "401" ] && pass "/api/v1/me XHR → 401 (expected 401)" || fail "/api/v1/me XHR → $ME (expected 401)"
 
-LOGIN="$("${CURL[@]}" -o /dev/null -w '%{http_code}' -H 'Accept: text/html' "$BASE/api/v1/auth/login" || true)"
-[ "$LOGIN" = "302" ] && pass "/api/v1/auth/login nav → 302 (expected 302)" || fail "/api/v1/auth/login nav → $LOGIN (expected 302)"
+METHODS="$("${CURL[@]}" -w '\n%{http_code}' "$BASE/api/v1/auth/methods" || true)"
+METHODS_CODE="$(printf '%s' "$METHODS" | tail -1)"
+METHODS_BODY="$(printf '%s' "$METHODS" | sed '$d')"
+# No jq on the VM: the body is one small object, {"provider":"Entra"|"Adfs"|null}.
+PROVIDER="$(printf '%s' "$METHODS_BODY" | tr -d ' \r\n' | sed -n 's/.*"provider":"\([^"]*\)".*/\1/p')"
+if [ "$METHODS_CODE" = "200" ] && printf '%s' "$METHODS_BODY" | tr -d ' \r\n' | grep -q '"provider":\(null\|"[^"]*"\)'; then
+  pass "/api/v1/auth/methods → 200 (provider: ${PROVIDER:-none})"
+else
+  fail "/api/v1/auth/methods → $METHODS_CODE (expected 200 JSON with provider): ${METHODS_BODY:-<nothing>}"
+fi
+
+SMOKE_SIGN_IN='{"username":"smoke-check-nonexistent","password":"smoke-check-password-0000"}'
+local_sign_in() {   # extra curl args; prints the body, then the status on its own line
+  "${CURL[@]}" -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' "$@" \
+    --data "$SMOKE_SIGN_IN" "$BASE/api/v1/auth/local" || true
+}
+LOCAL="$(local_sign_in)"
+LOCAL_CODE="$(printf '%s' "$LOCAL" | tail -1)"
+if [ "$LOCAL_CODE" = "401" ] && printf '%s' "$LOCAL" | grep -q 'SIGN_IN_FAILED'; then
+  pass "/api/v1/auth/local unknown name → 401 SIGN_IN_FAILED"
+else
+  fail "/api/v1/auth/local unknown name → $LOCAL_CODE (expected 401 SIGN_IN_FAILED): $(printf '%s' "$LOCAL" | sed '$d')"
+fi
+CROSS="$(local_sign_in -H 'Sec-Fetch-Site: cross-site')"
+CROSS_CODE="$(printf '%s' "$CROSS" | tail -1)"
+if [ "$CROSS_CODE" = "403" ] && printf '%s' "$CROSS" | grep -q 'CROSS_SITE_REQUEST_REFUSED'; then
+  pass "/api/v1/auth/local cross-site → 403 CROSS_SITE_REQUEST_REFUSED"
+else
+  fail "/api/v1/auth/local cross-site → $CROSS_CODE (expected 403 CROSS_SITE_REQUEST_REFUSED): $(printf '%s' "$CROSS" | sed '$d')"
+fi
+
+if [ -n "$PROVIDER" ]; then
+  LOGIN="$("${CURL[@]}" -o /dev/null -w '%{http_code}' -H 'Accept: text/html' "$BASE/api/v1/auth/login" || true)"
+  [ "$LOGIN" = "302" ] && pass "/api/v1/auth/login nav → 302 (expected 302)" || fail "/api/v1/auth/login nav → $LOGIN (expected 302)"
+fi
 
 SPA="$("${CURL[@]}" -w '\n%{http_code}' "$BASE/" || true)"
 SPA_CODE="$(printf '%s' "$SPA" | tail -1)"
@@ -569,6 +607,39 @@ fi
 HIST_AFTER="$(docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c 'SELECT count(*) FROM "__EFMigrationsHistory";' | tr -d '\r')"
 echo "   __EFMigrationsHistory: $HIST_BEFORE → $HIST_AFTER"
 
+# The link is a credential: it goes to the terminal only, never into .env, the pins file or a log.
+SIGN_IN_NOTE=""
+FIRST_ADMIN_LINE=""
+if [ "$FAILURES" -eq 0 ]; then
+  step "First administrator"
+  if [ -z "$SITE" ] || [ "$SITE" = "localhost" ]; then
+    SIGN_IN_NOTE="  first admin     set SITE_ADDRESS in .env to the name devices use to reach this server,
+                  then redeploy: the first-admin link is issued only for a real name"
+    echo "   SITE_ADDRESS is localhost: no first-admin link issued"
+  else
+    ERR_FILE="$(mktemp)"
+    rc=0
+    FIRST_ADMIN="$(docker compose exec -T api dotnet CarnivalApp.Api.dll accounts first-admin 2>"$ERR_FILE")" || rc=$?
+    case "$rc" in
+      0)
+        FIRST_ADMIN_LINE="$(printf '%s\n' "$FIRST_ADMIN" | tr -d '\r' | grep -m1 '^First administrator:' || true)"
+        if [ -n "$FIRST_ADMIN_LINE" ]; then
+          pass "first-admin link issued (printed after the summary)"
+        else
+          fail "accounts first-admin exited 0 but printed no 'First administrator:' line"
+        fi
+        ;;
+      2)
+        echo "   no link issued: $(cat "$ERR_FILE")"
+        ;;
+      *)
+        fail "accounts first-admin exited $rc: $(cat "$ERR_FILE")"
+        ;;
+    esac
+    rm -f "$ERR_FILE"; ERR_FILE=""
+  fi
+fi
+
 [ "$FAILURES" -eq 0 ] || { echo; echo "$FAILURES smoke check(s) failed." >&2; exit 1; }
 
 step "Recording $NEW_SHA as the deployed commit"
@@ -579,6 +650,11 @@ echo "   .env now names $NEW_SHA, and only because every check above passed"
 IMAGES_BLOCK="$API_IMAGE
                   $WEB_IMAGE
                   $BACKUP_IMAGE"
+LINK_TODO=""
+[ -z "$FIRST_ADMIN_LINE" ] || LINK_TODO="
+   - sign in through the browser with the first-admin link printed below."
+LOGIN_SMOKE=""
+[ -z "$PROVIDER" ] || LOGIN_SMOKE="/auth/login 302 | "
 ROLLBACK_NOTE="(no rebuild, and no dependence on the state of the source tree)"
 if [ "$LOCAL_BUILD" = "1" ]; then
   # Local tags, not digests: the runbook row is copied from this block.
@@ -600,9 +676,12 @@ cat <<SUMMARY
   pre-deploy dump $DUMP
   migrations      $HIST_BEFORE -> $HIST_AFTER
   db roles        owner '$PG_USER' (migrations) | app '$APP_USER' (requests, no audit writes)
-  smoke           /health Healthy | /me 401 | /auth/login 302 | SPA 200   (all PASS)
-
-  NOT DONE BY THIS SCRIPT — do these by hand now:
+  smoke           /health Healthy | /me 401 | /auth/methods 200 | /auth/local 401, cross-site 403 |
+                  ${LOGIN_SMOKE}SPA 200   (all PASS)
+${SIGN_IN_NOTE:+
+$SIGN_IN_NOTE
+}
+  NOT DONE BY THIS SCRIPT — do these by hand now:${LINK_TODO}
    - §5.1 step 8: sign in in a BROWSER as CARNIVAL-SysAdmins and as a collapsed
      group (CARNIVAL-Verifiers is the sharpest) and read /api/v1/me. Empty roles []
      means stop and roll the code back, cleanly, before touching any config.
@@ -620,3 +699,9 @@ cat <<SUMMARY
     (config first, code second, if the override file was already edited — §5.1 step 12)
 ==================================================================
 SUMMARY
+
+if [ -n "$FIRST_ADMIN_LINE" ]; then
+  echo
+  echo "  !! Do not record this link; it is single use and expires in 24 hours."
+  echo "  >>> $FIRST_ADMIN_LINE"
+fi

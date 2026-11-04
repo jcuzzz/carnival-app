@@ -48,10 +48,13 @@ own location, so the working directory does not matter and the repo path can mov
    api proxy backup`. **It builds nothing.**
 8. Polls the api container for up to 120s, then checks each container's image really is the digest
    just pinned — the comparison that replaced runbook §5.0's served-bytes marker grep — and runs the
-   four unauthenticated smoke checks the
+   unauthenticated smoke checks the
    runbook's "Last deploy" rows record — `/health` → `Healthy`, `/api/v1/me` XHR → 401,
-   `/api/v1/auth/login` nav → 302, SPA `/` → 200 + HTML — plus the after-count of the migrations
-   history. Any FAIL aborts and prints the rollback commands.
+   `/api/v1/auth/methods` → 200, a `POST /api/v1/auth/local` for a nonexistent name → 401
+   `SIGN_IN_FAILED` and the same with `Sec-Fetch-Site: cross-site` → 403
+   `CROSS_SITE_REQUEST_REFUSED`, `/api/v1/auth/login` nav → 302 (only when `methods` reports a
+   provider), SPA `/` → 200 + HTML — plus the after-count of the migrations history. Any FAIL
+   aborts and prints the rollback commands.
 9. Runs `deploy/db/init-roles.sql` a second time (migrations have now created `AuditEvents` and any
    new table) and proves the split as the application role: `UPDATE "AuditEvents"` → permission
    denied, `SELECT` from `"Students"` → a count.
@@ -59,7 +62,11 @@ own location, so the working directory does not matter and the repo path can mov
     commit — so the record of what is deployed can never name a commit that failed. Any earlier
     exit puts the previous comment line back.
 11. Prints a summary: old → new commit, the three image digests, the previous-pins path, dump path,
-    history before/after, roles, smoke results.
+    history before/after, roles, smoke results. When no local account exists yet it runs
+    `accounts first-admin` in the api container and prints the first-admin setup link (valid 24
+    hours) after the summary, outside the block operators record, with or without a provider; the
+    link goes to the terminal only, never to a file. With `SITE_ADDRESS` at `localhost` it issues
+    no link and says to set the real name and redeploy.
 
 It also `chmod 600`s `.env` at the start and refuses to deploy when `APP_DB_PASSWORD` or
 `BACKUP_AGE_RECIPIENT` is missing (ADR-0047 items 4 and 5).
@@ -71,6 +78,7 @@ It also `chmod 600`s `.env` at the start and refuses to deploy when `APP_DB_PASS
 | Proxmox VM snapshot (host-side) | runbook §5.1 step 1 |
 | The change-specific pre-flight SQL, and the gate values it must return | runbook §5.2 |
 | `docker-compose.override.yml` / `.env` edits — **config follows the code deploy, never precedes it** | runbook §5.1 steps 9 and 12 |
+| Signing in through the browser with the first-admin link, when one was issued | printed after the deploy summary |
 | Browser sign-in proofs: `/me` for `CARNIVAL-SysAdmins` and a collapsed group (`CARNIVAL-Verifiers`), and the alias log line | runbook §5.1 step 8, §4.1 A |
 | The four-role allow/refuse matrix and the lifecycle 404 checks | runbook §4.1 B and C |
 | Recording the deploy in the instance table | runbook §5.1 step 13 |
