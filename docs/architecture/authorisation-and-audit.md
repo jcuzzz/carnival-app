@@ -18,7 +18,7 @@ An explicit `Identity:Provider` wins; otherwise the populated configuration sect
 - The development header scheme is registered only in the `Development` environment. Anywhere else, a host with no provider configured authenticates nobody and answers `401` to everything. When the scheme is registered, the API logs a critical warning at start-up.
 - The demo scheme refuses to start if dev header auth or any Entra or ADFS setting is also present.
 
-Built-in accounts and a generic OIDC provider are planned (see `docs/HANDOFF.md`); neither exists today. Setting up Entra or ADFS is covered in [self-hosting](../admin/self-host.md#4-sign-in).
+Built-in accounts ([ADR-0065](../adr/0065-built-in-local-accounts.md), accepted, not yet built) and a generic OIDC provider are planned; neither exists today. Setting up Entra or ADFS is covered in [self-hosting](../admin/self-host.md#4-sign-in).
 
 ### Development header and demo session
 

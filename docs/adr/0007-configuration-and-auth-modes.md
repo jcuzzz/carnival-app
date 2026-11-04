@@ -1,6 +1,6 @@
 # ADR-0007: Configuration/administration model and authentication modes
 
-- **Status:** Accepted (2026-07). Partly superseded by [ADR-0061](0061-demo-showcase-per-visitor-instances.md): the public demo has its own sign-in provider; header sign-in is never enabled on a shared deployment.
+- **Status:** Accepted (2026-07). Partly superseded by [ADR-0061](0061-demo-showcase-per-visitor-instances.md): the public demo has its own sign-in provider; header sign-in is never enabled on a shared deployment. Partly superseded by [ADR-0065](0065-built-in-local-accounts.md): outside `Development`, a deployment with no provider signs in with built-in local accounts, and local accounts can sit beside Entra or ADFS.
 
 ## Context
 

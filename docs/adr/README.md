@@ -10,7 +10,7 @@ ADRs record *why* a significant design decision was taken: its context, the deci
 | [0004](0004-reporting-and-publishing.md) | Reporting and publishing direction | Accepted (tier 1 built; tiers 2 and 3 are directions) |
 | [0005](0005-novelty-and-bonus-house-points.md) | Novelty and bonus house points | Accepted |
 | [0006](0006-shared-device-and-byo-session-policy.md) | Shared-device and BYO session policy | Accepted; partly superseded by [0031](0031-shared-device-hygiene.md) and [0034](0034-organiser-queue-visibility.md) |
-| [0007](0007-configuration-and-auth-modes.md) | Configuration/administration model and authentication modes | Accepted; partly superseded by [0061](0061-demo-showcase-per-visitor-instances.md) |
+| [0007](0007-configuration-and-auth-modes.md) | Configuration/administration model and authentication modes | Accepted; partly superseded by [0061](0061-demo-showcase-per-visitor-instances.md) and [0065](0065-built-in-local-accounts.md) |
 | [0008](0008-team-and-relay-events.md) | Team and relay events | Accepted |
 | [0009](0009-administrators-can-record-results.md) | Administrators can record results (staffing flexibility) | Superseded by [0016](0016-role-model-simplification.md) |
 | [0010](0010-offline-entry-creation.md) | Offline entry creation (client-supplied entry ids) | Accepted |
@@ -51,7 +51,7 @@ ADRs record *why* a significant design decision was taken: its context, the deci
 | [0045](0045-school-settings-in-app.md) | School settings administered in-app (admin GUI, slice 1) | Accepted |
 | [0046](0046-in-app-colour-picker.md) | In-app colour picker (react-colorful), native input retired | Accepted |
 | [0047](0047-the-database-stays-on-the-host.md) | The database stays on the application host, hardened in place | Accepted |
-| [0048](0048-in-app-role-assignment.md) | In-app role assignment, layered over Entra groups | Accepted |
+| [0048](0048-in-app-role-assignment.md) | In-app role assignment, layered over Entra groups | Accepted; partly superseded by [0065](0065-built-in-local-accounts.md) |
 | [0049](0049-images-are-built-in-ci-and-pulled-by-digest.md) | Images are built in CI and pulled by digest | Accepted |
 | [0050](0050-reconcile-template.md) | Reconciling a changed event template onto an existing catalogue | Accepted; amended by [0054](0054-setting-up-a-carnival.md) |
 | [0051](0051-outbox-ack-narrowing.md) | The stored outbox ack is narrowed per kind | Accepted |
@@ -68,3 +68,4 @@ ADRs record *why* a significant design decision was taken: its context, the deci
 | [0062](0062-retention-windows-for-operational-data.md) | Retention windows for operational data | Accepted |
 | [0063](0063-standings-list-every-house.md) | Standings list every house | Accepted |
 | [0064](0064-canonical-roster-csv-and-test-rosters-built-in-code.md) | The roster import reads generic input data, and test rosters are built in code | Accepted |
+| [0065](0065-built-in-local-accounts.md) | Built-in local accounts, with an optional authenticator app | Accepted; partly supersedes [0007](0007-configuration-and-auth-modes.md) and [0048](0048-in-app-role-assignment.md) |

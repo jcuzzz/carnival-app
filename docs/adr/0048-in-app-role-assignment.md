@@ -1,6 +1,6 @@
 # ADR-0048: In-app role assignment, layered over Entra groups
 
-- **Status:** Accepted (2026-09). The Roles page's place in the School area is set by [ADR-0055](0055-the-school-area.md).
+- **Status:** Accepted (2026-09). The Roles page's place in the School area is set by [ADR-0055](0055-the-school-area.md). Partly superseded by [ADR-0065](0065-built-in-local-accounts.md): local accounts are no longer rejected, and roles can be granted to a local username.
 
 ## Context
 
