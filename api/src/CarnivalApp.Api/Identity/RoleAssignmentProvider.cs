@@ -16,6 +16,11 @@ public interface IRoleAssignmentSource
 {
     Task<IReadOnlyList<ActiveAssignment>> GetActiveAsync(CancellationToken ct = default);
 
+    /// <summary>The active rows bound to <paramref name="subjectId"/>, read past any cache.</summary>
+    async Task<IReadOnlyList<ActiveAssignment>> GetActiveForSubjectAsync(
+        string subjectId, CancellationToken ct = default) =>
+        [.. (await GetActiveAsync(ct)).Where(row => row.SubjectId == subjectId)];
+
     Task BindAsync(
         IReadOnlyList<Guid> assignmentIds,
         string subjectId,
@@ -26,7 +31,8 @@ public interface IRoleAssignmentSource
 
 /// <summary>
 /// Single-instance deployment, so a synchronous <see cref="Invalidate"/> on every write is enough
-/// for changes to take effect on the next request. One slot per database, the last-good list
+/// for this process's changes to take effect on the next request; local sessions read past the
+/// cache, since the host command writes from another process. One slot per database, the last-good list
 /// included: a demo host serves one database per visitor (ADR-0061 §1).
 /// </summary>
 public sealed class RoleAssignmentProvider(
@@ -79,6 +85,31 @@ public sealed class RoleAssignmentProvider(
         // Never cache a read an Invalidate overtook.
         if (Volatile.Read(ref slot.Generation) == generation) Volatile.Write(ref slot.Cached, rows);
         return rows;
+    }
+
+    /// <summary>
+    /// For local sessions, whose grants may come from the host command in another process. Falls
+    /// back to the last-good list as <see cref="GetActiveAsync"/> does.
+    /// </summary>
+    public async Task<IReadOnlyList<ActiveAssignment>> GetActiveForSubjectAsync(
+        string subjectId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+            return await db.RoleAssignments.AsNoTracking()
+                .Where(row => row.RevokedAtUtc == null && row.SubjectId == subjectId)
+                .Select(row => new ActiveAssignment(row.Id, row.SubjectId, row.SubjectUpn, row.Role))
+                .ToListAsync(ct);
+        }
+        catch (Exception error)
+        {
+            var slot = _slots.GetOrAdd(database.Current, _ => new Slot());
+            if (Interlocked.Exchange(ref slot.Healthy, 0) == 1)
+                logger.LogError(error, "Reading a local account's role assignments failed; serving the last-good list.");
+            return [.. Volatile.Read(ref slot.LastGood).Where(row => row.SubjectId == subjectId)];
+        }
     }
 
     public async Task BindAsync(

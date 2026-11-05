@@ -87,16 +87,25 @@ public sealed class LocalAccountSelfService(
         return LocalAccountResult<AuthenticatorSetup>.Ok(await PendingAuthenticatorAsync(account, fresh: true, ct));
     }
 
+    /// <summary>A wrong code counts towards the lockout at this address, as at sign-in.</summary>
     public async Task<LocalAccountResult<EnrolledAuthenticator>> ConfirmAuthenticatorAsync(
-        Guid accountId, string? code, CancellationToken ct = default)
+        Guid accountId, string? code, IPAddress? clientAddress = null, CancellationToken ct = default)
     {
         if (await ActiveAsync(accountId, ct) is not { } account)
             return LocalAccountResult<EnrolledAuthenticator>.Fail(ErrorCodes.AccountNotFound);
         if (account.TwoFactorEnabled)
             return LocalAccountResult<EnrolledAuthenticator>.Fail(ErrorCodes.AuthenticatorAlreadyEnrolled);
-        return await EnrolAsync(account, code, ct) is { } codes
-            ? LocalAccountResult<EnrolledAuthenticator>.Ok(new EnrolledAuthenticator(account, codes))
-            : LocalAccountResult<EnrolledAuthenticator>.Fail(ErrorCodes.CodeInvalid);
+
+        var address = SignInAttemptLog.AddressText(clientAddress);
+        if (await attempts.IsLockedOutAsync(account.Id, address, ct))
+        {
+            await attempts.RecordAsync(account.Id, address, SignInOutcome.LockedOut, ct);
+            return LocalAccountResult<EnrolledAuthenticator>.Fail(ErrorCodes.CodeInvalid);
+        }
+        if (await EnrolAsync(account, code, ct) is { } codes)
+            return LocalAccountResult<EnrolledAuthenticator>.Ok(new EnrolledAuthenticator(account, codes));
+        await attempts.RecordAsync(account.Id, address, SignInOutcome.WrongCode, ct);
+        return LocalAccountResult<EnrolledAuthenticator>.Fail(ErrorCodes.CodeInvalid);
     }
 
     // At sign-in the pending key is kept, since each step is a new request; setting one does not

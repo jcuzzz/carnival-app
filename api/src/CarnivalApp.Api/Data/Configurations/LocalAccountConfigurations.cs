@@ -86,3 +86,12 @@ public class SignInAttemptConfiguration : IEntityTypeConfiguration<SignInAttempt
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class EndedLocalSessionConfiguration : IEntityTypeConfiguration<EndedLocalSession>
+{
+    public void Configure(EntityTypeBuilder<EndedLocalSession> b)
+    {
+        b.HasKey(x => x.SessionId);
+        b.Property(x => x.SessionId).HasMaxLength(EndedLocalSession.MaxSessionIdLength);
+    }
+}

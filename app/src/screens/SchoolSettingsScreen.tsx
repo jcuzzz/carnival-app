@@ -14,8 +14,8 @@ import { getSchoolSettings, putSchoolSettings } from "../api/resources";
 import type {
   HouseSettingRequest,
   LocalAccountAccess,
-  SchoolSettingsWithSignIn,
-  SchoolSettingsWithSignInRequest,
+  SchoolSettings,
+  SchoolSettingsRequest,
 } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
@@ -67,10 +67,10 @@ interface FormState {
 
 let rowKeySeed = 0;
 
-function formOf(settings: SchoolSettingsWithSignIn): FormState {
+function formOf(settings: SchoolSettings): FormState {
   return {
-    requireAuthenticator: settings.requireAuthenticator ?? false,
-    localAccounts: settings.localAccounts ?? "SystemAdministrators",
+    requireAuthenticator: settings.requireAuthenticator,
+    localAccounts: settings.localAccounts,
     name: settings.name,
     brandColour: settings.brandColour ?? "",
     houses: settings.houses.map((house) => ({
@@ -136,7 +136,7 @@ export default function SchoolSettingsScreen() {
   const offline = connectivity !== "connected";
   const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: isAdmin });
   const invalidate = useInvalidate();
-  const [baseline, setBaseline] = useState<SchoolSettingsWithSignIn | null>(null);
+  const [baseline, setBaseline] = useState<SchoolSettings | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [serverError, setServerError] = useState<ServerFieldError | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +146,7 @@ export default function SchoolSettingsScreen() {
   const wantsReload = useRef(false);
   const focusRow = useRef<string | null>(null);
 
-  const adopt = useCallback((data: SchoolSettingsWithSignIn) => {
+  const adopt = useCallback((data: SchoolSettings) => {
     wantsReload.current = false;
     adopted.current = data.updatedAtUtc;
     setBaseline(data);
@@ -228,7 +228,7 @@ export default function SchoolSettingsScreen() {
     setError(null);
     setStale(false);
     try {
-      const request: SchoolSettingsWithSignInRequest = {
+      const request: SchoolSettingsRequest = {
         name: form.name.trim(),
         brandColour: blankToNull(form.brandColour),
         houses: form.houses.map((row): HouseSettingRequest => ({

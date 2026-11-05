@@ -30,6 +30,7 @@ function assignment(overrides: Partial<RoleAssignment> = {}): RoleAssignment {
     role: "Recorder",
     bootstrap: false,
     boundToSubject: false,
+    localAccount: false,
     reason: "Timing desk for the swimming carnival.",
     assignedBySubject: "sys-1",
     assignedAtUtc: "2026-09-01T02:03:04.000Z",
@@ -115,7 +116,10 @@ describe("RolesSection", () => {
 
   it("badges a grant to a local account, which is bound from the start (ADR-0065)", async () => {
     vi.mocked(listRoleAssignments).mockResolvedValue([
-      Object.assign(assignment({ upn: "helper1", displayName: "Helper One", boundToSubject: true }), {
+      assignment({
+        upn: "helper1",
+        displayName: "Helper One",
+        boundToSubject: true,
         localAccount: true,
       }),
     ]);

@@ -30,7 +30,12 @@ import SetupScreen from "./SetupScreen";
 
 const TOKEN = "Xk3-token";
 const PASSWORD = "correct horse battery staple";
-const ME = { subject: "local:1", displayName: "Backup Admin", roles: ["SystemAdministrator"] };
+const ME = {
+  subject: "local:1",
+  displayName: "Backup Admin",
+  roles: ["SystemAdministrator"],
+  localAccount: true,
+};
 const ENROLMENT = {
   secret: "JBSWY3DPEHPK3PXP",
   otpauthUri: "otpauth://totp/School:backup-admin?secret=JBSWY3DPEHPK3PXP&issuer=School",
@@ -207,6 +212,23 @@ describe("SetupScreen", () => {
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/expired or has already been used/);
     expect(screen.queryByLabelText("Password")).toBeNull();
+  });
+
+  it("says when the school's access setting refuses the account, and offers sign-in", async () => {
+    vi.mocked(completeSetup).mockRejectedValue(
+      new ApiError(403, { error: "LOCAL_SIGN_IN_NOT_ALLOWED", detail: "x" }, "/api/v1/auth/setup/complete"),
+    );
+    renderWithQuery(<SetupScreen />);
+    await screen.findByText(/first system administrator/);
+    type("Username", "backup-admin");
+    type("Display name", "Backup Admin");
+    choosePassword();
+    fireEvent.click(screen.getByRole("button", { name: "Save password" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/only system administrators/);
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    expect(setupToken()).toBeNull();
   });
 
   it("offers a retry when the link could not be checked offline", async () => {

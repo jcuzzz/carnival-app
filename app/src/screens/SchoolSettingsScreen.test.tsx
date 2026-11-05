@@ -55,6 +55,9 @@ function settings(overrides: Partial<SchoolSettings> = {}): SchoolSettings {
       { code: "WATTLE", name: "Waratah", colour: "#b42318", inUse: false },
       { code: "MOUNTAIN ASH", name: "Mountain Ash", colour: "#1a7f37", inUse: false },
     ],
+    requireAuthenticator: false,
+    localAccounts: "SystemAdministrators",
+    providerConfigured: false,
     updatedAtUtc: STAMP,
     ...overrides,
   };
@@ -288,12 +291,7 @@ describe("SchoolSettingsScreen", () => {
   });
 
   it("shows the access choice only beside a provider, and saves both sign-in settings", async () => {
-    vi.mocked(getSchoolSettings).mockResolvedValue({
-      ...settings(),
-      requireAuthenticator: false,
-      localAccounts: "SystemAdministrators",
-      providerConfigured: true,
-    } as SchoolSettings);
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings({ providerConfigured: true }));
     vi.mocked(putSchoolSettings).mockResolvedValue(settings());
     renderWithQuery(<SchoolSettingsScreen />);
 

@@ -178,7 +178,7 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData("no-at-sign")]
+    [InlineData("no at sign")]
     [InlineData("@school.test")]
     [InlineData("coach@")]
     [InlineData("two@at@school.test")]
@@ -188,6 +188,14 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
         var response = await _admin.PostAsJsonAsync(Path, Grant(upn));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         await response.AssertErrorAsync(ErrorCodes.RoleUpnInvalid);
+    }
+
+    [Fact]
+    public async Task A_username_with_no_local_account_is_refused()
+    {
+        var response = await _admin.PostAsJsonAsync(Path, Grant("no-at-sign"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await response.AssertErrorAsync(ErrorCodes.RoleLocalAccountUnknown);
     }
 
     [Theory]

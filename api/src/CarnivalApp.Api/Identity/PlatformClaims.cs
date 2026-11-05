@@ -8,6 +8,20 @@ public static class PlatformClaims
 
     public const string Groups = "groups";
 
+    /// <summary>The identity's authentication type for a local account's session (ADR-0065).</summary>
+    public const string LocalAuthenticationType = "local";
+
+    public const string LocalUsername = "carnival:username";
+
+    /// <summary>The account's security stamp when the cookie was issued; a rotation ends the session.</summary>
+    public const string LocalStamp = "carnival:stamp";
+
+    /// <summary>One sign-in's id, so signing out can end that session on the server.</summary>
+    public const string LocalSessionId = "carnival:sid";
+
+    public static bool IsLocalSession(this ClaimsPrincipal user) =>
+        user.Identity is { IsAuthenticated: true, AuthenticationType: LocalAuthenticationType };
+
     public static string? GetSubject(this ClaimsPrincipal user) =>
         user.GetStableSubject() ?? user.Identity?.Name;
 

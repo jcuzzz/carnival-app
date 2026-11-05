@@ -12,6 +12,9 @@ namespace CarnivalApp.Api.Identity;
 public static class DevAuthentication
 {
     public const string Scheme = "DevHeader";
+
+    /// <summary>The header when sent, otherwise the session cookie, so local accounts work in development.</summary>
+    public const string PolicyScheme = "DevHeaderOrCookie";
     public const string EnabledKey = "Identity:DevAuth:Enabled";
     public const string SubjectHeader = "X-Dev-Subject";
     public const string RolesHeader = "X-Dev-Roles";
@@ -35,25 +38,6 @@ public sealed class DevAuthenticationBanner(
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
-
-/// <summary>
-/// Authenticates nobody, so an unconfigured non-Development host answers 401 rather than a
-/// "no authentication scheme" 500.
-/// </summary>
-public static class UnconfiguredIdentity
-{
-    public const string Scheme = "UnconfiguredIdentity";
-}
-
-public class UnconfiguredIdentityHandler(
-    IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder)
-    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
-        Task.FromResult(AuthenticateResult.NoResult());
 }
 
 public class DevAuthenticationHandler(

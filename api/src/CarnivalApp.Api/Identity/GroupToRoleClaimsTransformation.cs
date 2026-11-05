@@ -5,8 +5,9 @@ using CarnivalApp.Api.Data.Entities;
 namespace CarnivalApp.Api.Identity;
 
 /// <summary>
-/// Unions the group mapping, the in-app assignments and the bootstrap administrators. Runs on
-/// every authenticated request regardless of scheme, so it must stay idempotent.
+/// Unions the group mapping, the in-app assignments and the bootstrap administrators; a local
+/// account gets its assignments only. Runs on every authenticated request regardless of scheme,
+/// so it must stay idempotent.
 /// </summary>
 public class GroupToRoleClaimsTransformation(
     IConfiguration configuration,
@@ -33,9 +34,20 @@ public class GroupToRoleClaimsTransformation(
                 identity.AddClaim(new Claim(PlatformClaims.Role, role.ToString()));
         }
 
+        var subject = principal.GetStableSubject();
+
+        // A local account's roles are its bound assignments alone, read fresh: the host command grants
+        // from another process, and a bootstrap entry names provider accounts only.
+        if (principal.IsLocalSession())
+        {
+            if (subject is not null)
+                foreach (var row in await assignments.GetActiveForSubjectAsync(subject))
+                    Grant(row.Role);
+            return principal;
+        }
+
         AddGroupRoles(principal, Grant);
 
-        var subject = principal.GetStableSubject();
         var upn = principal.GetUpn();
         if (IsBootstrapAdministrator(subject, upn)) Grant(PlatformRole.SystemAdministrator);
 

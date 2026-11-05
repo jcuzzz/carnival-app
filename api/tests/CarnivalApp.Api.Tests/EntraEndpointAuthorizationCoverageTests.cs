@@ -18,7 +18,7 @@ public sealed class EntraEndpointAuthorizationCoverageTests : IDisposable
 {
     private const string SignInCallback = "/signin-oidc";
     private const string SignOutCallback = "/signout-callback-oidc";
-    private const string SessionCookie = ".AspNetCore.Cookies=";
+    private const string SessionCookie = CarnivalApp.Api.Identity.IdentitySetup.SessionCookieName + "=";
 
     private readonly ApiTestFactory _factory = new();
     private readonly WebApplicationFactory<Program> _host;

@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using CarnivalApp.Api.Auditing;
@@ -17,8 +18,8 @@ public sealed record IssuedSetupLink(Guid LinkId, string Token, DateTimeOffset E
 public enum SetupLinkKind
 {
     /// <summary>The person chooses the username and becomes a System administrator.</summary>
-    FirstAdministrator,
-    Account,
+    [JsonStringEnumMemberName("firstAdministrator")] FirstAdministrator,
+    [JsonStringEnumMemberName("account")] Account,
 }
 
 public sealed record SetupLinkInspection(

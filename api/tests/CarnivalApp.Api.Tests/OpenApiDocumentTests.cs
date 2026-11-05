@@ -33,6 +33,46 @@ public sealed class OpenApiDocumentTests(ApiTestFactory factory) : IClassFixture
         Assert.True(paths.TryGetProperty("/api/v1/school/settings", out _));
         // ADR-0054 §4: Manage's "Open all divisions" is generated against this route.
         Assert.True(paths.TryGetProperty("/api/v1/carnivals/{id}/events/open-scheduled", out _));
+        // ADR-0065: the sign-in box, setup links, My account and People.
+        foreach (var path in new[]
+                 {
+                     "/api/v1/auth/methods", "/api/v1/auth/identify", "/api/v1/auth/local",
+                     "/api/v1/auth/setup/inspect", "/api/v1/auth/setup/complete", "/api/v1/auth/logout",
+                     "/api/v1/account", "/api/v1/account/password", "/api/v1/account/authenticator",
+                     "/api/v1/account/authenticator/confirm", "/api/v1/admin/local-accounts",
+                     "/api/v1/admin/local-accounts/{id}/reset", "/api/v1/admin/local-accounts/{id}/disable",
+                     "/api/v1/admin/local-accounts/{id}/enable", "/api/v1/admin/local-accounts/{id}/clear-lockout",
+                 })
+            Assert.True(paths.TryGetProperty(path, out _), $"{path} is missing from the document.");
+    }
+
+    [Theory]
+    [InlineData("/api/v1/auth/local", "429")]
+    [InlineData("/api/v1/auth/setup/complete", "410")]
+    [InlineData("/api/v1/auth/setup/complete", "429")]
+    [InlineData("/api/v1/auth/setup/inspect", "410")]
+    [InlineData("/api/v1/account/password", "429")]
+    [InlineData("/api/v1/account/authenticator", "429")]
+    [InlineData("/api/v1/account/authenticator/confirm", "429")]
+    public async Task The_sign_in_refusals_are_documented(string path, string status)
+    {
+        var responses = (await DocumentAsync()).GetProperty("paths").GetProperty(path)
+            .GetProperty("post").GetProperty("responses");
+        Assert.True(responses.TryGetProperty(status, out var refusal), $"POST {path} does not document {status}.");
+        Assert.Contains("ApiErrorBody", refusal.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("LocalSignInStatus", new[] { "signedIn", "codeRequired", "enrolmentRequired" })]
+    [InlineData("IdentifyMethod", new[] { "password", "provider" })]
+    [InlineData("SetupLinkKind", new[] { "firstAdministrator", "account" })]
+    [InlineData("LocalAccountStatus", new[] { "AwaitingSetup", "Active", "Disabled" })]
+    [InlineData("SignInProvider", new[] { "Entra", "Adfs" })]
+    public async Task The_local_account_enums_are_documented_as_their_wire_strings(string schema, string[] expected)
+    {
+        var values = (await DocumentAsync()).GetProperty("components").GetProperty("schemas")
+            .GetProperty(schema).GetProperty("enum").EnumerateArray().Select(v => v.GetString());
+        Assert.Equal(expected, values);
     }
 
     [Fact]
@@ -196,6 +236,28 @@ public sealed class OpenApiDocumentTests(ApiTestFactory factory) : IClassFixture
     [InlineData("HouseSettingRequest", "colour")]
     [InlineData("HouseMark", "colour")]
     [InlineData("ApiErrorBody", "detail")]
+    // ADR-0065: the sign-in box, setup, My account and People screens.
+    [InlineData("MeResponse", "localAccount")]
+    [InlineData("RoleAssignmentDto", "localAccount")]
+    [InlineData("AuthMethodsResponse", "provider")]
+    [InlineData("IdentifyResponse", "loginUrl")]
+    [InlineData("LocalSignInRequest", "enrolmentCode")]
+    [InlineData("LocalSignInResponse", "status")]
+    [InlineData("LocalSignInResponse", "me")]
+    [InlineData("LocalSignInResponse", "recoveryCodes")]
+    [InlineData("LocalSignInResponse", "otpauthUri")]
+    [InlineData("SetupLinkInspection", "kind")]
+    [InlineData("SetupLinkInspection", "requireAuthenticator")]
+    [InlineData("SetupCompleteRequest", "username")]
+    [InlineData("MyLocalAccount", "recoveryCodesLeft")]
+    [InlineData("StartAuthenticatorRequest", "currentPassword")]
+    [InlineData("AuthenticatorSetup", "secret")]
+    [InlineData("RecoveryCodesResponse", "recoveryCodes")]
+    [InlineData("LocalAccountDto", "status")]
+    [InlineData("LocalAccountDto", "lockedOut")]
+    [InlineData("LocalAccountDto", "setupLink")]
+    [InlineData("SetupLinkSummary", "usedFromAddress")]
+    [InlineData("IssuedAccountLink", "setupToken")]
     public async Task Schema_carries_its_properties(string schema, string property)
     {
         var schemas = (await DocumentAsync()).GetProperty("components").GetProperty("schemas");

@@ -334,6 +334,20 @@ namespace CarnivalApp.Api.Migrations
                     b.ToTable("DeviceSyncStatuses");
                 });
 
+            modelBuilder.Entity("CarnivalApp.Api.Data.Entities.EndedLocalSession", b =>
+                {
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("SessionId");
+
+                    b.ToTable("EndedLocalSessions");
+                });
+
             modelBuilder.Entity("CarnivalApp.Api.Data.Entities.Entry", b =>
                 {
                     b.Property<Guid>("Id")

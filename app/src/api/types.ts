@@ -202,98 +202,28 @@ export type ApiErrorBody = Partial<Schemas["ApiErrorBody"]> & {
 
 // ---- Local accounts (ADR-0065) ------------------------------------------
 
-// Hand-written from the package contract until `npm run generate:types` picks up the API's routes.
+export type LocalAccountAccess = Schemas["LocalAccountAccess"];
+export type MeResponse = Schemas["MeResponse"];
+export type AuthMethods = Schemas["AuthMethodsResponse"];
+export type IdentifyResponse = Schemas["IdentifyResponse"];
 
-export type LocalAccountAccess = "SystemAdministrators" | "Everyone";
+export type LocalSignInRequest = Omittable<Schemas["LocalSignInRequest"]>;
 
-export type MeResponse = Schemas["MeResponse"] & { localAccount?: boolean };
+/** One object on the wire: `status` says which of the optional fields are present. */
+export type LocalSignInResponse = Schemas["LocalSignInResponse"];
 
-export type SchoolSettingsWithSignIn = SchoolSettings & {
-  requireAuthenticator?: boolean;
-  localAccounts?: LocalAccountAccess;
-  providerConfigured?: boolean;
-};
-
-export type SchoolSettingsWithSignInRequest = SchoolSettingsRequest & {
-  requireAuthenticator: boolean | null;
-  localAccounts: LocalAccountAccess | null;
-};
-
-export type RoleAssignmentWithLocal = RoleAssignment & { localAccount?: boolean };
-
-export interface IdentifyRequest {
-  username: string;
-  returnUrl: string | null;
-}
-
-export type IdentifyResponse = { method: "password" } | { method: "provider"; loginUrl: string };
-
-export interface LocalSignInRequest {
-  username: string;
-  password: string;
-  code?: string;
-  recoveryCode?: string;
-  enrolmentCode?: string;
-}
-
-export type LocalSignInResponse =
+/** `LocalSignInResponse` narrowed by its status, so a screen cannot read a field that is absent. */
+export type LocalSignInAnswer =
   | { status: "signedIn"; me: MeResponse; recoveryCodes?: string[] | null }
   | { status: "codeRequired" }
   | { status: "enrolmentRequired"; secret: string; otpauthUri: string };
 
-export interface SetupLinkInspection {
-  kind: "firstAdministrator" | "account";
-  username: string | null;
-  displayName: string | null;
-  expiresAtUtc: string;
-  requireAuthenticator: boolean;
-}
+export type SetupLinkInspection = Schemas["SetupLinkInspection"];
+export type SetupCompleteRequest = Omittable<Schemas["SetupCompleteRequest"]>;
 
-export interface SetupCompleteRequest {
-  token: string;
-  username?: string;
-  displayName?: string;
-  password: string;
-}
+export type MyAccount = Schemas["MyLocalAccount"];
+export type AuthenticatorEnrolment = Schemas["AuthenticatorSetup"];
 
-export interface MyAccount {
-  username: string;
-  displayName: string;
-  authenticatorEnrolled: boolean;
-  recoveryCodesLeft: number;
-  requireAuthenticator: boolean;
-}
-
-export interface StartAuthenticatorRequest {
-  currentPassword: string;
-}
-
-export interface AuthenticatorEnrolment {
-  secret: string;
-  otpauthUri: string;
-}
-
-export type LocalAccountStatus = "AwaitingSetup" | "Active" | "Disabled";
-
-export interface LocalAccount {
-  id: string;
-  username: string;
-  displayName: string;
-  status: LocalAccountStatus;
-  authenticatorEnrolled: boolean;
-  isSystemAdministrator: boolean;
-  lockedOut: boolean;
-  lastSignInAtUtc: string | null;
-  setupLink: {
-    expiresAtUtc: string;
-    usedAtUtc: string | null;
-    usedFromAddress: string | null;
-  } | null;
-  createdAtUtc: string;
-}
-
-export interface IssuedSetupLink {
-  account: LocalAccount;
-  setupToken: string;
-  expiresAtUtc: string;
-}
+export type LocalAccountStatus = Schemas["LocalAccountStatus"];
+export type LocalAccount = Schemas["LocalAccountDto"];
+export type IssuedSetupLink = Schemas["IssuedAccountLink"];

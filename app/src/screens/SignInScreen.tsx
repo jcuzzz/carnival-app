@@ -99,8 +99,9 @@ export default function SignInScreen({
     try {
       const answer = await identify(name, returnUrl);
       if (answer.method === "provider") {
-        // Only ever the API's own provider sign-in: anything else would be an open redirect.
-        if (answer.loginUrl.startsWith(`${apiBase()}/api/v1/auth/login?`)) go(answer.loginUrl);
+        // Only ever the API's own provider sign-in path: anything else would be an open redirect.
+        const path = answer.loginUrl ?? "";
+        if (path.startsWith("/api/v1/auth/login?")) go(`${apiBase()}${path}`);
         else setError(UNEXPECTED_ANSWER_TEXT);
         return;
       }

@@ -1,51 +1,17 @@
-import { ApiError, apiBase, devAuthHeaders } from "../api/client";
-import { reportReachable, reportUnreachable } from "../api/reachability";
+import { api } from "../api/client";
 import type {
-  ApiErrorBody,
+  AuthMethods,
   AuthenticatorEnrolment,
   IdentifyResponse,
   IssuedSetupLink,
   LocalAccount,
+  LocalSignInAnswer,
   LocalSignInRequest,
   LocalSignInResponse,
   MyAccount,
   SetupCompleteRequest,
   SetupLinkInspection,
-  StartAuthenticatorRequest,
 } from "../api/types";
-
-// Raw fetch until the generated document names these routes and `api()` can type them.
-async function request<T>(
-  path: string,
-  options: { method?: "GET" | "POST"; body?: unknown } = {},
-): Promise<T> {
-  const url = `${apiBase()}/api/v1${path}`;
-  const headers: Record<string, string> = { ...devAuthHeaders() };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: options.method ?? "GET",
-      headers,
-      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-      credentials: "include",
-    });
-  } catch (err) {
-    reportUnreachable();
-    throw err;
-  }
-  reportReachable();
-  let parsed: unknown;
-  try {
-    parsed = await response.json();
-  } catch {
-    parsed = undefined;
-  }
-  if (!response.ok) throw new ApiError(response.status, parsed as ApiErrorBody | undefined, url);
-  return parsed as T;
-}
-
-const post = <T>(path: string, body: unknown = {}) => request<T>(path, { method: "POST", body });
 
 export const localAccountKeys = {
   authMethods: () => ["/auth/methods"] as const,
@@ -53,66 +19,97 @@ export const localAccountKeys = {
   localAccounts: () => ["/admin/local-accounts"] as const,
 };
 
+/** A status without the fields it promises is a server fault, never a step to show. */
+export function signInAnswerOf(response: LocalSignInResponse): LocalSignInAnswer {
+  const { status, me, recoveryCodes, secret, otpauthUri } = response;
+  if (status === "signedIn" && me) return { status, me, recoveryCodes };
+  if (status === "enrolmentRequired" && secret && otpauthUri)
+    return { status, secret, otpauthUri };
+  if (status === "codeRequired") return { status };
+  throw new Error("The server's sign-in answer was incomplete. Try again.");
+}
+
 // ---- Signing in -------------------------------------------------------
 
-export function getAuthMethods(): Promise<{ provider: "Entra" | "Adfs" | null }> {
-  return request("/auth/methods");
+export function getAuthMethods(): Promise<AuthMethods> {
+  return api<AuthMethods>("/auth/methods");
 }
 
 export function identify(username: string, returnUrl: string | null): Promise<IdentifyResponse> {
-  return post("/auth/identify", { username, returnUrl });
+  return api<IdentifyResponse>("/auth/identify", {
+    method: "POST",
+    body: { username, returnUrl },
+  });
 }
 
-export function signInLocal(body: LocalSignInRequest): Promise<LocalSignInResponse> {
-  return post("/auth/local", body);
+export async function signInLocal(body: LocalSignInRequest): Promise<LocalSignInAnswer> {
+  return signInAnswerOf(await api<LocalSignInResponse>("/auth/local", { method: "POST", body }));
 }
 
 export function inspectSetupLink(token: string): Promise<SetupLinkInspection> {
-  return post("/auth/setup/inspect", { token });
+  return api<SetupLinkInspection>("/auth/setup/inspect", { method: "POST", body: { token } });
 }
 
-export function completeSetup(body: SetupCompleteRequest): Promise<LocalSignInResponse> {
-  return post("/auth/setup/complete", body);
+export async function completeSetup(body: SetupCompleteRequest): Promise<LocalSignInAnswer> {
+  return signInAnswerOf(
+    await api<LocalSignInResponse>("/auth/setup/complete", { method: "POST", body }),
+  );
 }
 
 // ---- My account -------------------------------------------------------
 
 export function getMyAccount(): Promise<MyAccount> {
-  return request("/account");
+  return api<MyAccount>("/account");
 }
 
-export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  return post("/account/password", { currentPassword, newPassword });
+/** 204, no body. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await api<unknown>("/account/password", {
+    method: "POST",
+    body: { currentPassword, newPassword },
+  });
 }
 
 /** Asks for the password again, so an unattended signed-in device cannot enrol someone's phone. */
 export function startAuthenticator(currentPassword: string): Promise<AuthenticatorEnrolment> {
-  const body: StartAuthenticatorRequest = { currentPassword };
-  return post("/account/authenticator", body);
+  return api<AuthenticatorEnrolment>("/account/authenticator", {
+    method: "POST",
+    body: { currentPassword },
+  });
 }
 
 export function confirmAuthenticator(code: string): Promise<{ recoveryCodes: string[] }> {
-  return post("/account/authenticator/confirm", { code });
+  return api<{ recoveryCodes: string[] }>("/account/authenticator/confirm", {
+    method: "POST",
+    body: { code },
+  });
 }
 
 // ---- Administration ---------------------------------------------------
 
 export function listLocalAccounts(): Promise<LocalAccount[]> {
-  return request("/admin/local-accounts");
+  return api<LocalAccount[]>("/admin/local-accounts");
 }
 
 export function createLocalAccount(username: string, displayName: string): Promise<IssuedSetupLink> {
-  return post("/admin/local-accounts", { username, displayName });
+  return api<IssuedSetupLink>("/admin/local-accounts", {
+    method: "POST",
+    body: { username, displayName },
+  });
 }
 
 export function resetLocalAccount(id: string): Promise<IssuedSetupLink> {
-  return post(`/admin/local-accounts/${encodeURIComponent(id)}/reset`);
+  return api(`/admin/local-accounts/${encodeURIComponent(id)}/reset`, { method: "POST", body: {} });
 }
 
 export type AccountChange = "disable" | "enable" | "clear-lockout";
 
 export function changeLocalAccount(id: string, change: AccountChange): Promise<LocalAccount> {
-  return post(`/admin/local-accounts/${encodeURIComponent(id)}/${change}`);
+  const path = `/admin/local-accounts/${encodeURIComponent(id)}` as const;
+  const options = { method: "POST", body: {} } as const;
+  if (change === "disable") return api(`${path}/disable`, options);
+  if (change === "enable") return api(`${path}/enable`, options);
+  return api(`${path}/clear-lockout`, options);
 }
 
 /** The address an administrator hands over: hash-routed, so the token never reaches a server log. */

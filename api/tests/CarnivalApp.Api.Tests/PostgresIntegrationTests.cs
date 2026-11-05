@@ -59,6 +59,25 @@ public class PostgresIntegrationTests
     }
 
     [SkippableFact]
+    public async Task The_host_command_refuses_a_database_the_api_has_not_migrated()
+    {
+        Skip.IfNot(DockerAvailable.Value, "Docker is not available on this machine.");
+        await using var container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+        await container.StartAsync();
+        var services = new ServiceCollection()
+            .AddDbContext<CarnivalAppDbContext>(o => o.UseNpgsql(container.GetConnectionString()))
+            .BuildServiceProvider();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exit = await AccountsCommandHost.RunAsync(services, ["first-admin"], output, error);
+
+        Assert.Equal(AccountsCommand.Failure, exit);
+        Assert.Equal("", output.ToString());
+        Assert.Contains(AccountsCommandHost.NotMigrated, error.ToString());
+    }
+
+    [SkippableFact]
     public async Task Migrations_apply_cleanly_to_postgres_17()
     {
         await WithPostgresAsync(async options =>

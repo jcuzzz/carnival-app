@@ -2,7 +2,7 @@ import { Fragment, useState, type FormEvent } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../../api/errorText";
 import { keys } from "../../api/queryKeys";
 import { grantRole, listRoleAssignments, revokeRole } from "../../api/resources";
-import type { PlatformRole, RoleAssignmentWithLocal as RoleAssignment } from "../../api/types";
+import type { PlatformRole, RoleAssignment } from "../../api/types";
 import { useApiQuery, useInvalidate } from "../../api/useApiQuery";
 import { showToast } from "../../shell/toast";
 

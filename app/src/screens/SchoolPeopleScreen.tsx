@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
 import { getSchoolSettings } from "../api/resources";
-import type { IssuedSetupLink, LocalAccount, SchoolSettingsWithSignIn } from "../api/types";
+import type { IssuedSetupLink, LocalAccount } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import {
   changeLocalAccount,
@@ -41,7 +41,7 @@ export default function SchoolPeopleScreen() {
   const [addError, setAddError] = useState<string | null>(null);
 
   const refresh = () => invalidate(localAccountKeys.localAccounts());
-  const access = settings.data as SchoolSettingsWithSignIn | undefined;
+  const access = settings.data;
   const adminsOnly = access?.providerConfigured === true && access.localAccounts !== "Everyone";
 
   async function add(e: FormEvent): Promise<void> {

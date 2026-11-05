@@ -43,6 +43,7 @@ public class CarnivalAppDbContext(DbContextOptions<CarnivalAppDbContext> options
     public DbSet<LocalAccount> LocalAccounts => Set<LocalAccount>();
     public DbSet<LocalAccountSetupLink> LocalAccountSetupLinks => Set<LocalAccountSetupLink>();
     public DbSet<SignInAttempt> SignInAttempts => Set<SignInAttempt>();
+    public DbSet<EndedLocalSession> EndedLocalSessions => Set<EndedLocalSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -8,9 +8,9 @@ namespace CarnivalApp.Api.Tests;
 
 /// <summary>
 /// The PWA session surface (ADR-0007 cookie/BFF flow): <c>/me</c> reports the
-/// signed-in official (401 when there is none), and the interactive
-/// <c>/auth/login</c>/<c>/auth/logout</c> redirects exist only when a real OIDC
-/// provider is configured. Exercised through the dev-header scheme — no live
+/// signed-in official (401 when there is none), the interactive <c>/auth/login</c>
+/// redirect exists only when a real OIDC provider is configured, and <c>/auth/logout</c>
+/// always does. Exercised through the dev-header scheme — no live
 /// tenant. The XHR-vs-navigation challenge rule is unit-tested separately
 /// (<see cref="ApiChallengeSuppression"/>) because it only fires on the OIDC
 /// handler, which these tests do not run.
@@ -43,13 +43,23 @@ public sealed class AuthEndpointsTests : IClassFixture<ApiTestFactory>
     }
 
     [Fact]
-    public async Task Login_and_logout_are_absent_without_a_configured_oidc_provider()
+    public async Task Login_is_absent_without_a_configured_oidc_provider_and_logout_is_always_there()
     {
-        // Dev-auth host: no AzureAd/Adfs section → provider is DevAuth → the
-        // interactive redirect endpoints are never mapped.
-        var client = _factory.CreateClient();
+        // Dev-auth host: no AzureAd/Adfs section → no provider redirect to start. A local
+        // account's session still has to end (ADR-0065), so logout is mapped regardless.
+        var client = _factory.CreateClient(
+            new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/auth/login")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/auth/logout")).StatusCode);
+        var logout = await client.GetAsync("/api/v1/auth/logout");
+        Assert.Equal(HttpStatusCode.Found, logout.StatusCode);
+        Assert.Equal("/", logout.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task Me_says_a_header_session_is_not_a_local_account()
+    {
+        var me = await _factory.CreateClientAs("official-43", "Viewer").GetFromJsonAsync<MeResponse>("/api/v1/me");
+        Assert.False(me!.LocalAccount);
     }
 
     [Theory]

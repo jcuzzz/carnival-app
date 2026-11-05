@@ -8,7 +8,8 @@ public sealed record RetentionOutcome(
     int IdempotencyKeysDeleted,
     int ImportBatchesPurged,
     int SignInAttemptsDeleted = 0,
-    int SetupLinksDeleted = 0);
+    int SetupLinksDeleted = 0,
+    int EndedSessionsDeleted = 0);
 
 /// <summary>
 /// Ages out operational rows only. Record classes are never touched, and the removed rows are not
@@ -70,7 +71,18 @@ public sealed class RetentionSweep(CarnivalAppDbContext db, TimeProvider time)
         foreach (var chunk in expiredLinks.Chunk(DeleteChunk))
             links += await db.LocalAccountSetupLinks.Where(l => chunk.Contains(l.Id)).ExecuteDeleteAsync(ct);
 
-        return new(keys, batches, attempts, links);
+        // Past its expiry the cookie is refused anyway, so the row has nothing left to do.
+        var endedSessions = (await db.EndedLocalSessions.AsNoTracking()
+                .Select(e => new { e.SessionId, e.ExpiresAtUtc })
+                .ToListAsync(ct))
+            .Where(e => e.ExpiresAtUtc < now)
+            .Select(e => e.SessionId)
+            .ToList();
+        var ended = 0;
+        foreach (var chunk in endedSessions.Chunk(DeleteChunk))
+            ended += await db.EndedLocalSessions.Where(e => chunk.Contains(e.SessionId)).ExecuteDeleteAsync(ct);
+
+        return new(keys, batches, attempts, links, ended);
     }
 
     // The table can grow under a guessing attack, so it is walked oldest first in Id order, which is
@@ -127,9 +139,9 @@ public sealed class RetentionJob(
         var outcome = await scope.ServiceProvider.GetRequiredService<RetentionSweep>().RunAsync(ct);
         logger.LogInformation(
             "Retention sweep: {Keys} idempotency key(s) deleted, {Batches} import batch(es) purged, "
-            + "{Attempts} sign-in attempt(s) and {Links} setup link(s) deleted.",
+            + "{Attempts} sign-in attempt(s), {Links} setup link(s) and {Ended} ended session(s) deleted.",
             outcome.IdempotencyKeysDeleted, outcome.ImportBatchesPurged,
-            outcome.SignInAttemptsDeleted, outcome.SetupLinksDeleted);
+            outcome.SignInAttemptsDeleted, outcome.SetupLinksDeleted, outcome.EndedSessionsDeleted);
         return true;
     }
 }

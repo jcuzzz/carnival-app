@@ -3,7 +3,7 @@ import { ApiError } from "../api/client";
 import { SIGN_IN_NEEDS_SERVER_TEXT, errorText, passwordCheckText } from "../api/errorText";
 import type { MeResponse, SetupLinkInspection } from "../api/types";
 import { resumeAfterSignIn } from "../api/syncSetup";
-import { sessionOf } from "../auth/entra";
+import { sessionOf, signInHref } from "../auth/entra";
 import {
   completeSetup,
   confirmAuthenticator,
@@ -25,7 +25,7 @@ import { navigate } from "../router";
 
 type Phase =
   | { kind: "inspecting" }
-  | { kind: "unusable"; message: string; retry?: boolean }
+  | { kind: "unusable"; message: string; retry?: boolean; signIn?: boolean }
   | { kind: "form"; link: SetupLinkInspection }
   | { kind: "offer" }
   | { kind: "enrol"; secret: string; otpauthUri: string; required: boolean }
@@ -141,6 +141,10 @@ export default function SetupScreen() {
       if (code === "SETUP_LINK_INVALID") {
         dropSetupToken();
         setPhase({ kind: "unusable", message: errorText(err) });
+      } else if (code === "LOCAL_SIGN_IN_NOT_ALLOWED") {
+        // The link is used and the password set; only the school's access setting refuses it.
+        dropSetupToken();
+        setPhase({ kind: "unusable", message: errorText(err), signIn: true });
       } else if (field) setFieldError({ field, text: errorText(err) });
       else setError(passwordCheckText(err, SIGN_IN_NEEDS_SERVER_TEXT));
     } finally {
@@ -165,6 +169,11 @@ export default function SetupScreen() {
       {phase.kind === "unusable" && (
         <div className="alert error" role="alert">
           {phase.message}
+          {phase.signIn && (
+            <p>
+              <a href={signInHref()}>Sign in</a>
+            </p>
+          )}
           {phase.retry && (
             <div className="button-row">
               <button

@@ -27,6 +27,12 @@ public sealed class EndpointAuthorizationCoverageTests(ApiTestFactory factory)
         "/health",
         "/api/v1/auth/login",
         "/api/v1/auth/logout",
+        // ADR-0065: the local-account sign-in, which starts a session and so cannot need one.
+        "/api/v1/auth/methods",
+        "/api/v1/auth/identify",
+        "/api/v1/auth/local",
+        "/api/v1/auth/setup/inspect",
+        "/api/v1/auth/setup/complete",
         // ADR-0040 §3: school name + brand colour, read by the sign-in screen
         // before a session exists. Added deliberately — H1 closed the anonymous
         // hole on /version and /school/houses, and this is the one read allowed
@@ -56,8 +62,8 @@ public sealed class EndpointAuthorizationCoverageTests(ApiTestFactory factory)
     [Fact]
     public void Only_the_named_routes_are_anonymous()
     {
-        // A subset, not an equality: /auth/login and /auth/logout are mapped only
-        // when a real OIDC provider is configured, and this host runs dev-auth.
+        // A subset, not an equality: /auth/login is mapped only when a real OIDC
+        // provider is configured, and this host runs dev-auth.
         // EntraEndpointAuthorizationCoverageTests holds the equality.
         var anonymous = Endpoints
             .Where(e => e.Metadata.GetMetadata<IAllowAnonymous>() is not null)
@@ -72,9 +78,8 @@ public sealed class EndpointAuthorizationCoverageTests(ApiTestFactory factory)
     [Fact]
     public void Only_two_kinds_of_api_v1_route_are_anonymous()
     {
-        // /auth/login and /auth/logout are the exception the rule is written
-        // around — they exist to START a session, so they cannot need one — and
-        // they only exist when a real OIDC provider is configured. /branding is
+        // The /auth/ routes are the exception the rule is written around — they
+        // exist to start or end a session, so they cannot need one. /branding is
         // the second (ADR-0040 §3): the sign-in screen paints the school's name
         // and colour before there is a session to read them with. Everything
         // else under /api/v1 is authenticated surface.

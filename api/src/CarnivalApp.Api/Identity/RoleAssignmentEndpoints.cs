@@ -4,10 +4,14 @@ using CarnivalApp.Api.Auditing;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
 using CarnivalApp.Api.Http;
+using CarnivalApp.Api.Identity.LocalAccounts;
 
 namespace CarnivalApp.Api.Identity;
 
-/// <summary>A bootstrap administrator row carries no Id and cannot be revoked in-app.</summary>
+/// <summary>
+/// A bootstrap administrator row carries no Id and cannot be revoked in-app. <c>Upn</c> is a local
+/// account's username when <c>LocalAccount</c> is set.
+/// </summary>
 public sealed record RoleAssignmentDto(
     Guid? Id,
     string Upn,
@@ -20,8 +24,10 @@ public sealed record RoleAssignmentDto(
     DateTimeOffset? AssignedAtUtc,
     DateTimeOffset? RevokedAtUtc,
     string? RevokedBySubject,
-    string? RevocationReason);
+    string? RevocationReason,
+    bool LocalAccount);
 
+/// <summary><c>Upn</c> is a sign-in address, or a local account's username (no '@').</summary>
 public sealed record GrantRoleRequest(string? Upn, string? Role, string? Reason);
 
 public sealed record RevokeRoleRequest(string? Reason);
@@ -53,7 +59,8 @@ public static class RoleAssignmentEndpoints
         row.CreatedAtUtc,
         row.RevokedAtUtc,
         row.RevokedBySubject,
-        row.RevocationReason);
+        row.RevocationReason,
+        LocalAccount: row.SubjectId?.StartsWith(LocalAccount.SubjectPrefix, StringComparison.Ordinal) == true);
 
     private static IEnumerable<RoleAssignmentDto> BootstrapRows(IConfiguration configuration) =>
         GroupToRoleClaimsTransformation.BootstrapAdministrators(configuration)
@@ -69,7 +76,8 @@ public static class RoleAssignmentEndpoints
             AssignedAtUtc: null,
             RevokedAtUtc: null,
             RevokedBySubject: null,
-            RevocationReason: null));
+            RevocationReason: null,
+            LocalAccount: false));
 
     private static async Task<IResult> ListAsync(
         [FromServices] CarnivalAppDbContext db,
@@ -91,11 +99,29 @@ public static class RoleAssignmentEndpoints
         [FromServices] CarnivalAppDbContext db,
         [FromServices] AuditService audit,
         [FromServices] RoleAssignmentProvider provider,
+        [FromServices] IConfiguration configuration,
         CancellationToken ct)
     {
-        if (NormaliseUpn(request.Upn) is not { } upn)
+        // A local account is bound at once: it has no UPN to bind by at sign-in.
+        string? upn, subjectId = null, displayName = null;
+        if (LocalUsernames.Validate(request.Upn, configuration, out var username)
+            is null or ErrorCodes.AccountUsernameReserved)
+        {
+            var normalised = username.ToUpperInvariant();
+            var account = await db.LocalAccounts.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.NormalizedUserName == normalised, ct);
+            if (account is null)
+                return ApiError.Unprocessable(ErrorCodes.RoleLocalAccountUnknown,
+                    $"No local account is named '{username}'. Add it under School → People first, "
+                    + "or enter the person's sign-in address, e.g. name@example.org.");
+            upn = account.UserName!;
+            subjectId = LocalAccount.SubjectFor(account.Id);
+            displayName = account.DisplayName;
+        }
+        else if ((upn = NormaliseUpn(request.Upn)) is null)
             return ApiError.Unprocessable(ErrorCodes.RoleUpnInvalid,
-                "Enter the person's sign-in address (their UPN or email), e.g. name@school.vic.edu.au.");
+                "Enter the person's sign-in address (their UPN or email), e.g. name@example.org, "
+                + "or a local account's username.");
         if (!PlatformRoles.TryParse(request.Role, out var role, out _))
             return ApiError.Unprocessable(ErrorCodes.RoleUnknown,
                 $"'{request.Role}' is not a platform role.");
@@ -112,6 +138,8 @@ public static class RoleAssignmentEndpoints
         {
             Id = Guid.NewGuid(),
             SubjectUpn = upn,
+            SubjectId = subjectId,
+            SubjectDisplayName = displayName,
             SubjectType = RoleSubjectType.User,
             Role = role,
             Reason = reason,

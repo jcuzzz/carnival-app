@@ -253,6 +253,28 @@ describe("SignInScreen", () => {
     expect((screen.getByLabelText("Password") as HTMLInputElement).value).not.toBe("");
   });
 
+  it("puts the dev loop's API base in front of the provider path", async () => {
+    vi.stubEnv("VITE_API_BASE", "http://localhost:5080");
+    try {
+      vi.mocked(identify).mockResolvedValue({
+        method: "provider",
+        loginUrl: "/api/v1/auth/login?returnUrl=%2F&loginHint=jo%40example.org",
+      });
+      const go = vi.fn();
+      renderWithQuery(<SignInScreen go={go} />);
+      type("Username", "jo@example.org");
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      await waitFor(() =>
+        expect(go).toHaveBeenCalledWith(
+          "http://localhost:5080/api/v1/auth/login?returnUrl=%2F&loginHint=jo%40example.org",
+        ),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("follows only the API's own provider sign-in", async () => {
     vi.mocked(identify).mockResolvedValue({
       method: "provider",

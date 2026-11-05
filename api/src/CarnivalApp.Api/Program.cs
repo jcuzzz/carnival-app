@@ -10,10 +10,20 @@ using CarnivalApp.Api.Demo;
 using CarnivalApp.Api.Http;
 using CarnivalApp.Api.Idempotency;
 using CarnivalApp.Api.Identity;
+using CarnivalApp.Api.Identity.LocalAccounts;
 using CarnivalApp.Api.Imports;
 using CarnivalApp.Api.School;
 
-var builder = WebApplication.CreateBuilder(args);
+// A host command (ADR-0065 §7): the host is built for its services and never started.
+var accountsCommand = args is ["accounts", ..];
+var builder = WebApplication.CreateBuilder(accountsCommand ? [] : args);
+if (accountsCommand)
+{
+    // stdout carries only the command's line; vm-deploy.sh reads it.
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+    builder.Logging.AddFilter((_, level) => level >= LogLevel.Warning);
+}
 
 builder.Configuration.AddJsonFile("appsettings.School.json", optional: true, reloadOnChange: true);
 
@@ -135,8 +145,12 @@ if (useSqlite)
     var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
     await db.Database.EnsureCreatedAsync();
 }
+
+// Before migrations: the running API applies those.
+if (accountsCommand) return await AccountsCommandHost.RunAsync(app.Services, args[1..], Console.Out, Console.Error);
+
 // Demo: the template is migrated and bootstrapped when it is built; a clone is never migrated in place.
-else if (!demoMode && app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", false))
+if (!useSqlite && !demoMode && app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", false))
 {
     // A configured migrations string means the request-path role cannot create tables.
     var migrationsConnectionString = DatabaseConnectionStrings.MigrationsOverride(app.Configuration);
@@ -199,6 +213,8 @@ app.UseStatusCodePages(pages => ApiError.DescribeBodylessStatus(pages.HttpContex
         .ExecuteAsync(pages.HttpContext)
     : Task.CompletedTask);
 
+app.UseSameOriginWrites();
+
 if (demoMode) app.UseDemoGuard();
 
 app.UseIdempotencyBuffering();
@@ -217,7 +233,9 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthorization();
-app.UseRateLimiter(); // After authorisation: every partition key must be a real subject.
+// After authorisation: every partition key must be a real subject. The sign-in limiter's routes are
+// anonymous or self-service and it has one partition, so it needs no subject.
+app.UseRateLimiter();
 
 var apiV1 = app.MapGroup("/api/v1");
 
@@ -276,11 +294,14 @@ CarnivalApp.Api.Reporting.ReportEndpoints.MapReportEndpoints(apiV1);
 CarnivalApp.Api.Records.RecordEndpoints.MapRecordEndpoints(apiV1);
 
 if (demoMode) apiV1.MapDemoEndpoints();
+else
+{
+    apiV1.MapLocalAuthEndpoints();
+    apiV1.MapAccountEndpoints();
+    apiV1.MapLocalAccountAdminEndpoints();
+}
 
-// The dev-auth fallback has no interactive redirect flow.
-var oidcEnabled = IdentitySetup.ResolveProvider(app.Configuration)
-    is IdentitySetup.IdentityProvider.Entra or IdentitySetup.IdentityProvider.Adfs;
-apiV1.MapAuthEndpoints(oidcEnabled);
+apiV1.MapAuthEndpoints(LocalAccountPolicy.ProviderConfigured(app.Configuration), sessionCookie: !demoMode);
 
 app.MapHealthChecks("/health").AllowAnonymous();
 
@@ -288,6 +309,7 @@ app.MapHealthChecks("/health").AllowAnonymous();
 if (app.Environment.IsDevelopment()) app.MapOpenApi().AllowAnonymous();
 
 app.Run();
+return 0;
 
 public partial class Program;
 

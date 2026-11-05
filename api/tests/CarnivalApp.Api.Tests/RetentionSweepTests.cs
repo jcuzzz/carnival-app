@@ -185,6 +185,23 @@ public sealed class RetentionSweepTests : IDisposable
     }
 
     [Fact]
+    public async Task An_ended_session_goes_once_its_cookie_has_expired()
+    {
+        await using (var seed = NewDb())
+        {
+            seed.EndedLocalSessions.Add(new EndedLocalSession { SessionId = "expired", ExpiresAtUtc = Now - TimeSpan.FromSeconds(1) });
+            seed.EndedLocalSessions.Add(new EndedLocalSession { SessionId = "live", ExpiresAtUtc = Now + TimeSpan.FromHours(1) });
+            await seed.SaveChangesAsync();
+        }
+
+        var outcome = await SweepAsync();
+
+        Assert.Equal(1, outcome.EndedSessionsDeleted);
+        await using var db = NewDb();
+        Assert.Equal(["live"], await db.EndedLocalSessions.Select(e => e.SessionId).ToListAsync());
+    }
+
+    [Fact]
     public async Task Records_are_never_touched()
     {
         await AddBatchAsync(Now - TimeSpan.FromDays(90), ImportBatchStatus.Promoted);
