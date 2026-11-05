@@ -160,7 +160,7 @@ export default function SchoolPeopleScreen() {
           </label>
         </div>
         <p className="row-sub">
-          A plain name, never an email address: lower-case letters, digits, dots and dashes. The
+          A plain name, never an email address: lower-case letters, digits, dots, dashes and underscores. The
           app makes a setup link, valid 24 hours, for you to pass on in person or by message.
         </p>
         {addError && (
