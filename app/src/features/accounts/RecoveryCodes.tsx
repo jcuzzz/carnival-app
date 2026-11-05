@@ -15,7 +15,7 @@ export function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () =
 
   return (
     <div className="card">
-      <h2>Your recovery codes</h2>
+      <h2 className="flush-top">Your recovery codes</h2>
       <p>
         If you lose your phone, each of these codes signs you in once instead of the
         authenticator app. Save them somewhere safe now, such as a password manager or a printed

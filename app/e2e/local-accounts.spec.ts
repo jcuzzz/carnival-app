@@ -96,7 +96,7 @@ async function enrol(page: Page): Promise<[string, number]> {
 }
 
 async function issuedLink(page: Page): Promise<string> {
-  const link = await page.getByLabel("Setup link").inputValue();
+  const link = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
   expect(link).toMatch(/\/#\/setup\/[A-Za-z0-9_-]+$/);
   return link;
 }

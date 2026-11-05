@@ -146,7 +146,7 @@ export default function MyAccountScreen() {
 
       {data && (
         <div className="card">
-          <p>
+          <p className="flush-top">
             <strong>{data.displayName}</strong>
           </p>
           <p className="row-sub">Username: {data.username}</p>

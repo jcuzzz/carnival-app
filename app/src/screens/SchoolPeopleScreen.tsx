@@ -198,7 +198,7 @@ function SetupLinkPanel({ issued, onDone }: { issued: IssuedSetupLink; onDone: (
 
   return (
     <section className="card" aria-label={`Setup link for ${issued.account.displayName}`}>
-      <h2>Setup link for {issued.account.displayName}</h2>
+      <h2 className="flush-top">Setup link for {issued.account.displayName}</h2>
       <p>
         Give this to <strong>{issued.account.displayName}</strong> ({issued.account.username}).
         Opening it lets them choose a password. It works once and expires{" "}
@@ -310,6 +310,11 @@ function AccountRow({
           <span className="row-sub">{row.username}</span>
           <span className="row-sub">{meta.join(" · ")}</span>
           {setupLinkLine(row) && <span className="row-sub">{setupLinkLine(row)}</span>}
+          {self && (
+            <span className="row-sub">
+              Change your own password on <a href={href("/account")}>My account</a>.
+            </span>
+          )}
         </span>
         <span className="role-status">
           {statusBadge(row)}
@@ -360,11 +365,6 @@ function AccountRow({
           )}
         </span>
       </div>
-      {self && (
-        <p className="row-sub">
-          Change your own password on <a href={href("/account")}>My account</a>.
-        </p>
-      )}
       {armed && (
         <div className="row-armed" role="alert">
           <span>

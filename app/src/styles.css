@@ -239,9 +239,12 @@
     }
   }
 
+  /* Wraps rather than overflows: a local session adds My account beside the name. */
   .shell-actor {
     margin-left: auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: var(--space-sm);
     font-size: var(--text-md);

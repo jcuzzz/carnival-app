@@ -32,7 +32,7 @@ export function AuthenticatorEnrolment({
 
   return (
     <form className="card" onSubmit={submit}>
-      <h2>Set up an authenticator app</h2>
+      <h2 className="flush-top">Set up an authenticator app</h2>
       <p>
         Open an authenticator app on your phone (Microsoft Authenticator, Google Authenticator,
         the iPhone's Passwords app or similar), add an account, and scan this code.

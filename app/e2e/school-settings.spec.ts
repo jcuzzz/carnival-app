@@ -66,7 +66,7 @@ test("a saved brand and house colour repaint the chrome and the dashboard", asyn
   await expect(topHouse).toBeVisible();
   const houseName = (await topHouse.innerText()).trim();
 
-  await page.goto("/#/school");
+  await page.goto("/#/school/settings");
   await expect(page.getByRole("heading", { name: "School settings", level: 1 })).toBeVisible();
   await (await openColour(page, "Brand colour")).fill(NEW_BRAND);
 
@@ -102,7 +102,7 @@ test("the in-app colour picker drives the value, in a real engine", async ({ pag
   // The unit suite pins this in jsdom; only a real engine drags a pointer across
   // the saturation area — which, unlike the OS dialog it replaced, is real DOM.
   await signIn(page);
-  await page.goto("/#/school");
+  await page.goto("/#/school/settings");
   await expect(page.getByRole("heading", { name: "School settings", level: 1 })).toBeVisible();
 
   const trigger = page.getByRole("button", { name: /^House 1 colour/ });
@@ -156,10 +156,10 @@ test("a role is assigned by UPN and revoked, both with a reason", async ({ playw
   await api.dispose();
 
   await signIn(page);
-  await page.goto("/#/school");
-  await expect(page.getByRole("heading", { name: "Roles", level: 2 })).toBeVisible();
+  await page.goto("/#/school/roles");
+  await expect(page.getByRole("heading", { name: "Roles", level: 1 })).toBeVisible();
 
-  await page.getByLabel("Sign-in address (UPN or email)").fill(ROLE_UPN);
+  await page.getByLabel("Username or school email").fill(ROLE_UPN);
   await page.getByLabel("Role", { exact: true }).selectOption("Recorder");
   await page
     .getByLabel(/^Reason \(recorded/)
@@ -200,8 +200,8 @@ test("a template is previewed against the catalogue and applied with a reason", 
   expect(before.some((d) => d.code === "SW-50-FREE"), "the dev seed's catalogue").toBe(true);
 
   await signIn(page);
-  await page.goto("/#/school");
-  await expect(page.getByRole("heading", { name: "Event templates", level: 2 })).toBeVisible();
+  await page.goto("/#/school/templates");
+  await expect(page.getByRole("heading", { name: "Event templates", level: 1 })).toBeVisible();
   // The picker names the document the last deploy shipped, not a database row.
   await expect(page.getByLabel("Template")).toContainText("Swimming carnival");
   await expect(page.getByText("swimming.json")).toBeVisible();

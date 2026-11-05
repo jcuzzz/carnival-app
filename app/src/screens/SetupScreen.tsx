@@ -200,7 +200,7 @@ export default function SetupScreen() {
           )}
           {phase.link.kind === "firstAdministrator" ? (
             <>
-              <p>
+              <p className="flush-top">
                 You are setting up the first system administrator. This account can always sign
                 in, even if the school's own sign-in is down.
               </p>
@@ -217,7 +217,7 @@ export default function SetupScreen() {
                 />
               </label>
               <p className="row-sub">
-                A plain name such as backup-admin: lower-case letters, digits, dots and dashes,
+                A plain name such as backup-admin: lower-case letters, digits, dots, dashes and underscores,
                 never an email address.
               </p>
               {fieldErrorFor("username") && (
@@ -243,7 +243,7 @@ export default function SetupScreen() {
             </>
           ) : (
             <>
-              <p>
+              <p className="flush-top">
                 Choose a password for <strong>{phase.link.displayName}</strong>.
               </p>
               <p className="row-sub">
@@ -290,7 +290,7 @@ export default function SetupScreen() {
 
       {phase.kind === "offer" && (
         <div className="card">
-          <h2>Add an authenticator app?</h2>
+          <h2 className="flush-top">Add an authenticator app?</h2>
           <p>
             With an authenticator app on your phone, a stolen password alone can't open your
             account. It takes a minute and needs no phone number or email.
