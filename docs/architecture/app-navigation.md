@@ -20,12 +20,16 @@ The app uses **hash routing** (`#/carnivals/…`), so the static host needs no r
 | `/carnivals/:id/setup/events`, `…/setup/events/new`, `…/setup/events/:definitionId` | Event setup, add an event, edit one |
 | `/carnivals/:id/setup/divisions` | Divisions profile |
 | `/school` | **School** hub |
-| `/school/settings`, `/school/roles`, `/school/templates` | School settings, role assignment, event templates |
+| `/school/settings`, `/school/roles`, `/school/templates` | School settings (including Sign-in), role assignment, event templates |
+| `/school/people` | Local accounts: add, reset, disable, enable, clear a lockout (not in a demo build) |
 | `/school/events`, `/school/events/new`, `/school/events/:definitionId` | Event catalogue |
 | `/school/records` | School records (`/records-admin` redirects here) |
 | `/import` | Roster import |
 | `/outbox` | This device's outbox |
-| `/login` | Sign in (the identity provider's hand-off, or the development identity picker) |
+| `/login` | Sign in: the one sign-in box (local password, or the hand-off to the identity provider), or the development identity picker on the Vite dev server. `?returnUrl=` names where to go afterwards |
+| `/setup/:token` | A setup link: the token is moved into memory and the address replaced with `/setup` before paint (not in a demo build) |
+| `/setup` | Set up your account: choose a password, then optionally an authenticator app |
+| `/account` | My account, for a local account: change the password, set up an authenticator app (not in a demo build) |
 
 Any other path renders a "Not found" screen with a link back to the carnivals. A demo build with no visitor session shows only the demo landing page ([demo mode](demo-mode.md)).
 
@@ -33,7 +37,7 @@ Any other path renders a "Not found" screen with a link back to the carnivals. A
 
 `shell/AppShell.tsx` frames every screen:
 
-- **Header**: the school's monogram and name, the **carnival chip** (the selected carnival's name, date and status; it opens the switcher), the **outbox indicator**, the signed-in official's name and roles (devices are shared, so the name stays visible), Sign in / Sign out, and the **Outdoor** toggle.
+- **Header**: the school's monogram and name, the **carnival chip** (the selected carnival's name, date and status; it opens the switcher), the **outbox indicator**, the signed-in official's name and roles (devices are shared, so the name stays visible), My account (local accounts only), Sign in / Sign out, and the **Outdoor** toggle.
 - **Primary navigation**:
   - With a carnival selected: **Deck**, **Dashboard**, **Manage** and **School**.
   - With none: **Carnivals** and **School**.
@@ -52,7 +56,7 @@ The Outbox is reached from the header indicator, never from behind a role-gated 
 | **Capture deck** | Enter entries, lanes and results for one division, one heat at a time, with a "Next event" link to the next division on the program ([races, heats and lanes](races-and-lanes.md)). |
 | **Dashboard** | How the carnival is going: house standings and progress, read-only. Administrators also see the devices panel. |
 | **Manage** | The organiser's changes: setup checklist, links to reports and records, scoring rules, lanes, carnival status, and Finalise at the foot with its own confirmation. |
-| **School** | A hub of school-wide sections, each on its own route: settings and houses, roles, roster import and event templates (System administrator); event catalogue and school records (Carnival or System administrator). |
+| **School** | A hub of school-wide sections, each on its own route: settings and houses, roles, people (local accounts), roster import and event templates (System administrator); event catalogue and school records (Carnival or System administrator). A System administrator signed in with a local account that has no authenticator app sees a warning linking to My account. |
 | **Outbox** | This device's queue: what is waiting, what needs a person, what has synced. |
 
 ## The selected carnival

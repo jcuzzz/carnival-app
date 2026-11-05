@@ -5,8 +5,6 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 ## Roadmap (Phase 2)
 
 - **[P1] Generic roster import** ([ADR-0064](adr/0064-canonical-roster-csv-and-test-rosters-built-in-code.md)). The importer reads generic fields through the mapping file, with CASES21 as a preset; status, gender and year-level values move into the mapping; a seeded C# roster builder and one small sample roster replace the committed fixtures and the Python generator. Known blocker: `Imports/RosterImportService.cs` (~128) looks columns up by hard-coded CASES21 names and ignores the mapping's `maps_to`, so renaming a mapping key passes the column check but rejects every row; inactive statuses (~24) and the 7–12 year range are constants.
-- **[P1] Built-in local accounts** ([ADR-0065](adr/0065-built-in-local-accounts.md), accepted). Before v0.1.0. Build checklist: "What the build must handle" in [the research note](research/2026-11-04-built-in-accounts.md).
-- **[P1] Governance and docs pass for local accounts**, in the same change as the build: `governance/access-control-matrix.md` §4 and `st4s-evidence-index.md` row 7 (MFA is no longer only the provider's), `data-inventory-and-ipp-mapping.md` (usernames, 90 days of sign-in addresses), `incident-response-plan.md` (lost or compromised backup admin), `admin/self-host.md` §4, `admin/configuration.md` (`BOOTSTRAP_ADMIN_UPN` is no longer the only recovery path), `admin/linux-runbook.md`, `architecture/overview.md` and `architecture/authorisation-and-audit.md`.
 - **[P1] Generic OIDC.** One standard OIDC provider (Google Workspace, Okta…) behind the ADR-0065 sign-in box, replacing the Entra- and ADFS-specific sign-in paths. In-app role assignment already works independently of the provider.
 - **[P2] Sign-in settings in the app** (needs its own research, plan and ADR; after v0.1.0, with generic OIDC). A System administrator connects Entra or another OIDC provider in School → Sign-in instead of `.env`: tenant or issuer, client ID and secret, a Test button, then Turn on, with Entra as one preset. The install then becomes one flow: deploy, open the first-admin link (the local backup administrator), optionally connect a provider, grant roles in School → Roles; no `ENTRA_*` or `BOOTSTRAP_ADMIN_UPN` for a new school. To solve: changing sign-in settings must re-ask the administrator's password and code and be audited, since an attacker holding an administrator account could otherwise point sign-in at their own provider; where the client secret is stored and how a restore treats it; reloading the authentication handlers at runtime (today they are read once at start-up); `.env` keeps working for configuration-as-code.
 - **[P1] Per-school records toggle.** A `recordsEnabled` school setting, enforced server-side (detection, minting, records screens and exports), for schools that do not keep a record book.
@@ -52,6 +50,17 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P3]** `HEIGHT_ATTEMPTS_EXHAUSTED` is unreachable through the mark PUT (`ATHLETE_ELIMINATED` answers first).
 - **[P3]** The setup checklist sums roster counts from the heavier `/progress` aggregate, the only read a carnival administrator has; a narrow roster-count read would fit better. Carnival administrators also cannot reach roster import from the checklist's blocked notice.
 - **[P3]** Roster cache searches are capped at the server's 50-row search limit (`Carnivals/EntryEndpoints.cs` ~172), which matters most for team entry across all houses.
+
+### Local accounts
+
+Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [authorisation and audit](architecture/authorisation-and-audit.md#accepted-risks):
+
+- **[P3]** Authenticator keys are stored unencrypted (Identity's default) and recovery codes as unsalted SHA-256, so a database reader can produce codes. Encrypting the keys needs a key that a restore to a new host still has (`dp-keys` is not backed up).
+- **[P3]** No list of a person's own other sessions and no way to end one (ASVS V7.5.2); changing the password is the only way.
+- **[P3]** No "end everyone's sessions" for an administrator short of restarting the API with an empty `dp-keys` volume.
+- **[P3]** No server-side idle timeout for a local session; only the app's 60-minute idle guard.
+- **[P3]** `GET /auth/logout` lets another site sign a person out; a POST with the same-origin check would not.
+- **[P3]** A password-hash work-factor upgrade at sign-in rotates the security stamp and signs the account's other devices out once.
 
 ### App
 

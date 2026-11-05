@@ -96,10 +96,10 @@ The app is built in demo mode with `VITE_DEMO_MODE=true`. Vite inlines the flag,
 |---|---|---|
 | Banner | "PUBLIC DEMO — synthetic data only, your copy is temporary" on every screen | none |
 | No session | Every route shows `DemoLandingScreen`: what the product is and a **Start demo** button | sign-in |
-| Start demo | `POST /demo/sessions`, then `GET /me`, then adopt the session | OIDC redirect |
+| Start demo | `POST /demo/sessions`, then `GET /me`, then adopt the session | the sign-in box: a local password or the provider's redirect |
 | Expired session | The landing page says "Your previous demo has ended"; nothing is re-provisioned silently | sign in again |
-| Sign-in controls | No Sign in, Sign out or Switch; `/login` redirects home | Entra or ADFS sign-in |
-| Identity | The same-origin cookie; no `X-Dev-*` headers (those are sent by the Vite dev server only) | the OIDC session cookie |
+| Sign-in controls | No Sign in, Sign out or Switch; `/login` redirects home; no People, My account or setup links | Local accounts, and Entra or ADFS where configured |
+| Identity | The same-origin cookie; no `X-Dev-*` headers (those are sent by the Vite dev server only) | the session cookie, from a local or provider sign-in |
 | `index.html` | `robots` `noindex, nofollow` meta tag | none |
 
 The demo routes are not in the generated API client (that is generated from a non-demo API), so `auth/demo.ts` calls them with plain `fetch`. The Vite dev server is never a demo build; it exposes the landing page at `/dev/demo-landing` for the screenshot pass.

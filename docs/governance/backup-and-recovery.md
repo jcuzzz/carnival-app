@@ -23,7 +23,8 @@
 | Item | In the dump? | Notes |
 |---|---|---|
 | The whole PostgreSQL database: students, roster snapshots, entries, results, revisions, records, adjustments, audit, import batches, configuration | **Yes** | `pg_dump -Fc` of the single database |
-| `dp-keys` (ASP.NET DataProtection keyring) | No | Rebuildable, but losing it invalidates every session cookie and signs every official out. An availability event, not a data loss |
+| Local accounts: usernames, display names, password hashes, authenticator keys, recovery-code hashes, setup links, sign-in attempts, signed-out session ids, and the two sign-in settings | **Yes** | In the same database. Authenticator keys are not separately encrypted, so a decrypted dump can produce valid codes: guard it as a credential store. A restore brings these back as they were at the dump (§5) |
+| `dp-keys` (ASP.NET DataProtection keyring) | No | Rebuildable, but losing it invalidates every session cookie and signs every official out, local and provider accounts alike. An availability event, not a data loss: local passwords and authenticators do not depend on it |
 | `caddy-data` / `caddy-config` | No | Rebuildable; regenerating Caddy's internal CA means re-trusting it on every device |
 | **`.env`**: school name, database passwords, identity-provider client secret, `SITE_ADDRESS`, backup recipient | **No** | Git-ignored by design; it exists only on the host |
 | **`docker-compose.override.yml`**: the group-to-role mapping and any ADFS settings | **No** | Only the example is in the repository |
@@ -74,7 +75,8 @@ With a target, the arrangement is two copies on two media with one away from the
 3. Restore into a **scratch database first** and check row counts there before touching the live one: `pg_restore --no-owner -d <scratch> <dump>`.
 4. Verify: `__EFMigrationsHistory` matches the deployed migrations, and spot counts on `Results`, `Entries`, `CarnivalEvents`, `AuditEvents` look right.
 5. Switch over: stop the API (`docker compose stop api`), restore into the live database, start the API, and confirm `/health` reports healthy and an official can sign in. Re-run `deploy/db/init-roles.sql` (the deploy script does this) so the application role's grants are in place.
-6. **Record the elapsed time** and the outcome in §6.
+6. **Re-apply local-account changes made since the dump**: disables, resets and used recovery codes come back undone, and a setup link issued in the 24 hours before the dump is live again. Redo the disables and resets, reset every account that used a recovery code since the dump, and reset every account whose setup link was issued in the 24 hours before it ([Linux runbook B10](../admin/linux-runbook.md#b10-after-a-restore)). If nobody can sign in, use the host command ([Self-hosting §4](../admin/self-host.md#recovering-access-from-the-host)).
+7. **Record the elapsed time** and the outcome in §6.
 
 ---
 

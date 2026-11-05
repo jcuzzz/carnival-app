@@ -57,9 +57,23 @@ One snapshot per student per promoted import; snapshots are never rewritten.
 | `CarnivalEventOfficials` | `SubjectId`, `SubjectDisplayName`, `AssignedBySubject` | Advisory "who is expected at this event"; **not an access control** |
 | `DeviceSyncStatuses` | `DeviceId`, `LastSubject`, `LastDisplayName`, `AppVersion`, queue counts and times | Organiser view of outstanding device queues. Counts only; no student data |
 | `AuditEvents` | actor and roles, time, timezone, action, entity, prior and new values, reason, import batch, application and rule versions | The audit trail. Prior and new values can carry student values. Append-only, enforced in the database |
-| `IdempotencyKeys` | key, payload hash, response status, **`ResponseBody`**, actor, device | Offline de-duplication. `ResponseBody` is the stored response replayed on a retry; for an entry or relay creation it includes **student display names**. Nothing prunes these rows |
+| `IdempotencyKeys` | key, payload hash, response status, **`ResponseBody`**, actor, device | Offline de-duplication. `ResponseBody` is the stored response replayed on a retry; for an entry or relay creation it includes **student display names**. Deleted 30 days after creation by the retention sweep |
 
-### 1.5 Import staging: `ImportBatches`
+### 1.5 Local accounts: staff sign-in
+
+Built-in accounts for staff and helpers ([ADR-0065](../adr/0065-built-in-local-accounts.md)). Created by a System administrator; no self-registration.
+
+| Entity | Fields | Purpose |
+|---|---|---|
+| `LocalAccounts` | `UserName` (a plain name such as `jsmith`, never an email address), `DisplayName`, password hash, security stamp, whether an authenticator is enrolled, the last accepted authenticator time step, `DisabledAtUtc`, `CreatedAtUtc`, `CreatedBySubject` | Sign-in. **No email address or phone number**: Identity's columns for them exist and are never written. Never deleted, so history stays attributable |
+| `LocalAccountTokens` | The authenticator key; SHA-256 hashes of the unused recovery codes | The second factor. Cleared when the account is reset |
+| `LocalAccountSetupLinks` | Token hash (never the token), purpose, account, creator, created, expires, **used at and from which client address**, revoked | Handing over a new or reset account. Deleted 90 days after expiry |
+| `SignInAttempts` | Time, account (null when the name matched none), **client IP address**, outcome | Lockout and the administrator's "last signed in". **The typed username is never stored**, since it is sometimes a password typed in the wrong box. Deleted after **90 days** |
+| `EndedLocalSessions` | A random session id, its expiry | Refusing a signed-out session's cookie. No person is named. Deleted once the expiry passes |
+
+Usernames and 90 days of sign-in addresses are staff personal data. Account changes are also in `AuditEvents` (the setup-complete row carries the address the link was used from), which is never pruned.
+
+### 1.6 Import staging: `ImportBatches`
 
 | Field | Purpose | Kept |
 |---|---|---|
@@ -71,9 +85,9 @@ One snapshot per student per promoted import; snapshots are never rewritten.
 
 **The source export file is never stored**, neither in the database nor on disk. Only its name and SHA-256 survive.
 
-### 1.6 School configuration: `SchoolConfigurations`
+### 1.7 School configuration: `SchoolConfigurations`
 
-Identifier, name, IANA timezone, houses, branding and settings. No personal data.
+Identifier, name, IANA timezone, houses, branding and settings, including the two sign-in settings. No personal data.
 
 ---
 
@@ -112,11 +126,11 @@ Absent from every entity, every migration and the example import mapping:
 2. **Upload and staging.** `POST /api/v1/imports`: `SystemAdministrator` only, `.csv` with a CSV or plain-text content type, size-capped, rate-limited (10 a minute per subject by default). The file is hashed, read through the deployment's import mapping, validated and staged. Only mapped columns are read; `BIRTHDATE` becomes an age group and is discarded.
 3. **Review and promotion.** The administrator reads validation and reconciliation, approves, then promotes. Promotion writes `Students` and `RosterSnapshots` and, in the same transaction, discards the staged rows and row issues.
 4. **Storage.** PostgreSQL 17 in the school's own Docker Compose stack, on an internal Docker network with port 5432 unpublished. Backups are encrypted; the live database volume is encrypted only if the host's disk is. **This deployment: hosted at `[location]`, disk encryption `[yes / no, how]`.**
-5. **Devices (PWA).** Officials sign in through the school's identity provider; no token reaches JavaScript. A device holds:
+5. **Devices (PWA).** Officials sign in with a local account or through the school's identity provider; no token reaches JavaScript. A device holds:
    - the **outbox** (IndexedDB): captured results and entries, each with its capture-time official. `accepted` and `discarded` rows are pruned **7 days** after resolution, and an accepted row's student name is stripped **1 hour** after acceptance. `queued` and `syncing` rows are never pruned. **`conflict` and `rejected` rows keep the student name until a person resolves them**: a retention exception the PIA should name. The stored acknowledgement is narrowed and carries no names.
    - the **roster cache** (IndexedDB): eligible students for an event, pruned after **72 hours** and cleared on sign-out or handover.
    - the **service worker's `api-reads` cache**: an allowlist of carnival-day GET routes, at most 24 hours and 200 entries, cleared on sign-out. Imports, reports, eligible students, `/me` and `/version` are never cached.
-   - **`localStorage`**: the session record (subject, display name, roles), the device id and a device-clear-pending flag. The session cookie lasts 12 hours, fixed; a 60-minute idle guard signs the device out, or covers the screen while the server is unreachable.
+   - **`localStorage`**: the session record (subject, display name, roles, whether it is a local account), the device id and a device-clear-pending flag. A setup link's token is held in memory only, never stored. The session cookie lasts 12 hours, fixed; a 60-minute idle guard signs the device out, or covers the screen while the server is unreachable.
 6. **Exports.** Three CSVs, `CarnivalAdministrator` and `SystemAdministrator` only, each audited (actor, format, row count) and rate-limited. Formula-leading characters are neutralised.
    - `standings.csv`: house totals; no student data.
    - `results.csv`: event, division, tier, heat, place, **name**, house, result, status and the high-jump series.
@@ -137,7 +151,7 @@ flowchart TD
   E --> K["Daily age-encrypted pg_dump<br/>optional off-host push"]
 ```
 
-**No student data leaves the school's stack by design.** The only external dependency in the request path is the identity provider. The PWA loads no CDN, analytics, third-party script or web font: the Inter font is bundled (`@fontsource-variable/inter`) and the proxy's CSP is `default-src 'self'`. **Identity-provider data residency (for Entra ID, the tenant's region): `[school ICT contact]`** (IPP 9).
+**No student data leaves the school's stack by design.** The only external dependency in the request path is the identity provider, where one is configured; a school on local accounts only has none. The PWA loads no CDN, analytics, third-party script or web font: the Inter font is bundled (`@fontsource-variable/inter`) and the proxy's CSP is `default-src 'self'`. **Identity-provider data residency (for Entra ID, the tenant's region): `[school ICT contact]`** (IPP 9).
 
 ---
 
@@ -155,7 +169,7 @@ If your school is a Victorian government school, it is bound by the Privacy and 
 | **6. Access and correction** | Result correction is an audited action; roster identity is corrected at source and re-imported. There is no self-service route for a student or parent; requests use the school's existing process. | `Carnivals/ResultEndpoints.cs` | Document the request route in the privacy notice: `[privacy officer]` |
 | **7. Unique identifiers** | The platform mints its own internal GUID; it **adopts** the system-of-record key (`STKEY`) as `ExternalStudentId` for import matching. | `Data/Entities/Student.cs` | IPP 7 restricts adopting another organisation's identifier. State and endorse the necessity (repeatable re-import matching) in the PIA |
 | **8. Anonymity** | Not available: a results platform attributes a performance to a named student. Aggregate surfaces (standings, `standings.csv`, progress) are house-level. | `Scoring/StandingsEndpoints.cs`; `Scoring/ProgressEndpoints.cs` | State the exception in the PIA |
-| **9. Transborder data flows** | All storage is in the school's own stack. No CDN, analytics, offshore error reporting, third-party fonts or scripts. | `deploy/Caddyfile` CSP; `app/package.json` | **The identity provider**: if it is a cloud service such as Entra ID, record its data residency: `[school ICT contact]`. Record where your host and any off-host backup target are located |
+| **9. Transborder data flows** | All storage is in the school's own stack, local accounts included. No CDN, analytics, offshore error reporting, third-party fonts or scripts. | `deploy/Caddyfile` CSP; `app/package.json` | **The identity provider**, if one is used: if it is a cloud service such as Entra ID, record its data residency: `[school ICT contact]`. Record where your host and any off-host backup target are located |
 | **10. Sensitive information** | No sensitive-information category is collected deliberately. The gender-derived M/F/S category is the contested field (§2). | ADR-0026; `Data/Entities/Enums.cs` | Classification and treatment: `[privacy officer]` |
 
 ---
@@ -168,12 +182,13 @@ If your school is a Victorian government school, it is bound by the Privacy and 
 | PIA, endorsed (for Victorian government schools, Parts 1–3 with Privacy team review) | `[principal]` |
 | Retention classes per entity (for Victorian government schools, PROV PROS 22/06) | `[records custodian]`; see `retention-and-disposal.md` |
 | Whether M/F/S is sensitive information, and whether the column is needed | `[privacy officer]` |
-| Identity-provider data residency statement | `[school ICT contact]` |
+| Identity-provider data residency statement, if a provider is used | `[school ICT contact]` |
+| Staff usernames and 90 days of sign-in addresses named in the PIA and the staff privacy notice | `[privacy officer]` |
 | Disk encryption and an off-host backup target | `[school ICT contact]` |
 
 ## In the code
 
-- `api/src/CarnivalApp.Api/Data/Entities/`: every stored field
+- `api/src/CarnivalApp.Api/Data/Entities/`: every stored field (local accounts: `LocalAccount`, `LocalAccountSetupLink`, `SignInAttempt`, `EndedLocalSession`)
 - `api/src/CarnivalApp.Api/Imports/`: mapping, derivation, staging and promotion
 - `app/src/sync/retention.ts`, `app/src/db/roster.ts`, `app/vite.config.ts` (the `api-reads` allowlist): device-side retention
 - `api/src/CarnivalApp.Api/Reporting/`: the CSV exports

@@ -15,12 +15,12 @@
 | # | Evidence item | Provided by the repository | Your school supplies | Status |
 |---|---|---|---|---|
 | 1 | **Data inventory**: every personal-data field, its source and purpose | `data-inventory-and-ipp-mapping.md` §1–§3 | Confirmation that your import mapping matches the example | `[ ]` |
-| 2 | **Data flow diagram**: roster in, results out | same, §4 | Host location; identity-provider data residency | `[ ]` |
+| 2 | **Data flow diagram**: roster in, results out | same, §4 | Host location; identity-provider data residency, if a provider is used | `[ ]` |
 | 3 | **Privacy principle mapping** | same, §5 (Victorian IPPs) | Answers to the gaps in §5–§6 | `[ ]` |
 | 4 | **Privacy impact assessment** | Input only: the data inventory | The PIA itself, written by school staff and endorsed. **A gate before real data** | `[ ]` |
 | 5 | **Collection notice** for students and families | — | The notice text, naming the platform | `[ ]` |
 | 6 | **Access control matrix**: roles, least privilege, administrator controls | `access-control-matrix.md` §1–§3, derived from the authorisation code and pinned by tests | Reviewer sign-off | `[ ]` |
-| 7 | **Authentication and MFA statement** | `access-control-matrix.md` §4: authentication is delegated to Entra ID or ADFS | Confirmation that MFA and conditional access apply to every account holding a role | `[ ]` |
+| 7 | **Authentication and MFA statement** | `access-control-matrix.md` §4: built-in local accounts with an authenticator app (TOTP) the platform provides, optional by default and required by one school setting; password, lockout and session rules. Entra ID or ADFS accounts, where used, rely on the provider's MFA | Whether the authenticator setting is on (it must be for Essential Eight or ST4S's top tier); for provider accounts, confirmation that MFA and conditional access apply to every account holding a role | `[ ]` |
 | 8 | **Access review and offboarding procedures** | `access-control-matrix.md` §5–§6 (procedures) | Owners, and a record of each review and offboarding | `[ ]` |
 | 9 | **Information security policy** (organisational) | — | The school's own policy; a risk-register entry for the platform | `[ ]` |
 | 10 | **Incident response plan**, with notification triggers | `incident-response-plan.md` (stack-specific detection, containment, evidence) | Named contacts, reporting references, a tabletop exercise | `[ ]` |

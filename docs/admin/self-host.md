@@ -39,12 +39,12 @@ The settings that matter on day one (every variable is documented in `.env.examp
 | `COMPOSE_PROJECT_NAME` | a short instance name, e.g. `carnival-app-prod` |
 | `SCHOOL_NAME`, `SCHOOL_BRAND_COLOUR` | first-start defaults; edited in the app afterwards (School → School settings) |
 | `SCHOOL_TIMEZONE` | the school's IANA timezone, e.g. `Australia/Melbourne`; read from configuration whenever it is needed (not editable in the app) |
-| `SITE_ADDRESS` | the machine's DNS name |
+| `SITE_ADDRESS` | the machine's DNS name, as devices reach it; the first-administrator and host-command setup links are built from it |
 | `TLS_MODE` | the certificate source (see [TLS](#tls)); `internal` by default |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | two different long random passwords |
 | `APPLY_MIGRATIONS` | `true` for the first start (see §6) |
 | `BACKUP_AGE_RECIPIENT` | the public key from §8 |
-| identity variables | see §4 |
+| identity variables | none for local accounts; for Entra or ADFS, see §4 |
 | `DEV_AUTH`, `VITE_DEMO_MODE` | `false` on any real instance |
 
 Images are pulled, not built (ADR-0049). If the packages are private, log in once with a read-only token: `printf %s '<token>' | docker login ghcr.io -u <user> --password-stdin`.
@@ -61,13 +61,59 @@ The proxy's certificate source is `TLS_MODE` in `.env` (default `internal`); com
 
 ## 4. Sign-in
 
-Today the API supports **Microsoft Entra ID** or **ADFS** (ADR-0007). Built-in accounts and generic OIDC (Google Workspace, Okta, Keycloak…) are planned; see `docs/HANDOFF.md`.
+Local accounts are built in ([ADR-0065](../adr/0065-built-in-local-accounts.md)): **a fresh install needs no identity settings.** Leave the `ENTRA_*` variables and `BOOTSTRAP_ADMIN_UPN` empty, and everyone signs in with a username and password the school creates in the app. Entra ID or ADFS is optional; see [below](#entra-or-adfs-optional). How sign-in works is in [authorisation and audit](../architecture/authorisation-and-audit.md#sign-in-one-box-one-cookie).
+
+### The first administrator
+
+The deploy script (§6) prints a link for the first System administrator, with or without a provider:
+
+- **Printed once**, after the deploy summary and outside the block you record, and only to the terminal, never to a file. It is issued only once every smoke check has passed, and only while no local account exists. A later deploy that finds an account issues none.
+- **Single use, valid 24 hours.** Opening it does not use it up; choosing the password does. A redeploy before it is used issues a new link and the old one stops working.
+- **Needs a real `SITE_ADDRESS`**, the name devices use to reach the server: the link is built from it. With `SITE_ADDRESS=localhost` the script issues no link and says to set the name and redeploy.
+
+```
+  !! Do not record this link; it is single use and expires in 24 hours.
+  >>> First administrator: open https://<name>/#/setup/<token>  (valid 24 hours)
+```
+
+Open it on a device that trusts the certificate, choose a username (a plain name such as `backup-admin`, never an email address), a display name and a password of at least 15 characters, then set up an authenticator app. That account is a System administrator.
+
+### Adding people
+
+In the app, **School → People → Add a person**: a username and a display name. The app shows a setup link, valid 24 hours and shown once, with a QR code; hand it over in person or by message. The person opens it and chooses their password. Then give them a role under **School → Roles**, by their username. People also lists each account's status, authenticator, lockout and last sign-in, and has Reset (a new link, clearing the password and authenticator), Disable, Enable and Clear lockout. Staff instructions are in [signing in](../guide/signing-in.md).
+
+### Sign-in settings
+
+Two settings in **School → School settings → Sign-in**, kept in the database, not in `.env`:
+
+| Setting | Default | Effect |
+|---|---|---|
+| Require an authenticator app | off | Everyone without one must set one up at their next sign-in; sessions already open run to their end. Turn it on if the school must meet ST4S's top tier or Essential Eight |
+| Who may use a local account | System administrators only | Shown only with Entra or ADFS. "Everyone" lets anyone added under People sign in locally, for example carnival-day helpers with no school account. Narrowing it signs other local accounts out at their next request |
+
+### Recovering access from the host
+
+When nobody can sign in (a forgotten password, a lost phone with no recovery codes left, a lockout), run on the host, from the clone's directory:
+
+```bash
+docker compose exec -T api dotnet CarnivalApp.Api.dll accounts setup-link <username>
+```
+
+```
+Setup link for <username>: open https://<name>/#/setup/<token>  (valid 24 hours)
+```
+
+It creates the account as a System administrator if it does not exist. For an existing account it clears the password, authenticator and recovery codes, enables it if disabled, and grants it System administrator if it lacks the role. It clears the account's lockout either way. The link works like any other setup link. `accounts first-admin` prints a first-administrator link while no local account exists (`First administrator: open …`); once one exists it prints the reason on stderr and exits `2`. Shell access to the host is what makes these safe, as it already is for `.env`.
+
+### Entra or ADFS (optional)
+
+With a provider configured, the sign-in box sends a school email to the provider and a local username to its password. By default only System administrators may hold a local account beside a provider, so the provider's MFA and conditional access still cover everyone else. **Keep a local backup administrator** (the first administrator from the deploy does this): it signs in when the provider is down or a group mapping is wrong. Turn on its authenticator app and keep its password and recovery codes in the school's safe or password manager.
 
 **Entra:**
 1. App registration in your tenant: single-tenant, Web platform, redirect URI `https://<name>/signin-oidc`, front-channel logout `https://<name>/signout-callback-oidc`, a client secret, ID tokens enabled.
 2. **Token configuration → groups claim:** return **Security groups**, with the **ID** token emitting **Group ID**. A wrong setting here gives users zero roles. After any change, users must sign out and back in; the session cookie holds the claims from sign-in.
 3. `.env`: `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` (the secret's *Value*, not its ID). Diarise the secret's expiry. Leave `ENTRA_INSTANCE` empty unless the tenant is in a sovereign cloud.
-4. `BOOTSTRAP_ADMIN_UPN`: the first System administrator, or several, comma-separated. Further roles can be granted in the app (School → Roles, ADR-0048) or by group (below).
+4. `BOOTSTRAP_ADMIN_UPN` (optional): provider accounts always granted System administrator, comma-separated. Local accounts never match it. Further roles can be granted in the app (School → Roles, ADR-0048) or by group (below).
 5. Group → role mapping (optional): copy `docker-compose.override.example.yml` to `docker-compose.override.yml` and map each security-group **object ID** to a role. Object IDs are case-sensitive; a mis-cased ID silently grants nothing.
 
 **ADFS** (2019 or later) has no `.env` variables; wire it in `docker-compose.override.yml` and leave the `ENTRA_*` variables empty. Register an application group with a server application: redirect URI `https://<name>/signin-oidc`, post-logout `https://<name>/signout-callback-oidc`, and a client secret. ADFS emits whatever its claim rules say, usually group *names*, so name the claim and map names (ADR-0007).
@@ -103,7 +149,7 @@ PREFLIGHT_OK=1 bash scripts/deploy/vm-deploy.sh
 curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health   # Healthy
 ```
 
-Then, in the browser: sign in as the bootstrap admin → School settings (houses, colours) → import the roster (a CSV; see `config/`) → create a carnival from a template. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
+Then, in the browser: open the first-administrator link the script printed (§4) → School settings (houses, colours) → import the roster (a CSV; see `config/`) → create a carnival from a template. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
 
 ## 6. Upgrades
 
@@ -135,7 +181,7 @@ After an upgrade, an installed PWA picks up the new build once all its windows a
 - **Timeouts on the application role**, set by the same script: `statement_timeout` 60 s, `idle_in_transaction_session_timeout` 60 s, `lock_timeout` 10 s. A runaway query or an abandoned transaction cannot hold locks for long. The owner role has none, so migrations are not cut short.
 - **Two networks:** `edge` (proxy, api) and an internal `data` network (api, db, backup). The proxy has no route to Postgres; the database has no route off the host.
 - **Unprivileged containers:** `api` runs as UID 1654, `proxy` as UID 10001, both with all capabilities dropped. Caddy listens on 8080/8443 inside the container, published as 80/443. If you deploy by hand, chown the `dp-keys` (1654) and `caddy-data`/`caddy-config` (10001) volumes first, as the script does; otherwise every official is signed out.
-- **A daily retention sweep** in the API, at start-up and then every 24 hours: idempotency keys (which hold response bodies with student names) are deleted 30 days after creation, and a roster upload that was never promoted loses its staged rows 7 days after upload ([ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). It runs only against PostgreSQL on a school instance, never touches results, records or the audit trail, and logs one line per run (`Retention sweep: …`).
+- **A daily retention sweep** in the API, at start-up and then every 24 hours: idempotency keys (which hold response bodies with student names) are deleted 30 days after creation, a roster upload that was never promoted loses its staged rows 7 days after upload, sign-in attempts are deleted after 90 days, setup links 90 days after they expire, and a signed-out session's record once its cookie would have expired ([ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). It runs only against PostgreSQL on a school instance, never touches results, records or the audit trail, and logs one line per run (`Retention sweep: …`).
 - **Log and memory caps** per service, sized for a 4 GB machine. Exit code 137 means a container hit its memory limit.
 - **State that cannot be recreated:** the `db-data` and `db-backups` volumes. `dp-keys` can be rebuilt, but losing it signs everyone out mid-carnival.
 
@@ -161,7 +207,7 @@ ssh <server> 'bash ~/work/carnival-app/scripts/deploy/restore-drill.sh ~/school-
 ssh <server> 'shred -u ~/school-backup.key'
 ```
 
-It restores the newest dump into a scratch database, compares row counts with the live tables, and fails if the dump is stale or a key table is empty. Record each drill in the instance record below.
+It restores the newest dump into a scratch database, compares row counts with the live tables, and fails if the dump is stale or a key table is empty. Record each drill in the instance record below. After a real restore, re-apply the local-account changes made since the dump ([Linux runbook B10](linux-runbook.md#b10-after-a-restore)).
 
 ## 9. Encryption at rest
 
@@ -175,7 +221,8 @@ Backups are encrypted; the live database volume is not, unless the host encrypts
 | OS and version | |
 | Who patches the OS and Docker | |
 | TLS certificate source and expiry | |
-| Identity provider, client secret expiry | |
+| Identity provider (if any), client secret expiry | |
+| Local backup administrator's username; where its password and recovery codes are kept | |
 | Backup key custodians | |
 | Off-host backup target | |
 | Restore drills (date, result) | |

@@ -48,6 +48,8 @@ On its first start against an empty database the API writes one `SchoolConfigura
 | Identity provider (`AzureAd`, `Adfs`, `Identity:Provider`) | At start-up | `.env` / override file, then recreate |
 | Group → role mappings, groups claim type, bootstrap administrator | Every request | Override file / `.env`, then recreate |
 | In-app role assignments | Database only, never configuration | School → Roles |
+| Local accounts | Database only, never configuration | School → People; the host command |
+| Sign-in settings (require an authenticator app; who may use a local account) | Database only, never configuration; every sign-in and every request of a local session | School → School settings → Sign-in |
 | Connection strings, `APPLY_MIGRATIONS` | At start-up | `.env`, then recreate |
 | Import mapping file | Every roster import | Edit the file in `./config` |
 | Event template files | Every list, apply and reconcile | Edit the files in `./config/event-templates` (no restart) |
@@ -105,17 +107,17 @@ Compose has four house slots. **Before the first start**, add houses with extra 
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `ENTRA_TENANT_ID` | Entra tenant (directory) ID | empty | Yes, for Entra | Empty tenant or client ID: no identity provider, every API call answers `401`. |
+| `ENTRA_TENANT_ID` | Entra tenant (directory) ID | empty | Yes, for Entra | Empty tenant or client ID: no identity provider, and everyone signs in with a local account. |
 | `ENTRA_CLIENT_ID` | App registration (client) ID | empty | Yes, for Entra | |
 | `ENTRA_CLIENT_SECRET` | The client secret's *Value* | empty | Yes, for Entra | **Secret.** Diarise its expiry. |
 | `ENTRA_INSTANCE` | Entra authority host | `https://login.microsoftonline.com/` | No | Leave empty for the public cloud; set only for a sovereign cloud. |
-| `BOOTSTRAP_ADMIN_UPN` | User principal names (or subject IDs) always granted System administrator, comma-separated | empty | Until another administrator exists | Read on every request, never stored: editing it and recreating the container is the lock-out recovery path. See [Identity settings](#identity-settings). |
+| `BOOTSTRAP_ADMIN_UPN` | Provider (Entra or ADFS) accounts always granted System administrator, by UPN or subject ID, comma-separated | empty | No | Local accounts never match it, and a local username cannot be one of its entries. Read on every request, never stored: editing it and recreating the container recovers a provider account's access. It is not the only recovery path: the host command recovers a local account ([self-hosting](self-host.md#recovering-access-from-the-host)). See [Identity settings](#identity-settings). |
 
 ### TLS
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `SITE_ADDRESS` | The DNS name Caddy serves | `localhost` | Yes | Caddy matches requests on this name. |
+| `SITE_ADDRESS` | The DNS name Caddy serves, as devices reach it | `localhost` | Yes | Caddy matches requests on this name. Compose also passes it to the API as `Site__Address`, which builds the setup links the host command prints; with `localhost` the deploy issues no first-administrator link. |
 | `TLS_MODE` | The certificate source: the Caddyfile's `tls` argument (`tls {$TLS_MODE:internal}`) | `internal` | No | `internal` is Caddy's own CA; an email address turns on automatic ACME (public hosts); `"/etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem"` uses mounted certificate files. The mount is commented out in the proxy service of `docker-compose.yml`. See [TLS](self-host.md#tls). |
 
 ### Backups
@@ -134,7 +136,7 @@ The API's own retention sweep (idempotency keys after 30 days, unpromoted staged
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `DEV_AUTH` | Header sign-in (`X-Dev-Subject`, `X-Dev-Roles`): anyone can claim any role | `false` | — | **Must be `false` on any real instance.** The API registers header sign-in only when `ASPNETCORE_ENVIRONMENT=Development` and no identity provider is configured; a `Production` instance answers `401` instead. |
+| `DEV_AUTH` | Header sign-in (`X-Dev-Subject`, `X-Dev-Roles`): anyone can claim any role | `false` | — | **Must be `false` on any real instance.** The API registers header sign-in only when `ASPNETCORE_ENVIRONMENT=Development` and no identity provider is configured; a `Production` instance with no provider signs in local accounts only. |
 | `VITE_DEMO_MODE` | Makes the deploy script pin the demo web image (public-demo banner, Start demo landing page, no sign-in) | `false` | — | Baked in at build time, so it selects an image rather than switching a running one. It only works against an API in demo mode ([demo mode](../architecture/demo-mode.md)). **`false` on any real instance.** |
 
 ## Other configuration keys
@@ -155,6 +157,7 @@ Keys the compose file sets for you, or that you set through the override file or
 | `EventTemplates:Path` | Directory of event template files; compose sets `/config/event-templates`. |
 | `RateLimiting:BulkDataPerMinute` | Per-user limit on roster uploads, import review reads and CSV exports. Default `10`; refusals are `429` with `Retry-After`. |
 | `Identity:DevAuth:Enabled` | Set from `DEV_AUTH`; honoured only in `Development`. |
+| `Site:Address` | Set from `SITE_ADDRESS`. The site name in the setup links the host command prints (`https://` is added when it has no scheme). |
 | `Logging:LogLevel:Default` | Standard .NET log level (`Information` by default). |
 
 The `Demo:*` keys configure a public demo host only and stay unset on a school instance; [demo mode](../architecture/demo-mode.md) explains each.
@@ -177,7 +180,7 @@ The procedures (app registration, group claims, ADFS relying party) are in [self
 
 ### Choosing the provider
 
-`Identity:Provider` selects explicitly: `Entra`, `Adfs`, `DevAuth` or `Demo`. Unset, the API infers it: `AzureAd:TenantId` and `AzureAd:ClientId` both set means Entra; otherwise `Adfs:Authority` and `Adfs:ClientId` both set means ADFS; otherwise none. With none on a `Production` instance every API call answers `401`.
+`Identity:Provider` selects explicitly: `Entra`, `Adfs`, `DevAuth` or `Demo`. Unset, the API infers it: `AzureAd:TenantId` and `AzureAd:ClientId` both set means Entra; otherwise `Adfs:Authority` and `Adfs:ClientId` both set means ADFS; otherwise none. With none, outside `Development`, everyone signs in with a local account. Local accounts are available beside Entra and ADFS too, and on every host except a demo host; they have no configuration keys of their own.
 
 ### Entra (`AzureAd:*`)
 
@@ -214,8 +217,8 @@ A person's roles are the union of three sources, worked out on every request:
 |---|---|
 | `Identity:GroupToRoleMappings:<group>` | Maps a group identifier to one of `SystemAdministrator`, `CarnivalAdministrator`, `Recorder`, `Viewer`. Entra sends group **object IDs**; ADFS sends whatever its claim rule emits, usually group names. Matching is **case-sensitive**: a mis-cased ID grants nothing (the log names the unmatched group). A mapping to an unknown role is ignored with a warning. |
 | `Identity:GroupsClaimType` | The claim carrying group memberships. Default `groups` (Entra). Set it to match an ADFS claim rule. |
-| `Identity:BootstrapAdministrators` | UPNs (or subject IDs) always granted `SystemAdministrator`, matched ignoring case. Every value, whether an array entry or the plain key, is split on commas, trimmed, and blanks dropped. Compose sets entry `0` from `BOOTSTRAP_ADMIN_UPN`. It appears on the Roles screen as a row that cannot be revoked in the app. |
-| In-app assignments | Granted on School → Roles; stored in the database. |
+| `Identity:BootstrapAdministrators` | UPNs (or subject IDs) of provider accounts always granted `SystemAdministrator`, matched ignoring case. Every value, whether an array entry or the plain key, is split on commas, trimmed, and blanks dropped. Compose sets entry `0` from `BOOTSTRAP_ADMIN_UPN`. It appears on the Roles screen as a row that cannot be revoked in the app. A local account never matches it. |
+| In-app assignments | Granted on School → Roles, to a UPN or a local account's username; stored in the database. A local account's roles come from these alone. |
 
 Mappings go in the override file, because the group ID is part of the key:
 
@@ -233,11 +236,11 @@ The start-up log reports how many bootstrap administrators are configured. A cou
 
 ## School settings in the app
 
-The School hub holds what belongs to the school rather than to one carnival. Settings, Roles, Roster import and Event templates are for System administrators only. Event catalogue and School records are also open to Carnival administrators. The server enforces each one.
+The School hub holds what belongs to the school rather than to one carnival. Settings, Roles, People, Roster import and Event templates are for System administrators only. Event catalogue and School records are also open to Carnival administrators. The server enforces each one.
 
 ### School settings
 
-One form: school name, brand colour, and the houses (code, display name, colour). A save replaces the whole record and is audited. Two administrators cannot overwrite each other: a save based on an older copy is refused and the screen asks for a reload.
+One form: school name, brand colour, the houses (code, display name, colour) and the [sign-in settings](#sign-in-settings). A save replaces the whole record and is audited. Two administrators cannot overwrite each other: a save based on an older copy is refused and the screen asks for a reload.
 
 | Field | Rule |
 |---|---|
@@ -251,9 +254,22 @@ One form: school name, brand colour, and the houses (code, display name, colour)
 
 House codes are what roster imports validate against (ignoring case), so set them to match the export before the first import.
 
+#### Sign-in settings
+
+For local accounts. Kept in the database and edited here, not in `.env` or any configuration key.
+
+| Setting | Default | Rule |
+|---|---|---|
+| Require an authenticator app | off | When on, a local account without an authenticator app must set one up at its next sign-in. Sessions already open run to their end. |
+| Who may use a local account | System administrators only | Shown only when Entra or ADFS is configured; with no provider everyone signs in locally. "Everyone" lets any local account sign in. Narrowing it, or revoking a local account's System administrator role while it is narrow, signs that account out at its next request. |
+
+### People
+
+Local accounts: add a person (username and display name), then hand over the setup link the app shows once. Reset, Disable, Enable and Clear lockout act on one account; you cannot act on your own. See [self-hosting § sign-in](self-host.md#adding-people).
+
 ### Roles
 
-Grant a role to a person by their sign-in address (UPN or email), with a reason. Revoking also needs a reason. Both are audited and take effect on that person's next request. An assignment is first matched by UPN; after the person's first sign-in it is bound to their stable account ID, so a later UPN rename does not lose it. You cannot revoke your own System administrator role.
+Grant a role to a person by their sign-in address (UPN or email) or a local account's username, with a reason. Revoking also needs a reason. Both are audited and take effect on that person's next request. An assignment is first matched by UPN; after the person's first sign-in it is bound to their stable account ID, so a later UPN rename does not lose it. A username must already be a local account under People, and is bound to it at once. You cannot revoke your own System administrator role.
 
 ### Event templates
 
@@ -435,7 +451,7 @@ A division is one age × category × tier instance of a catalogue definition. Th
 - `.env.example`, `docker-compose.yml`, `docker-compose.override.example.yml`, `deploy/Caddyfile`
 - `api/src/CarnivalApp.Api/Program.cs`: configuration sources, start-up gates, migrations
 - `api/src/CarnivalApp.Api/appsettings.json`, `appsettings.School.example.json`
-- `api/src/CarnivalApp.Api/Identity/IdentitySetup.cs`, `GroupToRoleClaimsTransformation.cs`, `RoleAssignmentEndpoints.cs`
+- `api/src/CarnivalApp.Api/Identity/IdentitySetup.cs`, `GroupToRoleClaimsTransformation.cs`, `RoleAssignmentEndpoints.cs`; `Identity/LocalAccounts/` (local accounts, the host command, `SetupLinks.cs` for `Site:Address`)
 - `api/src/CarnivalApp.Api/School/`: `SchoolSettingsBootstrap.cs` (first-start seed), `SchoolSettingsEndpoints.cs` (validation), `BrandColour.cs`, `HouseColour.cs`
 - `api/src/CarnivalApp.Api/Carnivals/EventTemplate.cs` (format and validation), `EventTemplateService.cs` (apply), `TemplateReconciler.cs`
 - `api/src/CarnivalApp.Api/Carnivals/EventDefinitionEndpoints.cs` (catalogue, usage), `CarnivalEventEndpoints.cs` (divisions, generate)

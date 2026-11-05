@@ -15,7 +15,7 @@ flowchart LR
     DB[("db<br/>PostgreSQL 17")]
     Backup["backup<br/>encrypted pg_dump"]
   end
-  IdP["Identity provider<br/>(Entra ID / ADFS)"]
+  IdP["Identity provider, optional<br/>(Entra ID / ADFS)"]
   PWA -- HTTPS --> Proxy
   Proxy --> API
   API --> DB
@@ -45,7 +45,7 @@ Minimal-API endpoints grouped by feature folder in `api/src/CarnivalApp.Api/`:
 | `Reporting/` | Results book and CSV exports, district team selection |
 | `Imports/` | Roster import: staging, validation, reconciliation review, promotion |
 | `School/` | School settings (name, houses, colours, brand) |
-| `Identity/` | Sign-in providers, the four roles, group → role mapping, in-app role assignment |
+| `Identity/` | Sign-in providers, local accounts (`Identity/LocalAccounts/`), the four roles, group → role mapping, in-app role assignment |
 | `Auditing/` | Append-only audit events; the acting user and role on every write |
 | `Idempotency/` | `Idempotency-Key` handling so a retried request applies once |
 | `Http/` | The error contract (stable error codes), rate limiting, field limits, OpenAPI |
@@ -59,13 +59,14 @@ In order, for every request:
 1. **Forwarded headers**: honour `X-Forwarded-Proto` from the proxy, so redirects and OIDC callbacks use `https`.
 2. **Exception handler**: unhandled faults become the standard error response; database serialisation conflicts become `409 CONCURRENCY_CONFLICT`.
 3. **Status-code pages**: the framework's own bodyless refusals get the standard error body: `404 ROUTE_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE`.
-4. **Demo guard** (demo mode only): refuses roster imports and marks responses `noindex`.
-5. **Idempotency buffering**: lets a response be stored against its `Idempotency-Key`.
-6. **Authentication**: the session cookie, set by the server-side OIDC sign-in (no token ever reaches the browser).
-7. **Unmatched routes** answer `404 ROUTE_NOT_FOUND`, not the fallback `401`: the outbox pauses all syncing on an authentication error, so a typo'd route must not look like a sign-out.
-8. **Authorisation**: every endpoint names a policy; the four roles map to policies on the server.
-9. **Rate limiting**: report exports and roster uploads, per signed-in subject (demo mode also limits every request per client address). Ordinary carnival traffic is not rate-limited.
-10. **Endpoint**: validates, applies the change, writes the audit event, and returns.
+4. **Same-origin writes**: an unsafe request under `/api` from another origin answers `403 CROSS_SITE_REQUEST_REFUSED`.
+5. **Demo guard** (demo mode only): refuses roster imports and marks responses `noindex`.
+6. **Idempotency buffering**: lets a response be stored against its `Idempotency-Key`.
+7. **Authentication**: the session cookie, set by a local sign-in or the server-side OIDC sign-in (no token ever reaches the browser). A local account's session is checked against the account on every request.
+8. **Unmatched routes** answer `404 ROUTE_NOT_FOUND`, not the fallback `401`: the outbox pauses all syncing on an authentication error, so a typo'd route must not look like a sign-out.
+9. **Authorisation**: every endpoint names a policy; the four roles map to policies on the server.
+10. **Rate limiting**: report exports and roster uploads, per signed-in subject; password and code checks, a few at a time for the whole host (demo mode also limits every request per client address). Ordinary carnival traffic is not rate-limited.
+11. **Endpoint**: validates, applies the change, writes the audit event, and returns.
 
 Errors are always JSON, `{error, detail}`, with a stable code in `error` (for example `RESULT_FINALISED`, `CONCURRENCY_CONFLICT`); the app maps codes to messages and decides whether a queued write should retry. Over-long text fields are refused up front as `400 VALIDATION_FAILED` against the column sizes in `Http/FieldLimits.cs` (measured trimmed), so they never reach PostgreSQL as a retryable `500` that would stall the outbox.
 
@@ -76,7 +77,7 @@ Errors are always JSON, `{error, detail}`, with a stable code in `error` (for ex
 | Folder | What it owns |
 |---|---|
 | `api/` | The typed client (types generated from the API's OpenAPI document), query keys, error-code text, outbox transport |
-| `auth/` | Session state, sign-in hand-off to the server, idle sign-out on shared devices, device ID |
+| `auth/` | Session state, local sign-in and setup links, sign-in hand-off to the provider, idle sign-out on shared devices, device ID |
 | `db/` | IndexedDB (Dexie): the outbox and a cached roster |
 | `sync/` | The outbox, the sync worker, retention of acknowledged and cancelled items, the stuck-outbox alarm, UUIDv7 keys |
 | `screens/` | One component per route |
@@ -112,7 +113,7 @@ sequenceDiagram
 
 | Shape | Database | Sign-in |
 |---|---|---|
-| School deployment | PostgreSQL, one per school | Entra ID or ADFS (built-in accounts planned) |
+| School deployment | PostgreSQL, one per school | Local accounts, optionally beside Entra ID or ADFS |
 | Local development | SQLite, seeded with synthetic data | development header sign-in |
 | Public demo | PostgreSQL, one database cloned per visitor from a seeded template | anonymous demo session cookie; imports refused |
 

@@ -211,12 +211,22 @@ A `SchoolRecord` is one record for one (event definition, age group, category).
 
 ## Role assignments
 
-`RoleAssignment` grants one of the four roles (`CarnivalAdministrator`, `Recorder`, `Viewer`, `SystemAdministrator`) to a user by UPN. Roles can also arrive from identity-provider groups through the deployment's group → role mapping; those are configuration and are not stored here.
+`RoleAssignment` grants one of the four roles (`CarnivalAdministrator`, `Recorder`, `Viewer`, `SystemAdministrator`) to a user by UPN, or to a local account by username. Roles can also arrive from identity-provider groups through the deployment's group → role mapping; those are configuration and are not stored here.
 
-- The UPN is stored lower-case. `SubjectId` is null until the user first signs in, when it binds (audited as a system action) and is never re-matched.
+- The UPN is stored lower-case. `SubjectId` is null until the user first signs in, when it binds (audited as a system action) and is never re-matched. A local account's row is bound at grant to its `local:<id>` subject, with the username in `SubjectUpn`.
 - Rows are never deleted: revocation sets `RevokedAtUtc`, actor and reason, so the table is its own history.
 - A filtered unique index allows one active row per (UPN, role) while keeping revoked rows.
 - Assignments are deployment-wide; `Scope` and the review columns are unused.
+
+## Local accounts
+
+Accounts that sign in with a username and password here ([authorisation](authorisation-and-audit.md#local-accounts)). ASP.NET Core Identity's user tables, renamed, with roles kept in `RoleAssignments`.
+
+- **`LocalAccounts`**: username (lower-case, unique), display name, password hash, security stamp, whether an authenticator is enrolled, the newest accepted authenticator time step, `DisabledAtUtc`, and who created it and when. Never deleted. Identity's email and phone columns exist but are never written, and its own lockout columns are unused.
+- **`LocalAccountTokens`**: the pending or enrolled authenticator key, and the SHA-256 hashes of the unused recovery codes. Cleared on reset. (`LocalAccountClaims` and `LocalAccountLogins` are Identity's and stay empty.)
+- **`LocalAccountSetupLinks`**: the SHA-256 of the token (never the token), purpose (`FirstAdministrator`, `Create`, `Reset`, `Host`), the account (null for a first-administrator link), who created it and when, expiry, when and from which client address it was used, and when it was revoked. Deleted 90 days after expiry by the retention sweep.
+- **`SignInAttempts`**: time, the account (null when the name matched none; the typed name is never stored), the client address and the outcome (`Succeeded`, `WrongPassword`, `WrongCode`, `LockedOut`, `Disabled`, `NotPermitted`, `RecoveryCodeUsed`, `LockoutCleared`). Lockout is derived from these rows. Deleted after 90 days by the retention sweep.
+- **`EndedLocalSessions`**: the id of a local session signed out before its cookie expired, and that expiry. Deleted once the expiry passes.
 
 ## Audit events
 
@@ -255,6 +265,7 @@ A `SchoolRecord` is one record for one (event definition, age group, category).
 | Event completion | Derived on read (entries vs results). |
 | Wind readings, plausibility bands | Not modelled. |
 | Unsynced captures | Live only in the device's outbox until the server accepts them. |
+| A local account's email or phone; the name typed in a failed sign-in; a setup link's token | Never collected; an attempt on an unknown name records no account; only the token's hash is kept. |
 
 ## Related
 

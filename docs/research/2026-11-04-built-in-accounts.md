@@ -21,7 +21,7 @@ A school with no Entra ID, ADFS or other identity provider cannot sign in today:
 No identity settings to configure; `SITE_ADDRESS` must already be the name devices use to reach the server, as for any install. At the end of the first deploy, `vm-deploy.sh` sees there is no administrator yet and prints a one-time link:
 
 ```
-First administrator: open https://<site>/setup/Xk3...  (valid 24 hours)
+First administrator: open https://<site>/#/setup/Xk3...  (valid 24 hours)
 ```
 
 Opening it: choose a username and a password, then "Set up an authenticator app (recommended)" or "Skip for now". That person is the first System administrator. Everything after that is in the app.

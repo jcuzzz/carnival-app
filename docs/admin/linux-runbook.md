@@ -3,7 +3,7 @@
 Two ways to run Carnival App on a Linux machine, both with synthetic data only:
 
 - **A. From source**: the API on SQLite and the app on the Vite dev server. No Docker, no identity provider; you sign in by picking a persona. Use it to try the product or to work on the code.
-- **B. The full stack**: Docker Compose with PostgreSQL, backups and Caddy, as a school runs it. Sign-in needs Microsoft Entra ID or ADFS until built-in accounts land.
+- **B. The full stack**: Docker Compose with PostgreSQL, backups and Caddy, as a school runs it. Sign-in uses the built-in local accounts; Microsoft Entra ID or ADFS is optional.
 
 Tested target: Ubuntu Server 24.04 LTS or Debian 12 on a VM with 2 vCPU, 4 GB RAM and 40 GB of disk. Run every command as a normal user with `sudo`, not as root.
 
@@ -94,11 +94,11 @@ Use a full VM, not an LXC container.
 
 ### B2. Give the machine a name
 
-Pick a host name such as `carnival.home.arpa` and make every device that will open the app resolve it to the VM: a record in your router or local DNS, or a line in each device's hosts file. Sign-in redirects and the TLS certificate depend on the name; the raw IP does not work.
+Pick a host name such as `carnival.home.arpa` and make every device that will open the app resolve it to the VM: a record in your router or local DNS, or a line in each device's hosts file. The TLS certificate, the first-administrator link and any provider's sign-in redirects depend on the name; the raw IP does not work.
 
-### B3. Register the app for sign-in
+### B3. Register the app with Entra (optional)
 
-In Microsoft Entra ID, create an app registration:
+Skip this to sign in with local accounts only. To try Entra as well, create an app registration in Microsoft Entra ID:
 
 1. Single-tenant, **Web** platform, redirect URI `https://<name>/signin-oidc`, front-channel logout URL `https://<name>/signout-callback-oidc`, ID tokens enabled.
 2. **Certificates & secrets**: create a client secret and copy its **Value**.
@@ -121,8 +121,8 @@ nano .env
 | `TLS_MODE` | `internal` |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | two different values from `openssl rand -base64 24` |
 | `APPLY_MIGRATIONS` | `true` |
-| `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` | from B3 |
-| `BOOTSTRAP_ADMIN_UPN` | your sign-in address |
+| `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` | from B3, or empty for local accounts only |
+| `BOOTSTRAP_ADMIN_UPN` | empty; with Entra, optionally your Entra sign-in address |
 | `BACKUP_ENCRYPTION` | `off` (synthetic data only; for real data set `BACKUP_AGE_RECIPIENT` instead, see [Self-hosting §8](self-host.md#8-backups)) |
 
 Leave `DEV_AUTH=false` and `VITE_DEMO_MODE=false`.
@@ -144,6 +144,8 @@ curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health      # Healthy
 docker compose logs api | grep "Retention sweep"                  # one line per run, the first at start-up
 ```
 
+Last, after the summary, the script prints the first-administrator link (`>>> First administrator: open https://<name>/#/setup/<token>  (valid 24 hours)`). It is single use and is printed only this once; do not paste it into notes. If `SITE_ADDRESS` is still `localhost` it prints no link: set the name and run the deploy again.
+
 Then set `APPLY_MIGRATIONS=false` in `.env`.
 
 ### B6. Trust the certificate
@@ -156,7 +158,7 @@ docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt ./carnival-ro
 
 ### B7. First carnival
 
-Browse to `https://<name>` and sign in with the bootstrap account. Then:
+Open the first-administrator link on a device that trusts the certificate (B6). Choose a username such as `backup-admin`, a display name and a password of at least 15 characters, and set up an authenticator app or skip it. You are signed in as a System administrator. Then:
 
 1. **School → School settings**: name and colours. The houses default to BANKSIA, WATTLE, MOUNTAIN ASH and GREVILLEA (`SCHOOL_HOUSE_1`…`4`), which the synthetic rosters use.
 2. **School → Roster import**: upload `data/synthetic/ST_SYNTH.csv` (120 students, a few with deliberate errors for the review to flag). Review, approve, promote.
@@ -172,7 +174,27 @@ PREFLIGHT_OK=1 LOCAL_BUILD=1 bash scripts/deploy/vm-deploy.sh
 
 Once releases are published, drop `LOCAL_BUILD=1` and the script pulls the CI images by digest.
 
-### B9. Remove
+### B9. Recover access
+
+When nobody can sign in, run on the host from the clone's directory:
+
+```bash
+docker compose exec -T api dotnet CarnivalApp.Api.dll accounts setup-link <username>
+```
+
+It prints `Setup link for <username>: open https://<name>/#/setup/<token>  (valid 24 hours)`. An existing account loses its password and authenticator, is enabled and has its lockout cleared; a new name becomes a System administrator account. `accounts first-admin` prints a first-administrator link while no local account exists. Exit codes: `0` done, `2` nothing to do (the reason on stderr), `1` failure. On a database with pending migrations both refuse with `database not migrated yet: deploy the API first`. See [Self-hosting §4](self-host.md#recovering-access-from-the-host).
+
+### B10. After a restore
+
+A restore brings local accounts back as they were at the dump. Accounts added, passwords changed and authenticators set up since then are lost: the person signs in with their old password, or an administrator adds or resets them again. Check the audit trail and the school's own records for changes made since the dump, and redo these:
+
+- **Disables and resets**: disable or reset those accounts again under School → People.
+- **Used recovery codes**: a code used since the dump works again. Reset any account with a `local-account.recovery-code-redeem` audit row after the dump time, so it enrols again with fresh codes.
+- **Setup links**: a link issued in the 24 hours before the dump and unused at the dump is live again, even if it was used or replaced since. Reset every account whose link was issued in that window; a reset issues a new link and revokes the old one.
+
+A local session signed out after the dump is valid again, for what remains of its 12 hours, on any device that still holds its cookie. Changing the account's password or resetting it ends every session of the account.
+
+### B11. Remove
 
 ```bash
 docker compose down -v      # -v deletes the database and backup volumes
@@ -184,7 +206,9 @@ docker compose down -v      # -v deletes the database and backup volumes
 |---|---|
 | `curl` fails the TLS handshake | Requests must use the name from B2; Caddy matches on the host name, not `localhost` or the IP |
 | Sign-in loops or returns an error page | Redirect URI does not match `https://<name>/signin-oidc` exactly, or the secret's ID was pasted instead of its Value |
-| Signed in but every screen says you lack access | `BOOTSTRAP_ADMIN_UPN` differs from the account's sign-in address |
+| Signed in but every screen says you lack access | A local account: no role granted yet under School → Roles. An Entra account: `BOOTSTRAP_ADMIN_UPN` differs from its sign-in address and no group or in-app grant applies |
+| No first-administrator link after the deploy | `SITE_ADDRESS` is `localhost`, a smoke check failed, or a local account already exists (the script says which); see B9 |
+| "This setup link has expired or has already been used" | Links are single use and last 24 hours; an administrator resets the account, or run the host command (B9) |
 | `backup` keeps restarting | `BACKUP_AGE_RECIPIENT` empty and `BACKUP_ENCRYPTION` not `off` |
 | The deploy script stops with "Working tree is dirty" | A file in the clone was edited; configuration belongs in `.env` and `docker-compose.override.yml` only |
 | A container exits with code 137 | It hit its memory limit; give the VM more RAM |

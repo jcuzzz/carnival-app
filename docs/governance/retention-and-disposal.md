@@ -1,7 +1,7 @@
 # Retention and disposal
 
 > **Template.** Sections 1–2 describe how long Carnival App keeps each kind of data, taken from the code; the retention classes and periods are your school's to set.
-> Anything in `[square brackets]` is yours to fill in. The software sets no retention periods for records: it keeps them until someone removes them. Only three operational stores age out automatically, on fixed windows (§2).
+> Anything in `[square brackets]` is yours to fill in. The software sets no retention periods for records: it keeps them until someone removes them. Only six operational stores age out automatically, on fixed windows (§2).
 > If your school is a Victorian government school, the periods come from PROV **PROS 22/06** (Retention and Disposal Authority for School Records); obtain it from PROV.
 
 If your school is a Victorian government school, the department's Records Management policy allows disposal only after the minimum retention period **and** with written principal approval, and records subject to an FOI request, legal proceedings, or of permanent historical value cannot be destroyed even then. School sporting and carnival records are commonly treated as of ongoing historical value: **confirm it, do not assume it.** Other schools apply their own records obligations: `[records policy]`.
@@ -23,14 +23,19 @@ If your school is a Victorian government school, the department's Records Manage
 | `HousePointsAdjustments` | House, points, category, reason, actor; **no student** | Kept indefinitely; voided, never deleted | `[class]` | Follows the carnival |
 | `AuditEvents` | Actor, roles, time, action, entity, prior and new values, reason | **Append-only, enforced by a database trigger**; no application path deletes one | `[class]` | The trigger refuses any deletion sweep: disposal needs a documented, approved, out-of-band step |
 | `IdempotencyKeys` | Payload hash, **stored response body** (for an entry or relay creation, includes student display names), actor, device | Deleted **30 days after creation** (server retention sweep) | n/a: operational | Automatic |
-| `RoleAssignments` | Staff UPN, subject, role, reason, grant and revocation history | Never deleted; revocation stamps who, when and why | `[class]` | Access-authorisation records |
+| `RoleAssignments` | Staff UPN or local username, subject, role, reason, grant and revocation history | Never deleted; revocation stamps who, when and why | `[class]` | Access-authorisation records |
+| `LocalAccounts` | Username, display name, password hash, authenticator flag, disabled time, creator; no email or phone | **Never deleted**; an account is disabled instead, so history stays attributable | `[class]` | Access-authorisation records; delete or de-identify with the audit rows that name it |
+| `LocalAccountTokens` | Authenticator key, recovery-code hashes | Replaced on enrolment; removed when the account is reset | n/a: credentials | Goes with the account |
+| `LocalAccountSetupLinks` | Token hash, purpose, account, creator, expiry, when and from which address it was used | Deleted **90 days after expiry** (server retention sweep) | n/a: operational | Automatic |
+| `SignInAttempts` | Time, account, client IP address, outcome; never the typed name | Deleted **90 days** after the attempt (server retention sweep) | n/a: operational | Automatic |
+| `EndedLocalSessions` | A random session id and its cookie's expiry; no person named | Deleted by the daily server retention sweep once its expiry has passed (the expiry is at most 12 hours after sign-in) | n/a: operational | Automatic |
 | `CarnivalEventOfficials` | Assigned official's subject and display name | Kept indefinitely | `[class]` | Follows the carnival |
 | `DeviceSyncStatuses` | Device id, last official, counts, app version; **no student data** | Last write wins per device per carnival; never pruned | `[class]` | Operational telemetry; delete with the carnival |
 | `SchoolConfigurations` | Name, timezone, houses, branding, settings; no personal data | One row, updated in place | n/a | — |
 | Device outbox (IndexedDB) | Captured entries and results, with student names | `accepted`, `discarded` and `cancelled` pruned **7 days** after resolution or cancellation; an accepted row's name stripped **1 hour** after acceptance; `queued` and `syncing` never pruned; **`conflict` and `rejected` keep the name until a person resolves them** | n/a: the server holds the record | See §2 |
 | Device roster cache (IndexedDB) | Eligible students for an event | Pruned after **72 hours**; cleared on sign-out or handover | n/a | — |
 | Service worker `api-reads` cache | Allowlisted carnival-day GET responses | At most 24 hours and 200 entries; cleared on sign-out | n/a | — |
-| Database backups | Encrypted `pg_dump` of everything above | `BACKUP_RETENTION_DAYS` (default 14), always keeping the newest three; off-host copies per your target's retention | Inherit the class of what they hold | See `backup-and-recovery.md` |
+| Database backups | Encrypted `pg_dump` of everything above, local-account credentials and sign-in attempts included | `BACKUP_RETENTION_DAYS` (default 14), always keeping the newest three; off-host copies per your target's retention. A restore brings back accounts, credentials, setup links and sign-in attempts as they were at the dump | Inherit the class of what they hold | See `backup-and-recovery.md` §5 |
 | Pre-deploy dumps on the host | Unencrypted full dump taken before each deploy | Mode 600, pruned to the newest five | n/a | Delete on decommission |
 
 ---
@@ -40,7 +45,7 @@ If your school is a Victorian government school, the department's Records Manage
 **Built:**
 
 - **Staged rosters are discarded at promotion and on rejection** ([ADR-0032](../adr/0032-staged-rosters-are-not-kept.md)). The batch keeps its counts, file name and hash, and the `import.promote` or `import.reject` audit row, not the rows. Reading the reconciliation of such a batch answers `409 IMPORT_ROWS_PURGED`.
-- **A server retention sweep for operational data** ([ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). A background job in the API runs at start-up and then daily, on a school instance with PostgreSQL (not on a demo host or the SQLite development database). It deletes idempotency keys 30 days after creation, and discards the staged rows of any batch not promoted within 7 days of upload; approving, promoting or reading the reconciliation of such a batch answers `409 IMPORT_BATCH_EXPIRED`, and the importer uploads the file again. It touches no record class and writes no audit event per row; each run logs its counts. The windows are fixed in code.
+- **A server retention sweep for operational data** ([ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). A background job in the API runs at start-up and then daily, on a school instance with PostgreSQL (not on a demo host or the SQLite development database). It deletes idempotency keys 30 days after creation, sign-in attempts after 90 days, setup links 90 days after they expire, and a signed-out session's record once its cookie has expired, and it discards the staged rows of any batch not promoted within 7 days of upload; approving, promoting or reading the reconciliation of such a batch answers `409 IMPORT_BATCH_EXPIRED`, and the importer uploads the file again. It touches no record class and writes no audit event per row; each run logs its counts. The windows are fixed in code.
 - **The source export file is never stored**, only its name and SHA-256.
 - **No full date of birth is stored.** It is read at import to derive the age group.
 - **Device-side retention**: the 7-day outbox sweep (accepted, discarded and cancelled rows), the 1-hour name strip on accepted rows, the 72-hour roster cache, and the sign-out purge with a retry if it fails.
@@ -72,7 +77,7 @@ The procedure for retiring an instance or migrating to another platform. **Writt
 6. Delete every other copy: the off-host encrypted dumps, the `~/pre-*.dump` files on the host, and any hypervisor snapshots or VM backups of the host (a full copy of the disk, plaintext unless the storage is encrypted).
 7. Destroy the backup private key, so any missed ciphertext copy is unrecoverable.
 8. Delete the host or VM and reclaim its storage; if the disk is being repurposed, have `[school ICT contact]` securely erase it.
-9. Remove the identity-provider app registration and the groups mapped to Carnival App roles; remove any deploy keys or registry tokens the host used.
+9. Remove the identity-provider app registration and the groups mapped to Carnival App roles, if a provider was used; destroy any stored copy of the backup administrator's password and recovery codes; remove any deploy keys or registry tokens the host used.
 10. Wipe or re-enrol the shared carnival devices through MDM, so no outbox or roster cache survives. A personally owned device cannot be remote-wiped: ask its owner to sign out, which clears the roster and API caches, and to resolve or discard any parked outbox items.
 11. Record the disposal: what was destroyed, when, by whom, under whose approval, against which retention class. File it with the school's records.
 
@@ -87,7 +92,7 @@ The procedure for retiring an instance or migrating to another platform. **Writt
 | Approve the resulting schedule | `[principal]` |
 | Decide how the schedule is applied until the software supports it (a manual, approved, recorded database operation) | `[records custodian]` + `[technical owner]` |
 | Name the device-side retention exception (names on parked outbox rows) in the PIA | `[privacy officer]` |
-| Record the fixed operational windows (idempotency keys 30 days, unpromoted staged rosters 7 days, resolved device outbox rows 7 days) in the PIA | `[privacy officer]` |
+| Record the fixed operational windows (idempotency keys 30 days, unpromoted staged rosters 7 days, sign-in attempts 90 days, setup links 90 days after expiry, resolved device outbox rows 7 days) in the PIA | `[privacy officer]` |
 
 ## In the code
 

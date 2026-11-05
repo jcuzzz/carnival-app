@@ -4,6 +4,7 @@ Pages marked *(planned)* are not written yet.
 
 ## Using it — for school staff
 
+- [Signing in](guide/signing-in.md): signing in, first-time setup, the authenticator app, recovery codes, lockouts; School → People for administrators
 - *(planned)* Setting up a carnival
 - *(planned)* Importing the roster
 - *(planned)* Carnival day: marshalling and recording results

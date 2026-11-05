@@ -84,9 +84,11 @@ Pairing rule of thumb:
 - `DEV_AUTH=true` + `VITE_DEMO_MODE=true` → working demo, loudly bannered.
 - `DEV_AUTH=true` + normal build → **misconfiguration**: the backend is wide
   open but the app can't even use it (no headers sent). Fix the env.
-- `DEV_AUTH=false` + `VITE_DEMO_MODE=true` → banner shows, every call 401s —
+- `DEV_AUTH=false` + `VITE_DEMO_MODE=true` → banner and demo landing page show,
+  but Start demo fails: a school host maps no demo endpoints (`404`) —
   harmless but rebuild without the flag.
-- Both false (default) → the real path: Entra ID OIDC per ADR-0001.
+- Both false (default) → the real path: local accounts, optionally beside
+  Entra ID or ADFS (ADR-0065).
 
 ## SECURITY CAVEAT — read before touching DEV_AUTH
 
