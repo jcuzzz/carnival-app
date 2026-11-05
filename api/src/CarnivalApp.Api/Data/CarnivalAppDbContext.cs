@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using CarnivalApp.Api.Data.Entities;
 
@@ -5,9 +6,11 @@ namespace CarnivalApp.Api.Data;
 
 /// <summary>
 /// Model and queries stay provider-clean — string enums, no Postgres-only SQL or column types —
-/// to keep a SQL Server deployment possible.
+/// to keep a SQL Server deployment possible. Identity contributes the local-account tables only:
+/// roles stay in <see cref="RoleAssignments"/>.
 /// </summary>
-public class CarnivalAppDbContext(DbContextOptions<CarnivalAppDbContext> options) : DbContext(options)
+public class CarnivalAppDbContext(DbContextOptions<CarnivalAppDbContext> options)
+    : IdentityUserContext<LocalAccount, Guid>(options)
 {
     public DbSet<SchoolConfiguration> SchoolConfigurations => Set<SchoolConfiguration>();
     public DbSet<Student> Students => Set<Student>();
@@ -36,6 +39,10 @@ public class CarnivalAppDbContext(DbContextOptions<CarnivalAppDbContext> options
     public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
+
+    public DbSet<LocalAccount> LocalAccounts => Set<LocalAccount>();
+    public DbSet<LocalAccountSetupLink> LocalAccountSetupLinks => Set<LocalAccountSetupLink>();
+    public DbSet<SignInAttempt> SignInAttempts => Set<SignInAttempt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

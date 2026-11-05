@@ -4,13 +4,18 @@ using CarnivalApp.Api.Auditing;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
 using CarnivalApp.Api.Http;
+using CarnivalApp.Api.Identity.LocalAccounts;
 
 namespace CarnivalApp.Api.School;
 
+/// <summary><c>LocalAccounts</c> applies only when <c>ProviderConfigured</c>.</summary>
 public sealed record SchoolSettingsResponse(
     string Name,
     string? BrandColour,
     IReadOnlyList<HouseSettingResponse> Houses,
+    bool RequireAuthenticator,
+    LocalAccountAccess LocalAccounts,
+    bool ProviderConfigured,
     DateTimeOffset? UpdatedAtUtc);
 
 /// <summary>
@@ -22,13 +27,16 @@ public sealed record HouseSettingResponse(string Code, string Name, string? Colo
 public sealed record HouseSettingRequest(string? Code, string? Name, string? Colour);
 
 /// <summary>
-/// Full replacement; a save not carrying the current <c>UpdatedAtUtc</c> is refused.
+/// Full replacement, except that a null sign-in setting keeps its value; a save not carrying the
+/// current <c>UpdatedAtUtc</c> is refused.
 /// </summary>
 public sealed record SchoolSettingsRequest(
     string? Name,
     string? BrandColour,
     List<HouseSettingRequest>? Houses,
-    DateTimeOffset? UpdatedAtUtc);
+    DateTimeOffset? UpdatedAtUtc,
+    bool? RequireAuthenticator = null,
+    LocalAccountAccess? LocalAccounts = null);
 
 /// <summary>
 /// Refuses a bad value rather than degrading it, because a person is present to fix it.
@@ -50,18 +58,22 @@ public static class SchoolSettingsEndpoints
     }
 
     private static SchoolSettingsResponse Project(
-        SchoolSettings settings, IReadOnlySet<string> referenced) =>
+        SchoolSettings settings, IReadOnlySet<string> referenced, IConfiguration configuration) =>
         new(settings.Name,
             settings.BrandColour,
             [.. settings.Houses.Select(house => new HouseSettingResponse(
                 house.Code, house.Name, house.Colour, referenced.Contains(house.Code)))],
+            settings.RequireAuthenticator,
+            settings.LocalAccounts,
+            LocalAccountPolicy.ProviderConfigured(configuration),
             settings.UpdatedAtUtc);
 
     private static async Task<IResult> GetAsync(
         [FromServices] SchoolSettingsProvider provider,
         [FromServices] CarnivalAppDbContext db,
+        [FromServices] IConfiguration configuration,
         CancellationToken ct) =>
-        Results.Ok(Project(await provider.GetAsync(ct), await ReferencedCodesAsync(db, ct)));
+        Results.Ok(Project(await provider.GetAsync(ct), await ReferencedCodesAsync(db, ct), configuration));
 
     private static IResult Invalid(string code, string field, string detail) =>
         ApiError.Unprocessable(code, detail, new Dictionary<string, object?> { ["field"] = field });
@@ -73,6 +85,7 @@ public static class SchoolSettingsEndpoints
         [FromServices] AuditService audit,
         [FromServices] SchoolSettingsProvider provider,
         [FromServices] ILoggerFactory loggers,
+        [FromServices] IConfiguration configuration,
         CancellationToken ct)
     {
         var row = await db.SchoolConfigurations.TheSchool().FirstOrDefaultAsync(ct);
@@ -158,11 +171,15 @@ public static class SchoolSettingsEndpoints
             Name = name,
             BrandColour = brandColour,
             Houses = houses,
+            RequireAuthenticator = request.RequireAuthenticator ?? current.RequireAuthenticator,
+            LocalAccounts = request.LocalAccounts ?? current.LocalAccounts,
             UpdatedAtUtc = Stamp(),
         };
         row.Name = updated.Name;
         row.BrandingJson = SchoolSettings.SerialiseBranding(updated.BrandColour, row.BrandingJson);
         row.HousesJson = SchoolSettings.SerialiseHouses(updated.Houses);
+        row.SettingsJson = SchoolSettings.SerialiseSignIn(
+            updated.RequireAuthenticator, updated.LocalAccounts, row.SettingsJson);
         row.UpdatedAtUtc = updated.UpdatedAtUtc;
 
         audit.Record(SessionActor.From(ctx), AuditActions.SchoolSettings, nameof(SchoolConfiguration),
@@ -178,7 +195,7 @@ public static class SchoolSettingsEndpoints
         }
 
         provider.Invalidate();
-        return Results.Ok(Project(updated, referenced));
+        return Results.Ok(Project(updated, referenced, configuration));
     }
 
     private static string? FirstHouseInUse(

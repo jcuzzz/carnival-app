@@ -2,9 +2,12 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 using CarnivalApp.Api.Carnivals;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
+using CarnivalApp.Api.Http;
+using CarnivalApp.Api.Identity.LocalAccounts;
 using CarnivalApp.Api.Imports;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -158,6 +161,114 @@ public class PostgresIntegrationTests
                     .Select(b => b.GetProperty("Label").GetString()!));
                 Assert.True(back.RootElement.TryGetProperty("Scoring", out _));
             }
+        });
+    }
+
+    /// <summary>
+    /// The local-account queries on PostgreSQL: the conditional writes behind single-use links and
+    /// the authenticator step guard, the lockout arithmetic, the host command and the sweep.
+    /// </summary>
+    [SkippableFact]
+    public async Task Local_accounts_run_on_postgres()
+    {
+        await WithPostgresAsync(async options =>
+        {
+            var connection = options.Extensions.OfType<RelationalOptionsExtension>().Single().ConnectionString!;
+            await using var h = await LocalAccountsHarness.CreateAsync(o => o.UseNpgsql(connection));
+
+            var (exit, output, _) = await h.RunCommandAsync("first-admin");
+            Assert.Equal(AccountsCommand.Done, exit);
+            var token = output.Split("/#/setup/")[1].Split(' ')[0];
+            var outcomes = await Task.WhenAll(
+                Task.Run(() => h.CompleteAsync(token, username: "backup-admin")),
+                Task.Run(() => h.CompleteAsync(token, username: "other-admin")));
+            var admin = Assert.Single(outcomes.OfType<LocalSignInOutcome.SignedIn>()).Account;
+            LocalAccountsHarness.AssertFailed(ErrorCodes.SetupLinkInvalid,
+                Assert.Single(outcomes.OfType<LocalSignInOutcome.Failed>()));
+            Assert.Equal(AccountsCommand.NothingToDo, (await h.RunCommandAsync("first-admin")).Exit);
+
+            for (var i = 0; i < SignInAttemptLog.FailureThreshold; i++)
+                await h.SignInAsync(admin.UserName!, "a wrong passphrase guess");
+            LocalAccountsHarness.AssertFailed(ErrorCodes.SignInFailed, await h.SignInAsync(admin.UserName!));
+            Assert.IsType<LocalSignInOutcome.SignedIn>(
+                await h.SignInAsync(admin.UserName!, from: LocalAccountsHarness.Elsewhere));
+
+            var secret = (await h.WithAsync(s => s.GetRequiredService<LocalAccountSelfService>()
+                .BeginAuthenticatorAsync(admin.Id, LocalAccountsHarness.StrongPassword, LocalAccountsHarness.Elsewhere)))
+                .Value!.Secret;
+            Assert.True((await h.WithAsync(s => s.GetRequiredService<LocalAccountSelfService>()
+                .ConfirmAuthenticatorAsync(admin.Id, LocalAccountsHarness.CodeFor(secret, h.Time.Now))))
+                .Succeeded);
+            h.Time.Now += Totp.Step;
+            var code = LocalAccountsHarness.CodeFor(secret, h.Time.Now);
+            Assert.IsType<LocalSignInOutcome.SignedIn>(
+                await h.SignInAsync(admin.UserName!, from: LocalAccountsHarness.Elsewhere, code: code));
+            LocalAccountsHarness.AssertFailed(ErrorCodes.CodeInvalid,
+                await h.SignInAsync(admin.UserName!, from: LocalAccountsHarness.Elsewhere, code: code));
+
+            var helper = await h.ActiveAccountAsync("helper1");
+            var list = await h.WithAsync(s => s.GetRequiredService<LocalAccountAdministration>().ListAsync());
+            Assert.Equal(2, list.Count);
+            var listed = Assert.Single(list, a => a.Id == admin.Id);
+            Assert.True(listed.IsSystemAdministrator && listed.LockedOut && listed.AuthenticatorEnrolled);
+            Assert.True((await h.WithAsync(s => s.GetRequiredService<LocalAccountAdministration>()
+                .ResetAsync(h.Admin, helper))).Succeeded);
+            Assert.Equal(AccountsCommand.Done, (await h.RunCommandAsync("setup-link", admin.UserName!)).Exit);
+
+            h.Time.Now += TimeSpan.FromDays(91);
+            var swept = await h.DbAsync(db => new RetentionSweep(db, h.Time).RunAsync());
+            Assert.True(swept.SignInAttemptsDeleted > SignInAttemptLog.FailureThreshold);
+            Assert.True(swept.SetupLinksDeleted >= 1);
+        });
+    }
+
+    /// <summary>The lockout window, its resets and the retention boundaries, as PostgreSQL evaluates them.</summary>
+    [SkippableFact]
+    public async Task Lockout_and_retention_queries_run_on_postgres()
+    {
+        await WithPostgresAsync(async options =>
+        {
+            var connection = options.Extensions.OfType<RelationalOptionsExtension>().Single().ConnectionString!;
+            await using var h = await LocalAccountsHarness.CreateAsync(o => o.UseNpgsql(connection));
+            var id = await h.ActiveAccountAsync("jsmith");
+            var log = (Func<IServiceProvider, SignInAttemptLog>)(s => s.GetRequiredService<SignInAttemptLog>());
+            const string wrong = "a wrong passphrase guess";
+
+            for (var i = 0; i < 9; i++) await h.SignInAsync("jsmith", wrong);
+            Assert.IsType<LocalSignInOutcome.SignedIn>(await h.SignInAsync("jsmith"));
+            for (var i = 0; i < 10; i++) await h.SignInAsync("JSmith", wrong);
+            var tenth = h.Time.Now;
+            Assert.True(await h.WithAsync(s => log(s).IsLockedOutAsync(id, "10.0.0.10")));
+            Assert.False(await h.WithAsync(s => log(s).IsLockedOutAsync(id, "10.0.0.20")));
+            Assert.True(await h.WithAsync(s => log(s).IsLockedOutAnywhereAsync(id)));
+
+            h.Time.Now = tenth + SignInAttemptLog.LockoutWindow - TimeSpan.FromSeconds(1);
+            LocalAccountsHarness.AssertFailed(ErrorCodes.SignInFailed, await h.SignInAsync("jsmith"));
+            h.Time.Now = tenth + SignInAttemptLog.LockoutWindow;
+            Assert.False(await h.WithAsync(s => log(s).IsLockedOutAsync(id, "10.0.0.10")));
+
+            for (var i = 0; i < 10; i++) await h.SignInAsync("jsmith", wrong);
+            Assert.True((await h.WithAsync(s => s.GetRequiredService<LocalAccountAdministration>()
+                .ClearLockoutAsync(h.Admin, id, null))).Succeeded);
+            Assert.False(await h.WithAsync(s => log(s).IsLockedOutAnywhereAsync(id)));
+            var signedInAt = h.Time.Now;
+            Assert.IsType<LocalSignInOutcome.SignedIn>(await h.SignInAsync("jsmith"));
+            Assert.Equal(signedInAt, await h.WithAsync(s => log(s).LastSignInAsync(id)));
+
+            var total = await h.DbAsync(db => db.SignInAttempts.CountAsync());
+            var lastAt = await h.DbAsync(db => db.SignInAttempts.OrderByDescending(a => a.Id).Select(a => a.AtUtc).FirstAsync());
+            var atLast = await h.DbAsync(db => db.SignInAttempts.CountAsync(a => a.AtUtc == lastAt));
+            h.Time.Now = lastAt + RetentionSweep.SignInAttemptRetention;
+            var kept = await h.DbAsync(db => new RetentionSweep(db, h.Time).RunAsync());
+            Assert.Equal(total - atLast, kept.SignInAttemptsDeleted);
+            Assert.Equal(atLast, await h.DbAsync(db => db.SignInAttempts.CountAsync()));
+
+            var expiry = await h.DbAsync(db => db.LocalAccountSetupLinks.Select(l => l.ExpiresAtUtc).SingleAsync());
+            h.Time.Now = expiry + RetentionSweep.SetupLinkRetention;
+            Assert.Equal(0, (await h.DbAsync(db => new RetentionSweep(db, h.Time).RunAsync())).SetupLinksDeleted);
+            h.Time.Now += TimeSpan.FromSeconds(1);
+            var swept = await h.DbAsync(db => new RetentionSweep(db, h.Time).RunAsync());
+            Assert.Equal((1, 0), (swept.SetupLinksDeleted, await h.DbAsync(db => db.SignInAttempts.CountAsync())));
         });
     }
 

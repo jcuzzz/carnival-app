@@ -4,7 +4,11 @@ using CarnivalApp.Api.Imports;
 
 namespace CarnivalApp.Api.Data;
 
-public sealed record RetentionOutcome(int IdempotencyKeysDeleted, int ImportBatchesPurged);
+public sealed record RetentionOutcome(
+    int IdempotencyKeysDeleted,
+    int ImportBatchesPurged,
+    int SignInAttemptsDeleted = 0,
+    int SetupLinksDeleted = 0);
 
 /// <summary>
 /// Ages out operational rows only. Record classes are never touched, and the removed rows are not
@@ -13,6 +17,10 @@ public sealed record RetentionOutcome(int IdempotencyKeysDeleted, int ImportBatc
 public sealed class RetentionSweep(CarnivalAppDbContext db, TimeProvider time)
 {
     public static readonly TimeSpan IdempotencyKeyRetention = TimeSpan.FromDays(30);
+    public static readonly TimeSpan SignInAttemptRetention = TimeSpan.FromDays(90);
+
+    /// <summary>Counted from expiry, so a used link's address stays visible for the window.</summary>
+    public static readonly TimeSpan SetupLinkRetention = TimeSpan.FromDays(90);
 
     private const int DeleteChunk = 500;
 
@@ -49,7 +57,40 @@ public sealed class RetentionSweep(CarnivalAppDbContext db, TimeProvider time)
                     .SetProperty(b => b.StagedRowsJson, (string?)null)
                     .SetProperty(b => b.ValidationResultsJson, (string?)null), ct);
 
-        return new(keys, batches);
+        var attempts = await DeleteSignInAttemptsAsync(now - SignInAttemptRetention, ct);
+
+        var linkCutOff = now - SetupLinkRetention;
+        var expiredLinks = (await db.LocalAccountSetupLinks.AsNoTracking()
+                .Select(l => new { l.Id, l.ExpiresAtUtc })
+                .ToListAsync(ct))
+            .Where(l => l.ExpiresAtUtc < linkCutOff)
+            .Select(l => l.Id)
+            .ToList();
+        var links = 0;
+        foreach (var chunk in expiredLinks.Chunk(DeleteChunk))
+            links += await db.LocalAccountSetupLinks.Where(l => chunk.Contains(l.Id)).ExecuteDeleteAsync(ct);
+
+        return new(keys, batches, attempts, links);
+    }
+
+    // The table can grow under a guessing attack, so it is walked oldest first in Id order, which is
+    // time order, and stops at the first chunk holding a row still inside the window.
+    private async Task<int> DeleteSignInAttemptsAsync(DateTimeOffset cutOff, CancellationToken ct)
+    {
+        var deleted = 0;
+        while (true)
+        {
+            var oldest = await db.SignInAttempts.AsNoTracking()
+                .OrderBy(a => a.Id)
+                .Take(DeleteChunk)
+                .Select(a => new { a.Id, a.AtUtc })
+                .ToListAsync(ct);
+            var expired = oldest.TakeWhile(a => a.AtUtc < cutOff).ToList();
+            if (expired.Count == 0) return deleted;
+            var last = expired[^1].Id;
+            deleted += await db.SignInAttempts.Where(a => a.Id <= last).ExecuteDeleteAsync(ct);
+            if (expired.Count < oldest.Count) return deleted;
+        }
     }
 }
 
@@ -85,8 +126,10 @@ public sealed class RetentionJob(
 
         var outcome = await scope.ServiceProvider.GetRequiredService<RetentionSweep>().RunAsync(ct);
         logger.LogInformation(
-            "Retention sweep: {Keys} idempotency key(s) deleted, {Batches} import batch(es) purged.",
-            outcome.IdempotencyKeysDeleted, outcome.ImportBatchesPurged);
+            "Retention sweep: {Keys} idempotency key(s) deleted, {Batches} import batch(es) purged, "
+            + "{Attempts} sign-in attempt(s) and {Links} setup link(s) deleted.",
+            outcome.IdempotencyKeysDeleted, outcome.ImportBatchesPurged,
+            outcome.SignInAttemptsDeleted, outcome.SetupLinksDeleted);
         return true;
     }
 }

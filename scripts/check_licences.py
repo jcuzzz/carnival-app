@@ -1,4 +1,5 @@
-"""Fail when a NuGet or npm dependency is not under a permissive licence (dual licensing needs it).
+"""Fail when a NuGet or npm dependency, or a bundled data file, is not under a permissive licence
+(dual licensing needs it). A bundled data file carries a `<name>.SOURCE.md` with a `Licence:` line.
 
 Usage: py scripts/check_licences.py   (after `dotnet restore` in api/; npm reads the lockfile only)
 """
@@ -61,13 +62,27 @@ def nuget() -> list[str]:
     return sorted(set(bad))
 
 
+def bundled() -> list[str]:
+    listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z",
+                             "--", "*.SOURCE.md"],
+                            cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    bad = []
+    for name in sorted(filter(None, listed.split("\0"))):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        m = re.search(r"^\W*Licen[cs]e:\W*([\w.+-]+(?:\s+(?:OR|AND)\s+[\w.+-]+)*)", text, re.MULTILINE)
+        lic = m.group(1) if m else "UNKNOWN"
+        if not allowed(lic, set()):
+            bad.append(f"bundled {name}: {lic}")
+    return bad
+
+
 def main() -> int:
-    bad = npm() + nuget()
+    bad = npm() + nuget() + bundled()
     if bad:
         print(f"{len(bad)} dependencies without an allowed licence:")
         print("\n".join(bad))
         return 1
-    print("dependency licences: all allowed")
+    print("dependency and bundled-data licences: all allowed")
     return 0
 
 

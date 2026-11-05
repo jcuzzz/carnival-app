@@ -124,6 +124,66 @@ public sealed class RetentionSweepTests : IDisposable
         Assert.NotNull(kept.ValidationResultsJson);
     }
 
+    private async Task AddAttemptsAsync(params (DateTimeOffset At, SignInOutcome Outcome)[] attempts)
+    {
+        await using var db = NewDb();
+        foreach (var (at, outcome) in attempts)
+            db.SignInAttempts.Add(new SignInAttempt { AtUtc = at, ClientAddress = "10.0.0.10", Outcome = outcome });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid> AddSetupLinkAsync(DateTimeOffset expiresAt)
+    {
+        var link = new LocalAccountSetupLink
+        {
+            Id = Guid.CreateVersion7(),
+            TokenHash = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Purpose = SetupLinkPurpose.FirstAdministrator,
+            CreatedAtUtc = expiresAt - TimeSpan.FromHours(24),
+            CreatedBySubject = "host",
+            ExpiresAtUtc = expiresAt,
+        };
+        await using var db = NewDb();
+        db.LocalAccountSetupLinks.Add(link);
+        await db.SaveChangesAsync();
+        return link.Id;
+    }
+
+    [Fact]
+    public async Task Sign_in_attempts_older_than_90_days_are_deleted_and_younger_ones_kept()
+    {
+        // More than one delete chunk, so the walk has to continue past the first.
+        await AddAttemptsAsync([.. Enumerable.Range(0, 1203)
+            .Select(i => (Now - TimeSpan.FromDays(91) + TimeSpan.FromSeconds(i), SignInOutcome.WrongPassword))]);
+        await AddAttemptsAsync(
+            (Now - TimeSpan.FromDays(90), SignInOutcome.Succeeded),
+            (Now - TimeSpan.FromDays(1), SignInOutcome.LockedOut));
+
+        var outcome = await SweepAsync();
+
+        Assert.Equal(1203, outcome.SignInAttemptsDeleted);
+        await using var db = NewDb();
+        Assert.Equal([SignInOutcome.Succeeded, SignInOutcome.LockedOut],
+            await db.SignInAttempts.OrderBy(a => a.Id).Select(a => a.Outcome).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Setup_links_go_90_days_after_they_expire()
+    {
+        var old = await AddSetupLinkAsync(Now - TimeSpan.FromDays(90) - TimeSpan.FromSeconds(1));
+        var boundary = await AddSetupLinkAsync(Now - TimeSpan.FromDays(90));
+        var live = await AddSetupLinkAsync(Now + TimeSpan.FromHours(1));
+
+        var outcome = await SweepAsync();
+
+        Assert.Equal(1, outcome.SetupLinksDeleted);
+        await using var db = NewDb();
+        var left = await db.LocalAccountSetupLinks.Select(l => l.Id).ToListAsync();
+        Assert.DoesNotContain(old, left);
+        Assert.Contains(boundary, left);
+        Assert.Contains(live, left);
+    }
+
     [Fact]
     public async Task Records_are_never_touched()
     {

@@ -423,6 +423,63 @@ public static class ErrorCodes
     public const string RoleUnknown = "ROLE_UNKNOWN";
     public const string RoleReasonRequired = "ROLE_REASON_REQUIRED";
 
+    /// <summary>A grant to a local username (no '@') names no local account.</summary>
+    public const string RoleLocalAccountUnknown = "ROLE_LOCAL_ACCOUNT_UNKNOWN";
+
+    // ---- Local accounts (ADR-0065) ----------------------------------------
+
+    /// <summary>
+    /// Unknown name, wrong password, locked, disabled or awaiting setup: one answer for all, so the
+    /// response never says which.
+    /// </summary>
+    public const string SignInFailed = "SIGN_IN_FAILED";
+
+    /// <summary>A wrong authenticator or recovery code; counted as a failed attempt at sign-in.</summary>
+    public const string CodeInvalid = "CODE_INVALID";
+
+    /// <summary>
+    /// The credentials were right, but beside an identity provider this account may not sign in
+    /// locally (the school allows System administrators only).
+    /// </summary>
+    public const string LocalSignInNotAllowed = "LOCAL_SIGN_IN_NOT_ALLOWED";
+
+    /// <summary>Unknown, used, revoked or expired; the response never says which.</summary>
+    public const string SetupLinkInvalid = "SETUP_LINK_INVALID";
+
+    public const string PasswordTooShort = "PASSWORD_TOO_SHORT";
+    public const string PasswordTooLong = "PASSWORD_TOO_LONG";
+
+    /// <summary>On the bundled list of common and breached passwords.</summary>
+    public const string PasswordTooCommon = "PASSWORD_TOO_COMMON";
+
+    /// <summary>Built from the school's name, house names or the person's own names.</summary>
+    public const string PasswordTooPredictable = "PASSWORD_TOO_PREDICTABLE";
+
+    public const string CurrentPasswordWrong = "CURRENT_PASSWORD_WRONG";
+
+    public const string AccountUsernameInvalid = "ACCOUNT_USERNAME_INVALID";
+
+    /// <summary>The name is a configured bootstrap administrator entry.</summary>
+    public const string AccountUsernameReserved = "ACCOUNT_USERNAME_RESERVED";
+
+    public const string AccountUsernameTaken = "ACCOUNT_USERNAME_TAKEN";
+    public const string AccountDisplayNameInvalid = "ACCOUNT_DISPLAY_NAME_INVALID";
+    public const string AccountNotFound = "ACCOUNT_NOT_FOUND";
+
+    /// <summary>A disabled account is enabled before it is reset.</summary>
+    public const string AccountDisabled = "ACCOUNT_DISABLED";
+
+    /// <summary>An administrator cannot reset, disable, enable or clear the lockout of their own account.</summary>
+    public const string AccountSelfChange = "ACCOUNT_SELF_CHANGE";
+
+    public const string AuthenticatorAlreadyEnrolled = "AUTHENTICATOR_ALREADY_ENROLLED";
+
+    /// <summary>The session is not a local account's.</summary>
+    public const string NotALocalAccount = "NOT_A_LOCAL_ACCOUNT";
+
+    /// <summary>An unsafe request under /api came from another site.</summary>
+    public const string CrossSiteRequestRefused = "CROSS_SITE_REQUEST_REFUSED";
+
     // ---- Public demo (ADR-0061) -------------------------------------------
 
     public const string DemoAtCapacity = "DEMO_AT_CAPACITY";

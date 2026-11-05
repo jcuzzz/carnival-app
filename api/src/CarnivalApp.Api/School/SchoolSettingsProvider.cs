@@ -12,13 +12,21 @@ public sealed record SchoolSettings(
     string Name,
     string? BrandColour,
     IReadOnlyList<HouseMark> Houses,
+    bool RequireAuthenticator,
+    LocalAccountAccess LocalAccounts,
     DateTimeOffset? UpdatedAtUtc)
 {
-    public static SchoolSettings From(SchoolConfiguration row, ILogger logger) => new(
-        row.Name,
-        ReadBrandColour(row.BrandingJson),
-        ReadHouses(row.HousesJson, row.Id, logger),
-        row.UpdatedAtUtc);
+    public static SchoolSettings From(SchoolConfiguration row, ILogger logger)
+    {
+        var signIn = ReadSignIn(row.SettingsJson);
+        return new(
+            row.Name,
+            ReadBrandColour(row.BrandingJson),
+            ReadHouses(row.HousesJson, row.Id, logger),
+            signIn.RequireAuthenticator,
+            signIn.LocalAccounts,
+            row.UpdatedAtUtc);
+    }
 
     // Merges rather than replaces: unknown keys belong to whoever wrote them.
     public static string SerialiseBranding(string? brandColour, string? existingJson = null)
@@ -26,6 +34,15 @@ public sealed record SchoolSettings(
         var blob = ParseObject(existingJson);
         blob.Remove("BrandColour");
         blob["brandColour"] = brandColour is null ? null : JsonValue.Create(brandColour);
+        return blob.ToJsonString();
+    }
+
+    public static string SerialiseSignIn(
+        bool requireAuthenticator, LocalAccountAccess localAccounts, string? existingJson = null)
+    {
+        var blob = ParseObject(existingJson);
+        blob["requireAuthenticator"] = requireAuthenticator;
+        blob["localAccounts"] = localAccounts.ToString();
         return blob.ToJsonString();
     }
 
@@ -48,6 +65,22 @@ public sealed record SchoolSettings(
         {
             return null;
         }
+    }
+
+    // An unreadable value reads as the default: off, and System administrators only.
+    private static (bool RequireAuthenticator, LocalAccountAccess LocalAccounts) ReadSignIn(string? json)
+    {
+        var blob = ParseObject(json);
+        var require = blob["requireAuthenticator"] is JsonValue flag
+            && flag.TryGetValue<bool>(out var on) && on;
+        var access = blob["localAccounts"] is JsonValue value
+            && value.TryGetValue<string>(out var text)
+            && !text.Any(char.IsAsciiDigit)
+            && Enum.TryParse<LocalAccountAccess>(text, ignoreCase: true, out var parsed)
+            && Enum.IsDefined(parsed)
+                ? parsed
+                : LocalAccountAccess.SystemAdministrators;
+        return (require, access);
     }
 
     private static JsonObject ParseObject(string? json)

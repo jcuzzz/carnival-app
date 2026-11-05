@@ -561,4 +561,62 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
             updatedAtUtc: await StampAsync()));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    // ---- Sign-in settings (ADR-0065) --------------------------------------
+
+    [Fact]
+    public async Task The_sign_in_settings_default_off_and_to_administrators_only_with_no_provider_configured()
+    {
+        var settings = await GetAsync();
+        Assert.False(settings.GetProperty("requireAuthenticator").GetBoolean());
+        Assert.Equal("SystemAdministrators", settings.GetProperty("localAccounts").GetString());
+        Assert.False(settings.GetProperty("providerConfigured").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_save_sets_the_sign_in_settings_audits_them_and_a_save_without_them_keeps_them()
+    {
+        await MutateRowAsync(row => row.SettingsJson = """{"futureKey":7}""");
+        var response = await _admin.PutAsJsonAsync(Path, new
+        {
+            name = "Test Synthetic College",
+            houses = new[] { House("BANKSIA"), House("WATTLE"), House("MOUNTAIN ASH"), House("GREVILLEA") },
+            updatedAtUtc = await StampAsync(),
+            requireAuthenticator = true,
+            localAccounts = "Everyone",
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var saved = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.True(saved.GetProperty("requireAuthenticator").GetBoolean());
+        Assert.Equal("Everyone", saved.GetProperty("localAccounts").GetString());
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await _admin.PutAsJsonAsync(Path, Body(updatedAtUtc: await StampAsync()))).StatusCode);
+
+        var settings = await GetAsync();
+        Assert.True(settings.GetProperty("requireAuthenticator").GetBoolean());
+        Assert.Equal("Everyone", settings.GetProperty("localAccounts").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+        Assert.Contains("\"futureKey\":7", (await db.SchoolConfigurations.SingleAsync()).SettingsJson);
+        var audit = await db.AuditEvents.Where(e => e.Action == AuditActions.SchoolSettings)
+            .OrderBy(e => e.Id).FirstAsync();
+        Assert.Contains("\"RequireAuthenticator\":false", audit.PriorValuesJson);
+        Assert.Contains("\"RequireAuthenticator\":true", audit.NewValuesJson);
+        Assert.Contains("\"LocalAccounts\":\"Everyone\"", audit.NewValuesJson);
+    }
+
+    [Theory]
+    [InlineData("\"Anyone\"")]
+    [InlineData("1")]
+    public async Task An_unknown_local_account_setting_is_refused(string value)
+    {
+        var body = $$"""
+            {"name":"Test Synthetic College","houses":[{"code":"BANKSIA"}],"updatedAtUtc":null,"localAccounts":{{value}}}
+            """;
+        var response = await _admin.PutAsync(Path,
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

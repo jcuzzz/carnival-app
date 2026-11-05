@@ -12,7 +12,8 @@ namespace CarnivalApp.Api.Tests;
 /// </summary>
 public sealed class SchoolSettingsReaderTests
 {
-    private static SchoolConfiguration Row(string? housesJson = null, string? brandingJson = null) => new()
+    private static SchoolConfiguration Row(
+        string? housesJson = null, string? brandingJson = null, string? settingsJson = null) => new()
     {
         Id = Guid.CreateVersion7(),
         SchoolIdentifier = "SCHOOL",
@@ -20,6 +21,7 @@ public sealed class SchoolSettingsReaderTests
         Timezone = "Australia/Melbourne",
         BrandingJson = brandingJson,
         HousesJson = housesJson,
+        SettingsJson = settingsJson,
     };
 
     [Fact]
@@ -70,6 +72,39 @@ public sealed class SchoolSettingsReaderTests
 
         Assert.Contains("\"logo\":\"x\"", merged);
         Assert.Equal("#1f3a5f", SchoolSettings.From(Row(brandingJson: merged), new CapturingLogger()).BrandColour);
+    }
+
+    [Fact]
+    public void The_sign_in_settings_round_trip_and_keep_the_keys_they_do_not_own()
+    {
+        var merged = SchoolSettings.SerialiseSignIn(true, LocalAccountAccess.Everyone, """{"other":[1,2]}""");
+
+        Assert.Contains("\"other\":[1,2]", merged);
+        var settings = SchoolSettings.From(Row(settingsJson: merged), new CapturingLogger());
+        Assert.True(settings.RequireAuthenticator);
+        Assert.Equal(LocalAccountAccess.Everyone, settings.LocalAccounts);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not json")]
+    [InlineData("[]")]
+    [InlineData("""{"requireAuthenticator":"yes","localAccounts":"Anyone"}""")]
+    [InlineData("""{"requireAuthenticator":1,"localAccounts":"1"}""")]
+    public void An_unreadable_sign_in_setting_reads_as_the_default(string? json)
+    {
+        var settings = SchoolSettings.From(Row(settingsJson: json), new CapturingLogger());
+        Assert.False(settings.RequireAuthenticator);
+        Assert.Equal(LocalAccountAccess.SystemAdministrators, settings.LocalAccounts);
+    }
+
+    [Fact]
+    public void The_sign_in_settings_read_case_insensitively()
+    {
+        var settings = SchoolSettings.From(
+            Row(settingsJson: """{"requireAuthenticator":true,"localAccounts":"everyone"}"""), new CapturingLogger());
+        Assert.True(settings.RequireAuthenticator);
+        Assert.Equal(LocalAccountAccess.Everyone, settings.LocalAccounts);
     }
 
     private sealed class CapturingLogger : ILogger

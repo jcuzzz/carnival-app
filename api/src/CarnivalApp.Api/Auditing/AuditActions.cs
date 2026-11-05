@@ -147,6 +147,24 @@ public static class AuditActions
     /// </summary>
     public const string RoleAssignmentBind = "role-assignment.bind";
 
+    // ---- Local accounts ---------------------------------------------------
+
+    public const string LocalAccountCreate = "local-account.create";
+    public const string LocalAccountReset = "local-account.reset";
+    public const string LocalAccountDisable = "local-account.disable";
+    public const string LocalAccountEnable = "local-account.enable";
+
+    /// <summary>A link issued from the host; the actor is "host".</summary>
+    public const string LocalAccountSetupLink = "local-account.setup-link";
+
+    /// <summary>Carries the address and time the link was used from.</summary>
+    public const string LocalAccountSetupComplete = "local-account.setup-complete";
+
+    public const string LocalAccountPasswordChange = "local-account.password-change";
+    public const string LocalAccountAuthenticatorEnrol = "local-account.authenticator-enrol";
+    public const string LocalAccountRecoveryCodeRedeem = "local-account.recovery-code-redeem";
+    public const string LocalAccountLockoutClear = "local-account.lockout-clear";
+
     // ---- Development ------------------------------------------------------
 
     public const string DevSeed = "dev.seed";

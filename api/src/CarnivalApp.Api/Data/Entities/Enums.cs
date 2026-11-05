@@ -132,3 +132,24 @@ public enum RoleSubjectType
     User,
     Group,
 }
+
+public enum SetupLinkPurpose
+{
+    /// <summary>Not tied to an account: the person chooses the username at setup.</summary>
+    FirstAdministrator,
+    Create,
+    Reset,
+    Host,
+}
+
+public enum SignInOutcome
+{
+    Succeeded,
+    WrongPassword,
+    WrongCode,
+    LockedOut,
+    Disabled,
+    NotPermitted,
+    RecoveryCodeUsed,
+    LockoutCleared,
+}
