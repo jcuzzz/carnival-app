@@ -146,7 +146,7 @@ curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health      # Healthy
 docker compose logs api | grep "Retention sweep"                  # one line per run, the first at start-up
 ```
 
-Last, after the summary, the script prints the first-administrator link (`>>> First administrator: open https://<name>/#/setup/<token>  (valid 24 hours)`). It is single use and is printed only this once; do not paste it into notes. If `SITE_ADDRESS` is still `localhost` it prints no link: set the name and run the deploy again.
+Last, after the summary, the script prints the first-administrator link (`>>> First administrator: open https://<name>/#/setup/<token>  (valid 24 hours)`). It is single use; do not paste it into notes. Every passing deploy prints a new one, revoking the last, until a local account exists. If `SITE_ADDRESS` is still `localhost` it prints no link: set the name and run the deploy again.
 
 Then set `APPLY_MIGRATIONS=false` in `.env`.
 
@@ -208,7 +208,7 @@ docker compose down -v      # -v deletes the database and backup volumes
 
 | Symptom | Likely cause |
 |---|---|
-| `curl` fails the TLS handshake | Requests must use `SITE_ADDRESS` from B2; with a name set, Caddy answers neither `localhost` nor the IP |
+| `curl` fails the TLS handshake | Requests must use `SITE_ADDRESS` from B2; with a name set, the certificate names only that name, so `localhost` or the IP get a certificate error |
 | Sign-in loops or returns an error page | Redirect URI does not match `https://<name>/signin-oidc` exactly, or the secret's ID was pasted instead of its Value |
 | Signed in but every screen says you lack access | A local account: no role granted yet under School → Roles. An Entra account: `BOOTSTRAP_ADMIN_UPN` differs from its sign-in address and no group or in-app grant applies |
 | No first-administrator link after the deploy | `SITE_ADDRESS` is `localhost`, a smoke check failed, or a local account already exists (the script says which); see B9 |

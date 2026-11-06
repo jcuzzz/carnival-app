@@ -68,7 +68,7 @@ Local accounts are built in ([ADR-0065](../adr/0065-built-in-local-accounts.md))
 
 The deploy script (§6) prints a link for the first System administrator, with or without a provider:
 
-- **Printed once**, after the deploy summary and outside the block you record, and only to the terminal, never to a file. It is issued only once every smoke check has passed, and only while no local account exists. A later deploy that finds an account issues none.
+- **Printed after the deploy summary**, outside the block you record, and only to the terminal, never to a file. It is issued only once every smoke check has passed, and only while no local account exists. A later deploy that finds an account issues none.
 - **Single use, valid 24 hours.** Opening it does not use it up; choosing the password does. A redeploy before it is used issues a new link and the old one stops working.
 - **Needs a real `SITE_ADDRESS`**, the name devices use to reach the server: the link is built from it. With `SITE_ADDRESS=localhost` the script issues no link and says to set the name and redeploy.
 

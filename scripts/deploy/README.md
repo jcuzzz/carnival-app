@@ -42,8 +42,8 @@ own location, so the working directory does not matter and the repo path can mov
    (no `__EFMigrationsHistory`, checked with `to_regclass`, and no tables) counts as 0 and has no
    data gates; the API creates the schema at its first start, so the script stops here unless
    `.env` has `APPLY_MIGRATIONS=true`. Tables without a history table stop the script too (the
-   wrong `POSTGRES_DB`, or a schema this API did not migrate). Every failure before the pull says
-   "Stopped before anything changed" instead of printing rollback commands.
+   wrong `POSTGRES_DB`, or a schema this API did not migrate). These two refusals say what to fix; any other
+   failure before the pull says "Stopped before anything changed". Neither prints rollback commands.
 5. **Stops at the pre-flight gate** unless `PREFLIGHT_OK=1` (env var, not a marker file — a file
    would survive to silently pre-authorise the *next* deploy).
 6. `git pull --ff-only` (a branch with an upstream only), then **the digest gate (ADR-0049)**: resolves
