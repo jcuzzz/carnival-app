@@ -6,13 +6,13 @@ One Linux VM (or mini PC) runs one school's stack with Docker Compose: `api` + `
 
 | Setting | Value |
 |---|---|
-| OS | Debian 12 or Ubuntu Server 24.04 LTS |
+| OS | Debian 13, Debian 12 or Ubuntu Server 24.04 LTS |
 | CPU / RAM | 2 vCPU / 4 GB (8 GB comfortable) |
 | Disk | 40 GB SSD-backed (database and backups live here) |
 | Network | Reachable from the devices that will record results |
 | Virtualisation | A full VM, not an LXC container (Docker inside LXC fights AppArmor/nesting) |
 
-**Give it a DNS name, not just an IP.** The PWA's install identity, the identity provider's redirect URI and the TLS certificate all key off the hostname. One IP is enough: devices only ever reach Caddy on 80/443; Postgres and the backup job stay on an internal Docker network.
+**Give it a DNS name if you can.** The PWA's install identity, the identity provider's redirect URI and the TLS certificate all key off `SITE_ADDRESS`. An IP address works too, as long as it never changes; a name survives a change of address. A name on the local network needs a record in the school's DNS or a hosts-file entry on each device. One IP is enough: devices only ever reach Caddy on 80/443; Postgres and the backup job stay on an internal Docker network.
 
 ## 2. Install Docker
 
@@ -39,7 +39,7 @@ The settings that matter on day one (every variable is documented in `.env.examp
 | `COMPOSE_PROJECT_NAME` | a short instance name, e.g. `carnival-app-prod` |
 | `SCHOOL_NAME`, `SCHOOL_BRAND_COLOUR` | first-start defaults; edited in the app afterwards (School → School settings) |
 | `SCHOOL_TIMEZONE` | the school's IANA timezone, e.g. `Australia/Melbourne`; read from configuration whenever it is needed (not editable in the app) |
-| `SITE_ADDRESS` | the machine's DNS name, as devices reach it; the first-administrator and host-command setup links are built from it |
+| `SITE_ADDRESS` | the machine's DNS name (or fixed IP address), as devices reach it; the first-administrator and host-command setup links are built from it |
 | `TLS_MODE` | the certificate source (see [TLS](#tls)); `internal` by default |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | two different long random passwords |
 | `APPLY_MIGRATIONS` | `true` for the first start (see §6) |
@@ -47,7 +47,7 @@ The settings that matter on day one (every variable is documented in `.env.examp
 | identity variables | none for local accounts; for Entra or ADFS, see §4 |
 | `DEV_AUTH`, `VITE_DEMO_MODE` | `false` on any real instance |
 
-Images are pulled, not built (ADR-0049). If the packages are private, log in once with a read-only token: `printf %s '<token>' | docker login ghcr.io -u <user> --password-stdin`.
+Images are pulled, not built (ADR-0049). If the packages are private, log in once with a read-only token: `printf %s '<token>' | docker login ghcr.io -u <user> --password-stdin`. While no images are published, the deploy script builds them on the host instead (`LOCAL_BUILD=1`, §5 and §6).
 
 ### TLS
 
@@ -57,7 +57,8 @@ The proxy's certificate source is `TLS_MODE` in `.env` (default `internal`); com
 - **A certificate from your school's IT:** mount the files into the proxy and set `TLS_MODE="/etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem"`. `docker-compose.yml` carries the mount commented out (`./certs:/etc/caddy/certs:ro`). Add it in `docker-compose.override.yml` under `services: proxy: volumes:` rather than uncommenting it: the deploy script refuses a tree with local edits. The files can sit in the clone's `certs/` folder, which git ignores, or outside the clone (for example `/etc/carnival-app/certs`). The key must be readable by the proxy's UID 10001.
 - **Reachable from the internet:** set `TLS_MODE` to an admin email address and Caddy obtains a Let's Encrypt certificate for `SITE_ADDRESS` automatically.
 - HSTS is not sent in any mode yet.
-- Caddy matches on the host name: requests to the raw IP get no site, and `curl https://localhost` fails the handshake. Test with `curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health`.
+- Caddy matches on `SITE_ADDRESS`: with a name set, requests to the raw IP get no site, and `curl https://localhost` fails the handshake. Test with `curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health`.
+- An IP address as `SITE_ADDRESS` works with `TLS_MODE=internal` or a certificate issued for that IP. A client reaching an IP sends no server name, so Caddy answers with the `SITE_ADDRESS` certificate by default.
 
 ## 4. Sign-in
 
@@ -144,10 +145,14 @@ The API connects as `APP_DB_USER`, a role that `deploy/db/init-roles.sql` create
 
 ```bash
 docker compose up -d db
-bash scripts/deploy/vm-deploy.sh                  # pre-flight pass: stops at the gate
-PREFLIGHT_OK=1 bash scripts/deploy/vm-deploy.sh
+bash scripts/deploy/vm-deploy.sh                                # pre-flight pass: stops at the gate
+PREFLIGHT_OK=1 LOCAL_BUILD=1 bash scripts/deploy/vm-deploy.sh
 curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health   # Healthy
 ```
+
+No release images are published yet, so `LOCAL_BUILD=1` builds them on the host (the first build takes several minutes). Drop it once CI publishes images for the commit you deploy, for example a release tag (§6): the script then pulls them by digest.
+
+On a database the API has never migrated, the script reports a fresh database, skips the data gates and leaves the schema to the API's first start, which needs `APPLY_MIGRATIONS=true`; without it the script stops before changing anything. It also stops when the database has tables but no migration history, which usually means the wrong `POSTGRES_DB`.
 
 Then, in the browser: open the first-administrator link the script printed (§4) → School settings (houses, colours) → import the roster (a CSV; see `config/`) → create a carnival from a template. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
 
@@ -157,7 +162,21 @@ Then, in the browser: open the first-administrator link the script printed (§4)
 
 **Image pins.** For the commit being deployed, the script resolves each image's `sha-<short>` tag in GHCR (`carnival-app-api`, `carnival-app-backup`, and `carnival-app-web`, or `carnival-app-web-demo` when `VITE_DEMO_MODE=true`) to its digest, and rewrites `API_IMAGE`, `WEB_IMAGE` and `BACKUP_IMAGE` at the end of `.env` as `repository@sha256:…` under a comment naming the commit. The comment reads `PENDING` until every smoke check has passed, including a check that each container runs exactly the pinned image. CI publishes images only when its Images workflow is run for a commit; if any tag is missing, the script stops and nothing is deployed.
 
-**`LOCAL_BUILD=1`** is the fallback when CI has published no images: the script builds the three images on the host with `docker-compose.build.yml` (after the override file, if there is one), tags them `carnival-app-local/{api,web,backup}:<short-sha>` and writes those tags to `.env`. They are not the CI-tested images and are not pinned by digest.
+**`LOCAL_BUILD=1`** is the fallback when CI has published no images: the script builds the three images on the host with `docker-compose.build.yml` (after the override file, if there is one), tags them `carnival-app-local/{api,web,backup}:<short-sha>` and writes those tags to `.env`. They are not the CI-tested images and are not pinned by digest. They are built without default attestations, so rebuilding an unchanged commit gives the same image IDs, and any service whose container is not running the image just built is recreated. A redeploy with nothing new passes the image check.
+
+**What it deploys** is what the clone has checked out. On a branch with an upstream (normally `main`), it fetches, stops when the upstream has a newer copy of the script (`git pull --ff-only`, then run it again), and fast-forwards. On a release tag, a detached commit or a branch with no upstream, it deploys the commit as it is, pulls nothing, and says so.
+
+**Upgrading from one release to the next:**
+
+```bash
+cd ~/work/carnival-app
+git fetch --tags origin
+git checkout vX.Y.Z
+bash scripts/deploy/vm-deploy.sh                  # lists the migrations since the deployed commit
+PREFLIGHT_OK=1 bash scripts/deploy/vm-deploy.sh
+```
+
+Read the release notes for anything the upgrade needs first, such as `APPLY_MIGRATIONS=true` for a migration (below). A release tag's images carry the same `sha-<short>` tags the script resolves. To roll back, check out the previous tag and follow **Rollback** below.
 
 **Image retention.** No retention policy is configured: nothing prunes old images on the host or in the registry. A digest pin can be pulled again for a rollback; a local build cannot, so roll back to one only while its images are still on the host (or re-run with `LOCAL_BUILD=1` at the old commit). The deploy's own pre-deploy dumps (`~/pre-*.dump`, unencrypted) are pruned to the newest five.
 
@@ -172,6 +191,8 @@ If it does, take a dump, start once with `APPLY_MIGRATIONS=true`, check `/health
 The `OneAgePerDivision` migration refuses to run while any division, event or school record holds a merged age key (a hyphenated code such as `15-16`); its error lists them. Remove those divisions and the records they set, then start again.
 
 **Rollback** is the previous pins: check out the old commit, restore the pin lines from the saved file into `.env`, `docker compose up -d db api proxy backup`.
+
+**Configuration follows the code.** A change to sign-in or role settings (the `ENTRA_*` variables, `BOOTSTRAP_ADMIN_UPN`, the override file's group mappings) goes in only after the deploy and its browser sign-in checks have passed, then `docker compose up -d api`. To roll back after such a change, put the configuration back first and the code second. `APPLY_MIGRATIONS` is the exception: it is set before the deploy that needs it.
 
 After an upgrade, an installed PWA picks up the new build once all its windows are closed and reopened.
 
@@ -226,3 +247,4 @@ Backups are encrypted; the live database volume is not, unless the host encrypts
 | Backup key custodians | |
 | Off-host backup target | |
 | Restore drills (date, result) | |
+| Deploys (date, commit, images, migration count) | |

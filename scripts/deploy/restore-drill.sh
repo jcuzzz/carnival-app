@@ -119,7 +119,7 @@ for TABLE in Students Carnivals Results AuditEvents; do
 done
 printf '  wall time     %ss\n' "$ELAPSED"
 if [ "$FAILURES" -eq 0 ]; then
-  echo "  RESULT        PASS — record this row in the runbook §5.5 table."
+  echo "  RESULT        PASS — record it in the instance record (docs/admin/self-host.md §10)."
 else
   echo "  RESULT        FAIL — $FAILURES check(s) failed. Record the row, then fix the backups."
 fi

@@ -10,25 +10,25 @@
 #
 # Runs ON the VM, as the no-sudo deploy account. It automates only the parts that are
 # the same on every deploy: refuse a dirty tree, dump the database first, show what is
-# pending, pull fast-forward, resolve the CI-published image digests for the commit being
-# deployed, pin them in .env, bootstrap the database roles, pull and start
-# api+proxy+backup, and re-run the unauthenticated smoke checks that every
-# "Last deploy" row in the runbook records.
+# pending, fast-forward a branch to its upstream (a tag, a detached HEAD or a branch with
+# no upstream deploys as checked out), resolve the CI-published image digests for the
+# commit being deployed, pin them in .env, bootstrap the database roles, pull and start
+# api+proxy+backup, and run the unauthenticated smoke checks.
 #
 # It BUILDS NOTHING (ADR-0049) unless LOCAL_BUILD=1 — the owner-approved fallback for a
 # month with no GitHub free-tier minutes left, when CI has published no images at all
 # (ADR-0049 amendment). Images otherwise come from ghcr.io, built by the CI `images` job
 # from the commit whose tests passed. That needs a one-time, read-only
 #   printf %s '<read:packages PAT>' | docker login ghcr.io -u <github-user> --password-stdin
-# on this VM; the credential store keeps it (runbook §5.0).
+# on this VM; the credential store keeps it (docs/admin/self-host.md §3).
 #
 # It deliberately does NOT do, and will never do:
-#   - the Proxmox VM snapshot (§5.1 step 1) — host-side, not reachable from in here
-#   - the change-specific pre-flight SQL (§5.2) — the gate below stops until a human ran it
-#   - any edit to docker-compose.override.yml or .env (§5.1 steps 9/12) — config follows the
-#     code deploy and is the one act with an ordering hazard; a script would get it wrong quietly
-#   - the browser proofs (§5.1 step 8, §4.1 A/B/C) — /me is cookie-authenticated, so the alias
-#     check and the role matrix are human, in a browser, and green CI is not evidence
+#   - a VM snapshot — host-side, not reachable from in here
+#   - the change-specific pre-flight checks (self-host §6) — the gate below stops until a human ran them
+#   - any edit to docker-compose.override.yml or .env — config follows the code deploy and
+#     is the one act with an ordering hazard; a script would get it wrong quietly
+#   - the browser proofs — /me is cookie-authenticated, so the role checks are human, in a
+#     browser, and green CI is not evidence
 #   - anything needing sudo, anything interactive, any rollback (it only tells you the command)
 
 set -Eeuo pipefail   # -E so the ERR trap survives into functions and subshells
@@ -78,7 +78,8 @@ on_exit() {
 trap on_exit EXIT
 
 on_err() {
-  [ "$SUPPRESS_ROLLBACK" = "1" ] && exit 1
+  [ "$BASHPID" = "$$" ] || exit 1   # -E fires this in $(...) subshells too; report once, from the main shell
+  [ "$SUPPRESS_ROLLBACK" = "1" ] && { echo "!! Stopped before anything changed: nothing to roll back." >&2; exit 1; }
   echo
   echo "!! DEPLOY FAILED. Rollback:"
   restore_pin_comment
@@ -155,8 +156,8 @@ if [ -z "$(env_value BACKUP_AGE_RECIPIENT)" ] && [ "$(env_value BACKUP_ENCRYPTIO
 fi
 
 # Caddy host-matches {$SITE_ADDRESS}; a localhost handshake gets no cert and dies with
-# curl (35) even under -k (§4.1). So resolve the FQDN to the loopback rather than asking
-# for localhost. Falls back to localhost only when SITE_ADDRESS is unset (pre-TLS stand-up).
+# curl (35) even under -k (self-host §3, TLS). So resolve the name to the loopback rather
+# than asking for localhost. Falls back to localhost only when SITE_ADDRESS is unset (pre-TLS stand-up).
 SITE="$(env_value SITE_ADDRESS)"
 if [ -n "$SITE" ] && [ "$SITE" != "localhost" ]; then
   BASE="https://$SITE"; CURL=(curl -sk --resolve "$SITE:443:127.0.0.1")
@@ -169,13 +170,29 @@ echo "   smoke target: $BASE"
 # conflicts or silently ships an un-reviewed change — either way, not a deploy.
 # Bash keeps the pre-pull inode open, so a script that pulls a newer copy of itself
 # keeps running the OLD steps (seen 2026-09-04). Pull first when this file changed.
+# It deploys what is checked out: a branch follows its upstream; a tag, a detached HEAD
+# or a branch with no upstream is deployed as is, with nothing to pull.
 step "Checking this script is current"
-git fetch --quiet origin
-if ! git diff --quiet HEAD origin/main -- "${BASH_SOURCE[0]}"; then
-  echo "vm-deploy.sh changed upstream. Run 'git pull --ff-only' first, then re-run this script." >&2
-  SUPPRESS_ROLLBACK=1; exit 3
+SELF="scripts/deploy/vm-deploy.sh"
+BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
+UPSTREAM=""
+[ -z "$BRANCH" ] || UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [ -n "$UPSTREAM" ]; then
+  DEPLOY_REF="$UPSTREAM"
+  git fetch --quiet
+  if [ -n "$(git rev-list -1 "HEAD..$UPSTREAM" -- "$SELF")" ] && ! git diff --quiet HEAD "$UPSTREAM" -- "$SELF"; then
+    echo "vm-deploy.sh changed on $UPSTREAM. Run 'git pull --ff-only' first, then re-run this script." >&2
+    SUPPRESS_ROLLBACK=1; exit 3
+  fi
+  echo "   branch $BRANCH, tracking $UPSTREAM: the script matches it"
+else
+  DEPLOY_REF="HEAD"
+  if [ -n "$BRANCH" ]; then
+    echo "   branch $BRANCH has no upstream: deploying it as checked out, no fetch or pull"
+  else
+    echo "   detached at $(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD): deploying it as checked out, no fetch or pull"
+  fi
 fi
-echo "   script matches origin/main"
 
 step "Checking the working tree is clean"
 if [ -n "$(git status --porcelain)" ]; then
@@ -224,8 +241,32 @@ fi
 git --no-pager log --oneline -1 "$OLD_SHA"
 echo "   ROLLBACK TARGET: $OLD_SHA"
 
+db_scalar() { docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c "$1" | tr -d '\r'; }
+
+# Read-only until the pull: a failure up to there has nothing to roll back.
+SUPPRESS_ROLLBACK=1
+
+# A first start runs this right after 'docker compose up -d db'. initdb's temporary server
+# listens on the socket only, so the TCP probe cannot pass while it runs.
+step "Waiting for the database (up to 60s)"
+ERR_FILE="$(mktemp)"
+for i in $(seq 1 30); do
+  if docker compose exec -T db pg_isready -h 127.0.0.1 -U "$PG_USER" -d "$PG_DB" >"$ERR_FILE" 2>&1 \
+     && [ "$(db_scalar 'SELECT 1;' 2>"$ERR_FILE" || true)" = "1" ]; then
+    echo "   db: answering (${i}x2s)"; break
+  fi
+  if [ "$i" = 30 ]; then
+    echo "The db service does not answer. Start it with 'docker compose up -d db', check POSTGRES_DB" >&2
+    echo "and POSTGRES_USER in .env, then re-run. Last probe:" >&2
+    sed 's/^/   /' "$ERR_FILE" >&2
+    exit 1
+  fi
+  sleep 2
+done
+rm -f "$ERR_FILE"; ERR_FILE=""
+
 # (c) Before the pull, not after: APPLY_MIGRATIONS=true means a bad migration can leave the
-# api container unable to start, and there is no taking a dump from a stack that is down (§5.2).
+# api container unable to start, and there is no taking a dump from a stack that is down.
 step "Dumping the database (service is 'db', not 'postgres')"
 DUMP="$HOME/pre-deploy-$(date -u +%Y%m%d)-${OLD_SHA:0:7}.dump"
 docker compose exec -T db pg_dump -U "$PG_USER" -Fc "$PG_DB" > "$DUMP"
@@ -245,12 +286,42 @@ echo "   $KEPT dump(s) retained in $HOME"
 
 # (d) The before-count is half of a pair; the after-count at the end is meaningless alone.
 step "Migrations: state before, and what is pending"
-HIST_BEFORE="$(docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c 'SELECT count(*) FROM "__EFMigrationsHistory";' | tr -d '\r')"
-echo "   __EFMigrationsHistory before: $HIST_BEFORE"
-git fetch --quiet origin
-echo "   pending migration commits ($OLD_SHA..origin/main):"
-git --no-pager log --oneline "$OLD_SHA..origin/main" -- api/src/CarnivalApp.Api/Migrations/ | sed 's/^/     /'
-echo "   commits behind main: $(git rev-list --count "$OLD_SHA..origin/main")"
+# A database the API has never migrated has no history table; the API creates the schema
+# at its first start, so there is nothing to count or gate yet.
+history_table() { db_scalar "SELECT to_regclass('\"__EFMigrationsHistory\"') IS NOT NULL;"; }   # t or f
+history_count() {
+  case "$(history_table)" in
+    t) db_scalar 'SELECT count(*) FROM "__EFMigrationsHistory";' ;;
+    f) echo 0 ;;
+    *) echo "could not tell whether __EFMigrationsHistory exists" >&2; return 1 ;;
+  esac
+}
+# Fresh means no history AND no tables: tables without history are a schema this API did
+# not migrate (or the wrong POSTGRES_DB), and starting on it would fail or worse.
+FRESH_DB=0
+if [ "$(history_table)" = "f" ]; then
+  PUBLIC_TABLES="$(db_scalar "SELECT count(*) FROM pg_tables WHERE schemaname = 'public';")"
+  if [ "$PUBLIC_TABLES" != "0" ]; then
+    echo "Database $PG_DB has $PUBLIC_TABLES table(s) but no __EFMigrationsHistory: not a database this API" >&2
+    echo "migrated. Check POSTGRES_DB in .env. Nothing has been changed." >&2
+    exit 1
+  fi
+  FRESH_DB=1
+fi
+HIST_BEFORE="$(history_count)"
+if [ "$FRESH_DB" = "1" ]; then
+  echo "   fresh database: no __EFMigrationsHistory yet; the API applies every migration at start-up"
+  if [ "$(env_value APPLY_MIGRATIONS | tr '[:upper:]' '[:lower:]')" != "true" ]; then
+    echo "A fresh database needs APPLY_MIGRATIONS=true in .env for the first start, or the API cannot start." >&2
+    echo "Set it, re-run this script, then set it back to false (self-host §5)." >&2
+    SUPPRESS_ROLLBACK=1; exit 1
+  fi
+else
+  echo "   __EFMigrationsHistory before: $HIST_BEFORE"
+fi
+echo "   pending migration commits ($OLD_SHA..$DEPLOY_REF):"
+git --no-pager log --oneline "$OLD_SHA..$DEPLOY_REF" -- api/src/CarnivalApp.Api/Migrations/ | sed 's/^/     /'
+echo "   commits to deploy: $(git rev-list --count "$OLD_SHA..$DEPLOY_REF")"
 
 # (d2) The gates the script CAN answer. A migration that refuses on data it cannot carry
 # (ADR-0058 OneAgePerDivision) must be refused HERE, before the images are swapped:
@@ -258,14 +329,13 @@ echo "   commits behind main: $(git rev-list --count "$OLD_SHA..origin/main")"
 # a migration id and the query whose non-zero count that migration would refuse on.
 step "Data gates for pending destructive migrations"
 migration_applied() {
-  docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA \
-    -c "SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$1';" | tr -d '\r'
+  db_scalar "SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$1';"
 }
 data_gate() {  # $1 migration id, $2 what the count means, $3 SQL returning one count
   if [ "$(migration_applied "$1")" = "0" ]; then
-    COUNT="$(docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c "$3" | tr -d '\r')"
+    COUNT="$(db_scalar "$3")"
     if [ "$COUNT" != "0" ]; then
-      echo "   $1: $COUNT $2 — the migration will refuse. Fix the data (runbook §5.2), then re-run." >&2
+      echo "   $1: $COUNT $2 — the migration will refuse. Fix the data (self-host §6), then re-run." >&2
       SUPPRESS_ROLLBACK=1; exit 1
     fi
     echo "   $1: 0 $2"
@@ -274,7 +344,11 @@ data_gate() {  # $1 migration id, $2 what the count means, $3 SQL returning one 
 MERGED_AGES="SELECT (SELECT count(*) FROM \"CarnivalEvents\" WHERE \"AgeGroupKey\" LIKE '%-%')
   + (SELECT count(*) FROM \"CarnivalDivisions\" WHERE \"AgeGroupKey\" LIKE '%-%')
   + (SELECT count(*) FROM \"SchoolRecords\" WHERE \"AgeGroup\" LIKE '%-%');"
-data_gate 20260916233014_OneAgePerDivision "rows with a merged age key" "$MERGED_AGES"
+if [ "$FRESH_DB" = "1" ]; then
+  echo "   fresh database: no data to gate"
+else
+  data_gate 20260916233014_OneAgePerDivision "rows with a merged age key" "$MERGED_AGES"
+fi
 
 # (e) The human gate. Every deploy so far has had a change-specific pre-flight — the
 # index-tightening duplicate check, the HeatLaneSettingsJson non-null count — and each one
@@ -286,12 +360,14 @@ data_gate 20260916233014_OneAgePerDivision "rows with a merged age key" "$MERGED
 # to prevent. An env var cannot go stale.
 if [ "${PREFLIGHT_OK:-}" != "1" ]; then
   echo
-  echo "== PRE-FLIGHT GATE (runbook §5.2)"
-  echo "   Stop here. Run the pre-flight queries this change needs, against the counts above,"
-  echo "   and read the pending-migration table in §5.2 for the gate that applies:"
+  echo "== PRE-FLIGHT GATE (docs/admin/self-host.md §6, Upgrades)"
+  echo "   Stop here. Read the pending migrations above and the release notes for any check this"
+  echo "   change needs, and run it against the database:"
   echo "     docker compose exec -T db psql -U $PG_USER -d $PG_DB -c '<the check for this migration>'"
   echo "   A non-zero result on a destructive migration's gate is a conversation, not a deployment."
-  echo "   Then re-run:  PREFLIGHT_OK=1 bash $0"
+  RERUN="PREFLIGHT_OK=1"
+  [ "$LOCAL_BUILD" != "1" ] || RERUN="$RERUN LOCAL_BUILD=1"
+  echo "   Then re-run:  $RERUN bash $0"
   SUPPRESS_ROLLBACK=1; exit 2
 fi
 if [ -e "$(dirname "${BASH_SOURCE[0]}")/PREFLIGHT_OK" ]; then
@@ -299,9 +375,15 @@ if [ -e "$(dirname "${BASH_SOURCE[0]}")/PREFLIGHT_OK" ]; then
 fi
 echo "   pre-flight acknowledged by the operator (PREFLIGHT_OK=1)"
 
+SUPPRESS_ROLLBACK=0
+
 # (f) --ff-only: a merge commit created on the VM is a divergence nobody will ever see again.
-step "Pulling (fast-forward only)"
-git pull --ff-only
+if [ -n "$UPSTREAM" ]; then
+  step "Pulling $UPSTREAM (fast-forward only)"
+  git pull --ff-only
+else
+  step "Not pulling: no upstream, deploying the checked-out commit"
+fi
 NEW_SHA="$(git rev-parse HEAD)"
 git --no-pager log --oneline -1 HEAD
 
@@ -318,7 +400,7 @@ if [ "$LOCAL_BUILD" = "1" ]; then
   echo "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   echo "  !! LOCAL BUILD — images built on this VM, NOT the CI-tested images,"
   echo "  !! NOT pinned by digest."
-  echo '  !! Record "built on VM (LOCAL_BUILD)" in the runbook row.'
+  echo '  !! Record "built on VM (LOCAL_BUILD)" in the instance record (self-host §10).'
   echo "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   echo
   API_IMAGE="carnival-app-local/api:$SHORT"
@@ -452,6 +534,14 @@ chown_volume caddy-config "10001:10001"
 step "Database roles: creating/refreshing '$APP_USER' before the api restarts"
 bootstrap_roles
 
+container_image() { docker inspect -f '{{.Image}}' "$(docker compose ps -q "$1" || true)" 2>/dev/null || true; }
+image_id() { docker image inspect -f '{{.Id}}' "$1" 2>/dev/null || true; }
+needs_recreate() {   # $1 = compose service, $2 = the image it should run
+  local want
+  want="$(image_id "$2")"
+  [ -n "$want" ] && [ "$(container_image "$1")" != "$want" ]
+}
+
 # (f4) Nothing is built here (ADR-0049) unless LOCAL_BUILD=1. The pull needs the one-time
 # `docker login ghcr.io`; an absent or expired read token fails loudly at this
 # line, before any container is recreated.
@@ -466,9 +556,17 @@ if [ "$LOCAL_BUILD" = "1" ]; then
     COMPOSE_FILES+=(-f docker-compose.override.yml)
   fi
   COMPOSE_FILES+=(-f docker-compose.build.yml)
+  # No default attestations: with them every cached rebuild gets a new image ID, which
+  # Compose (containerd image store) does not recreate the container for.
   step "Building the images on this VM, then starting db + api + proxy + backup"
   echo "   compose files: ${COMPOSE_FILES[*]}"
-  docker compose "${COMPOSE_FILES[@]}" up -d --build db api proxy backup
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose "${COMPOSE_FILES[@]}" up -d --build db api proxy backup
+  for PAIR in "api=$API_IMAGE" "proxy=$WEB_IMAGE" "backup=$BACKUP_IMAGE"; do
+    if needs_recreate "${PAIR%%=*}" "${PAIR#*=}"; then
+      echo "   ${PAIR%%=*}: the container is not running the image just built; recreating it"
+      docker compose "${COMPOSE_FILES[@]}" up -d --no-build --no-deps --force-recreate "${PAIR%%=*}"
+    fi
+  done
 else
   step "Pulling the pinned images"
   docker compose pull api proxy backup
@@ -533,14 +631,12 @@ else
   fail "api has $RUN_MAPS Identity__GroupToRoleMappings__ entries but config declares $CFG_MAPS - a compose file (docker-compose.override.yml?) did not reach the api"
 fi
 
-# (h2) The digest comparison that replaces §5.0's served-bytes marker grep: each
-# container must BE the image just pinned, or `up -d` reused an older one.
+# (h2) Each container must BE the image just pinned, or `up -d` reused an older one.
 step "Deployed image digests"
 digest_check() {   # $1 = compose service, $2 = pinned ref
-  local cid img want
-  cid="$(docker compose ps -q "$1" || true)"
-  img="$(docker inspect -f '{{.Image}}' "$cid" 2>/dev/null || true)"
-  want="$(docker image inspect -f '{{.Id}}' "$2" 2>/dev/null || true)"
+  local img want
+  img="$(container_image "$1")"
+  want="$(image_id "$2")"
   if [ -n "$img" ] && [ "$img" = "$want" ]; then
     pass "$1 runs ${2##*/}"
   else
@@ -604,7 +700,7 @@ else
   fail "SPA served at / → $SPA_CODE (expected 200 + HTML)"
 fi
 
-HIST_AFTER="$(docker compose exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c 'SELECT count(*) FROM "__EFMigrationsHistory";' | tr -d '\r')"
+HIST_AFTER="$(history_count)"
 echo "   __EFMigrationsHistory: $HIST_BEFORE → $HIST_AFTER"
 
 # The link is a credential: it goes to the terminal only, never into .env, the pins file or a log.
@@ -657,7 +753,7 @@ LOGIN_SMOKE=""
 [ -z "$PROVIDER" ] || LOGIN_SMOKE="/auth/login 302 | "
 ROLLBACK_NOTE="(no rebuild, and no dependence on the state of the source tree)"
 if [ "$LOCAL_BUILD" = "1" ]; then
-  # Local tags, not digests: the runbook row is copied from this block.
+  # Local tags, not digests: the instance record (self-host §10) is copied from this block.
   IMAGES_BLOCK="LOCAL BUILD (unpinned)
                   $API_IMAGE
                   $WEB_IMAGE
@@ -682,21 +778,21 @@ ${SIGN_IN_NOTE:+
 $SIGN_IN_NOTE
 }
   NOT DONE BY THIS SCRIPT — do these by hand now:${LINK_TODO}
-   - §5.1 step 8: sign in in a BROWSER as CARNIVAL-SysAdmins and as a collapsed
-     group (CARNIVAL-Verifiers is the sharpest) and read /api/v1/me. Empty roles []
-     means stop and roll the code back, cleanly, before touching any config.
-   - §5.1 step 9: only then, if wanted, edit docker-compose.override.yml values
-     (keys unchanged) and 'docker compose up -d api'. Config never precedes code.
-   - §4.1: the allow/refuse matrix, and the lifecycle 404 checks.
-   - §5.1 step 13: record commit, the IMAGE DIGESTS above, migrations, history
-     count and /me output in the runbook instance table.
+   - sign in through a BROWSER as a System administrator and, where one exists, as a
+     person with a lesser role, and check each can do what the role allows and no
+     more. Someone left without the access they had means stop and roll the code
+     back, cleanly, before touching any config.
+   - only then, if wanted, edit .env or docker-compose.override.yml values and
+     'docker compose up -d api'. Config never precedes code.
+   - record the commit, the images above and the migration count in the instance
+     record (docs/admin/self-host.md §10).
 
   Rollback if any of that goes wrong:
     cd $COMPOSE_DIR && git checkout $OLD_SHA
     put the pins from $PINS back into .env, then
     docker compose up -d db api proxy backup
     $ROLLBACK_NOTE
-    (config first, code second, if the override file was already edited — §5.1 step 12)
+    (config first, code second, if .env or the override file was already edited)
 ==================================================================
 SUMMARY
 

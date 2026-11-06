@@ -18,8 +18,8 @@
 
 - **Built, reviewed and committed; not merged.** API 2232 tests (Docker tests included), app 1678 tests, the local-accounts e2e journey, 36 screenshots, docs and governance. Every package had an independent review (OWASP ASVS 5.0 L2 for API and app); accepted risks are in `architecture/authorisation-and-audit.md`.
 - **VM test passed (2026-11-06, `carnival`, 192.168.0.65, Debian 13)** on `4b436d6`: every sign-in, setup, authenticator, reset/disable, sign-out, cross-site and role check; 200 guesses at 8 in parallel all `SIGN_IN_FAILED`, `/health` p99 48 ms, API peak 171 MiB of 768. The stack is left running on the branch (`SITE_ADDRESS=carnival.home.arpa`, require-authenticator on, `APPLY_MIGRATIONS=true`). The VM clone has the maintainer's own uncommitted runbook notes stashed (`stash@{0}`).
-- **The deploy needed workarounds**, recorded as BACKLOG P1 items (deploy-script defects found on the fresh-clone run). Fix them before the release.
-- Next: fix the deploy defects, merge to `main`, then the rest of "Before the first release".
+- **Deploy-script defects from the fresh-clone run fixed** (fresh database, branch/tag deploys, `LOCAL_BUILD` image check, IP `SITE_ADDRESS`, stale references, docs); pending a VM re-run.
+- Next: the VM re-run, merge to `main`, then the rest of "Before the first release".
 - No .NET SDK on the maintainer's Linux machine: sessions ran it in the `mcr.microsoft.com/dotnet/sdk:10.0` container (repo mounted at the same path, host Docker socket and CLI mounted so the Testcontainers tests run).
 
 ## Before the first release

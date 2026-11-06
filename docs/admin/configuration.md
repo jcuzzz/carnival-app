@@ -117,7 +117,7 @@ Compose has four house slots. **Before the first start**, add houses with extra 
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `SITE_ADDRESS` | The DNS name Caddy serves, as devices reach it | `localhost` | Yes | Caddy matches requests on this name. Compose also passes it to the API as `Site__Address`, which builds the setup links the host command prints; with `localhost` the deploy issues no first-administrator link. |
+| `SITE_ADDRESS` | The DNS name or IP address Caddy serves, as devices reach it | `localhost` | Yes | Caddy matches requests on this value. An IP address works: a client reaching an IP sends no server name, and Caddy answers with this site's certificate by default. A name on the local network needs a DNS record or a hosts-file entry on each device. Compose also passes it to the API as `Site__Address`, which builds the setup links the host command prints; with `localhost` the deploy issues no first-administrator link. |
 | `TLS_MODE` | The certificate source: the Caddyfile's `tls` argument (`tls {$TLS_MODE:internal}`) | `internal` | No | `internal` is Caddy's own CA; an email address turns on automatic ACME (public hosts); `"/etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem"` uses mounted certificate files. The mount is commented out in the proxy service of `docker-compose.yml`. See [TLS](self-host.md#tls). |
 
 ### Backups

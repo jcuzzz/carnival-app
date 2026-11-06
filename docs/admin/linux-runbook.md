@@ -5,7 +5,7 @@ Two ways to run Carnival App on a Linux machine, both with synthetic data only:
 - **A. From source**: the API on SQLite and the app on the Vite dev server. No Docker, no identity provider; you sign in by picking a persona. Use it to try the product or to work on the code.
 - **B. The full stack**: Docker Compose with PostgreSQL, backups and Caddy, as a school runs it. Sign-in uses the built-in local accounts; Microsoft Entra ID or ADFS is optional.
 
-Tested target: Ubuntu Server 24.04 LTS or Debian 12 on a VM with 2 vCPU, 4 GB RAM and 40 GB of disk. Run every command as a normal user with `sudo`, not as root.
+Tested target: Debian 13, Debian 12 or Ubuntu Server 24.04 LTS on a VM with 2 vCPU, 4 GB RAM and 40 GB of disk. Run every command as a normal user with `sudo`, not as root.
 
 ## 0. Get the code
 
@@ -20,6 +20,8 @@ While the repository is private, `git clone` needs a credential. For a VM, a rea
 ## A. From source
 
 ### A1. Install .NET 10 and Node 22
+
+.NET needs the ICU library, which minimal and cloud images leave out: `sudo apt install -y libicu76` on Debian 13, `libicu74` on Ubuntu 24.04, `libicu72` on Debian 12. Without it every `dotnet` command aborts with "Couldn't find a valid ICU package".
 
 ```bash
 curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
@@ -71,7 +73,7 @@ cd ~/work/carnival-app/api && dotnet test
 cd ~/work/carnival-app/app && npx tsc -b && npm run lint && npm test && npm run build
 ```
 
-Six API tests use Testcontainers and skip without Docker. With Docker installed (B1) and your user in the `docker` group, they run against a real PostgreSQL, and nothing should be skipped.
+The API suite takes about 15 minutes on 2 vCPU, and its test host peaks near 2.5 GB, so give the VM 4 GB of RAM and some swap if the API and app stay running alongside it. Six API tests use Testcontainers and skip without Docker. With Docker installed (B1) and your user in the `docker` group, they run against a real PostgreSQL, and nothing should be skipped.
 
 ### A6. Reset
 
@@ -94,7 +96,7 @@ Use a full VM, not an LXC container.
 
 ### B2. Give the machine a name
 
-Pick a host name such as `carnival.home.arpa` and make every device that will open the app resolve it to the VM: a record in your router or local DNS, or a line in each device's hosts file. The TLS certificate, the first-administrator link and any provider's sign-in redirects depend on the name; the raw IP does not work.
+Pick a host name such as `carnival.home.arpa` and make every device that will open the app resolve it to the VM: a record in your router or local DNS, or a line in each device's hosts file. The TLS certificate, the first-administrator link and any provider's sign-in redirects depend on the name. The VM's IP address also works as `SITE_ADDRESS`, with no DNS or hosts entry, as long as it never changes.
 
 ### B3. Register the app with Entra (optional)
 
@@ -117,7 +119,7 @@ nano .env
 | Variable | Test value |
 |---|---|
 | `COMPOSE_PROJECT_NAME` | `carnival-app-test` |
-| `SITE_ADDRESS` | the name from B2 |
+| `SITE_ADDRESS` | the name (or IP address) from B2 |
 | `TLS_MODE` | `internal` |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | two different values from `openssl rand -base64 24` |
 | `APPLY_MIGRATIONS` | `true` |
@@ -137,7 +139,7 @@ bash scripts/deploy/vm-deploy.sh                              # pre-flight: dump
 PREFLIGHT_OK=1 LOCAL_BUILD=1 bash scripts/deploy/vm-deploy.sh
 ```
 
-The script ends with its smoke checks. Check it yourself:
+The database is new, so the script reports a fresh database with no migration history, skips the data gates, and the API applies every migration as it starts (`APPLY_MIGRATIONS=true` from B4; without it the script stops before changing anything). The script ends with its smoke checks. Check it yourself:
 
 ```bash
 curl -sk --resolve <name>:443:127.0.0.1 https://<name>/health      # Healthy
@@ -172,7 +174,9 @@ bash scripts/deploy/vm-deploy.sh
 PREFLIGHT_OK=1 LOCAL_BUILD=1 bash scripts/deploy/vm-deploy.sh
 ```
 
-Once releases are published, drop `LOCAL_BUILD=1` and the script pulls the CI images by digest.
+The script deploys whatever is checked out. A branch with an upstream is fetched and fast-forwarded; a branch with no upstream, a tag or a detached commit is deployed as it is, with no pull (skip the `git pull` above too). Running it again with nothing new passes as well.
+
+Once releases are published, check out a release tag instead ([Self-hosting §6](self-host.md#6-upgrades)) and drop `LOCAL_BUILD=1`: the script pulls the CI images by digest.
 
 ### B9. Recover access
 
@@ -204,11 +208,13 @@ docker compose down -v      # -v deletes the database and backup volumes
 
 | Symptom | Likely cause |
 |---|---|
-| `curl` fails the TLS handshake | Requests must use the name from B2; Caddy matches on the host name, not `localhost` or the IP |
+| `curl` fails the TLS handshake | Requests must use `SITE_ADDRESS` from B2; with a name set, Caddy answers neither `localhost` nor the IP |
 | Sign-in loops or returns an error page | Redirect URI does not match `https://<name>/signin-oidc` exactly, or the secret's ID was pasted instead of its Value |
 | Signed in but every screen says you lack access | A local account: no role granted yet under School → Roles. An Entra account: `BOOTSTRAP_ADMIN_UPN` differs from its sign-in address and no group or in-app grant applies |
 | No first-administrator link after the deploy | `SITE_ADDRESS` is `localhost`, a smoke check failed, or a local account already exists (the script says which); see B9 |
 | "This setup link has expired or has already been used" | Links are single use and last 24 hours; an administrator resets the account, or run the host command (B9) |
 | `backup` keeps restarting | `BACKUP_AGE_RECIPIENT` empty and `BACKUP_ENCRYPTION` not `off` |
+| The deploy script stops with "vm-deploy.sh changed on origin/…" | The upstream has a newer copy of the script: `git pull --ff-only`, then run it again |
+| The deploy script stops with "A fresh database needs APPLY_MIGRATIONS=true" | Set `APPLY_MIGRATIONS=true` in `.env` for the first start, run it again, then set it back (B5) |
 | The deploy script stops with "Working tree is dirty" | A file in the clone was edited; configuration belongs in `.env` and `docker-compose.override.yml` only |
 | A container exits with code 137 | It hit its memory limit; give the VM more RAM |

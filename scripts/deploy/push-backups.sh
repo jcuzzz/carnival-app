@@ -64,7 +64,7 @@ fi
 
 # --checksum, not --ignore-existing: a file already at the target whose bytes
 # differ is re-sent. This proves the bytes match; it does not prove they decrypt
-# (the age identity is off this host — that is the restore drill's job, §5.5).
+# (the age identity is off this host — that is the restore drill's job, recorded in the instance record, self-host §10).
 echo "Pushing $COUNT encrypted dump(s) from $VOLUME to $TARGET"
 rsync -av --checksum --chmod=F600 "$STAGE"/*.dump.age "$TARGET/"
 echo "Push complete: $(date -u +%Y-%m-%dT%H:%M:%SZ)"

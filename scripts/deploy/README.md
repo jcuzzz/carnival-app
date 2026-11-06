@@ -8,7 +8,14 @@ identical every time. Everything that changes per deploy stays in
 
 ```bash
 ssh deploy 'PREFLIGHT_OK=1 bash ~/work/carnival-app/scripts/deploy/vm-deploy.sh'
+ssh deploy 'PREFLIGHT_OK=1 LOCAL_BUILD=1 bash ~/work/carnival-app/scripts/deploy/vm-deploy.sh'   # no CI images: build here
 ```
+
+It deploys whatever the clone has checked out. On a branch with an upstream it fetches, exits 3
+when the upstream has a newer copy of this script (`git pull --ff-only`, then re-run: bash would
+otherwise keep running the old copy), and fast-forwards in step 6. On a release tag, a detached
+commit or a branch with no upstream it deploys the commit as it is and pulls nothing, and says so.
+To deploy a release: `git fetch --tags origin && git checkout vX.Y.Z`, then the two passes.
 
 **One-time per VM (ADR-0049):** the images are pulled from a private GHCR, so the host needs a
 read-only credential once — `printf %s '<read:packages PAT>' | docker login ghcr.io -u <user>
@@ -26,14 +33,21 @@ own location, so the working directory does not matter and the repo path can mov
 2. Records and prints the current commit as the rollback target — read from the deployed-commit
    comment in `.env`, which names **only a commit that has passed the smoke checks** (a `PENDING`
    or absent comment falls back to the short sha in the `API_IMAGE` tag, then to `HEAD`).
-3. `pg_dump -Fc` to `~/pre-deploy-<utcdate>-<shortsha>.dump` **before** anything changes (the service
+3. Waits up to 60s for the `db` service to answer (a first start runs right after
+   `docker compose up -d db`), then `pg_dump -Fc` to `~/pre-deploy-<utcdate>-<shortsha>.dump` **before** anything changes (the service
    is `db`, not `postgres`), and aborts if the file comes out empty.
-4. Prints `__EFMigrationsHistory` before, fetches, and lists the pending commits touching
-   `api/src/CarnivalApp.Api/Migrations/`.
+4. Prints `__EFMigrationsHistory` before and lists the commits touching
+   `api/src/CarnivalApp.Api/Migrations/` between the deployed commit and the upstream (or `HEAD`
+   when there is none), then runs the data gates for destructive migrations. **A fresh database**
+   (no `__EFMigrationsHistory`, checked with `to_regclass`, and no tables) counts as 0 and has no
+   data gates; the API creates the schema at its first start, so the script stops here unless
+   `.env` has `APPLY_MIGRATIONS=true`. Tables without a history table stop the script too (the
+   wrong `POSTGRES_DB`, or a schema this API did not migrate). Every failure before the pull says
+   "Stopped before anything changed" instead of printing rollback commands.
 5. **Stops at the pre-flight gate** unless `PREFLIGHT_OK=1` (env var, not a marker file — a file
    would survive to silently pre-authorise the *next* deploy).
-6. `git pull --ff-only`, then **the digest gate (ADR-0049)**: resolves
-   `ghcr.io/jcuzzz/carnival-app-{api,web,backup}:sha-<short>` for the commit just pulled and **hard-fails
+6. `git pull --ff-only` (a branch with an upstream only), then **the digest gate (ADR-0049)**: resolves
+   `ghcr.io/jcuzzz/carnival-app-{api,web,backup}:sha-<short>` for the commit being deployed and **hard-fails
    if any tag is missing** — CI has not published for that commit, so it is not deployable. This
    replaces the by-hand "confirm CI is green", the step whose omission on 2026-08-18 put a broken
    build on the VM. **Images are built on demand, not on every push** (ADR-0049 amendment
@@ -45,11 +59,12 @@ own location, so the working directory does not matter and the repo path can mov
    `API_IMAGE`/`WEB_IMAGE`/`BACKUP_IMAGE` digest pins into `.env` (mode 600) under a comment
    marked `PENDING`, runs
    `deploy/db/init-roles.sql` (ADR-0047 §3), then `docker compose pull` + `docker compose up -d db
-   api proxy backup`. **It builds nothing.**
-8. Polls the api container for up to 120s, then checks each container's image really is the digest
-   just pinned — the comparison that replaced runbook §5.0's served-bytes marker grep — and runs the
-   unauthenticated smoke checks the
-   runbook's "Last deploy" rows record — `/health` → `Healthy`, `/api/v1/me` XHR → 401,
+   api proxy backup`. **It builds nothing** unless `LOCAL_BUILD=1`: then it builds the three images
+   with `docker-compose.build.yml` and `BUILDX_NO_DEFAULT_ATTESTATIONS=1` (so an unchanged rebuild
+   keeps its image ID), and recreates any service whose container is not running the image just
+   built, which Compose on the containerd image store does not always do. A no-change redeploy passes.
+8. Polls the api container for up to 120s, then checks each container's image really is the image
+   just pinned, and runs the unauthenticated smoke checks: `/health` → `Healthy`, `/api/v1/me` XHR → 401,
    `/api/v1/auth/methods` → 200, a `POST /api/v1/auth/local` for a nonexistent name → 401
    `SIGN_IN_FAILED` and the same with `Sec-Fetch-Site: cross-site` → 403
    `CROSS_SITE_REQUEST_REFUSED`, `/api/v1/auth/login` nav → 302 (only when `methods` reports a
@@ -75,23 +90,22 @@ It also `chmod 600`s `.env` at the start and refuses to deploy when `APP_DB_PASS
 
 | Step | Where |
 |---|---|
-| Proxmox VM snapshot (host-side) | runbook §5.1 step 1 |
-| The change-specific pre-flight SQL, and the gate values it must return | runbook §5.2 |
-| `docker-compose.override.yml` / `.env` edits — **config follows the code deploy, never precedes it** | runbook §5.1 steps 9 and 12 |
+| A VM snapshot, if the host takes them (host-side) | the hypervisor |
+| The change-specific pre-flight checks, and the values they must return | the release notes; [self-host §6](../../docs/admin/self-host.md#6-upgrades) |
+| Sign-in and role settings in `.env` or `docker-compose.override.yml` — **config follows the code deploy, never precedes it** | [self-host §6](../../docs/admin/self-host.md#6-upgrades) |
 | Signing in through the browser with the first-admin link, when one was issued | printed after the deploy summary |
-| Browser sign-in proofs: `/me` for `CARNIVAL-SysAdmins` and a collapsed group (`CARNIVAL-Verifiers`), and the alias log line | runbook §5.1 step 8, §4.1 A |
-| The four-role allow/refuse matrix and the lifecycle 404 checks | runbook §4.1 B and C |
-| Recording the deploy in the instance table | runbook §5.1 step 13 |
+| Browser sign-in checks: a System administrator and a person with a lesser role each can do what the role allows and no more | [self-host §4](../../docs/admin/self-host.md#roles) |
+| Recording the deploy | [self-host §10](../../docs/admin/self-host.md#10-instance-record-fill-in-keep-with-your-own-documentation), the instance record |
 
-`/me` is cookie-authenticated, so a bare `curl` gets a 401 by design — the role proofs cannot be
-scripted from the VM and a green CI run is not a substitute (§4.1 A).
+`/me` is cookie-authenticated, so a bare `curl` gets a 401 by design — the role checks cannot be
+scripted from the VM and a green CI run is not a substitute.
 
 ## The two backup scripts (ADR-0047 §4)
 
 | Script | Runs | Does |
 |---|---|---|
 | `push-backups.sh` | on the VM, cron-able | rsyncs `*.dump.age` from the `db-backups` volume to `BACKUP_PUSH_TARGET`; clean no-op while that is unset. Never copies plaintext. A short stage copy or a zero-length ciphertext fails the run, and `--checksum` re-sends a file whose bytes differ from the target's copy. |
-| `restore-drill.sh <age-identity-file>` | on the VM, once a term | decrypts the newest dump, restores into a scratch `carnival_drill`, prints row counts and wall time, then drops and shreds. Record the row in runbook §5.5. **FAILs** on a dump older than 2 × `BACKUP_INTERVAL_SECONDS`, on any of the four tables restoring 0 rows, and on a count under 90% of that table's live count read in the same run. |
+| `restore-drill.sh <age-identity-file>` | on the VM, once a term | decrypts the newest dump, restores into a scratch `carnival_drill`, prints row counts and wall time, then drops and shreds. Record it in the instance record (self-host §10). **FAILs** on a dump older than 2 × `BACKUP_INTERVAL_SECONDS`, on any of the four tables restoring 0 rows, and on a count under 90% of that table's live count read in the same run. |
 
 ## Rollback
 
@@ -102,5 +116,5 @@ line that went with those pins; the script puts it back in `.env` itself when a 
 *next* run's rollback target is still the last commit that actually served. No rebuild, no registry, and no dependence on the
 state of the source tree. **After** a config edit, roll the config back first and the code second —
 an old server plus new role names in config is the one state the ADR-0016 claim aliases cannot
-rescue (§5.1 step 12). Database rollback is a separate, dump-based operation using the
+rescue. Database rollback is a separate, dump-based operation using the
 `pre-deploy-*.dump` from step 3.

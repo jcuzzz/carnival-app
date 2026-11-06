@@ -26,6 +26,9 @@
 	# container port, not the port the client actually reached. The explicit
 	# redirect site below uses {host} alone, which is correct externally.
 	auto_https disable_redirects
+
+	# A client reaching an IP address sends no SNI; without a default Caddy finds no certificate.
+	default_sni {$SITE_ADDRESS}
 }
 
 http://{$SITE_ADDRESS}:8080 {
