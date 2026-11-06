@@ -17,9 +17,9 @@
 ## In progress: local accounts (branch `feature/local-accounts`)
 
 - **Built, reviewed and committed; not merged.** API 2232 tests (Docker tests included), app 1678 tests, the local-accounts e2e journey, 36 screenshots, docs and governance. Every package had an independent review (OWASP ASVS 5.0 L2 for API and app); accepted risks are in `architecture/authorisation-and-audit.md`.
-- **VM test passed (2026-11-06, `carnival`, 192.168.0.65, Debian 13)** on `4b436d6`: every sign-in, setup, authenticator, reset/disable, sign-out, cross-site and role check; 200 guesses at 8 in parallel all `SIGN_IN_FAILED`, `/health` p99 48 ms, API peak 171 MiB of 768. The stack is left running on the branch (`SITE_ADDRESS=carnival.home.arpa`, require-authenticator on, `APPLY_MIGRATIONS=true`). The VM clone has the maintainer's own uncommitted runbook notes stashed (`stash@{0}`).
-- **Deploy-script defects from the fresh-clone run fixed** (fresh database, branch/tag deploys, `LOCAL_BUILD` image check, IP `SITE_ADDRESS`, stale references, docs); pending a VM re-run.
-- Next: the VM re-run, merge to `main`, then the rest of "Before the first release".
+- **VM test passed (2026-11-06, `carnival`, 192.168.0.65, Debian 13)** on `4b436d6`: every sign-in, setup, authenticator, reset/disable, sign-out, cross-site and role check; 200 guesses at 8 in parallel all `SIGN_IN_FAILED`, `/health` p99 48 ms, API peak 171 MiB of 768. The VM clone keeps the maintainer's runbook notes stashed (`stash@{0}`), now folded into the runbook.
+- **Deploy-script defects from the fresh-clone run fixed and VM-tested (2026-11-07, `07cb151`):** first start on an empty database with no workaround, HTTPS by IP (`SITE_ADDRESS=192.168.0.65`), no-change redeploys, a branch with no upstream, a tag, the upstream currency refusal and both fresh-database refusals all pass. The stack runs on the branch with `SITE_ADDRESS=192.168.0.65` and no account yet; `APPLY_MIGRATIONS` is still `true`. Disk 16 GB at 72%: grow it to 32 GB, since local builds refill the cache.
+- Next: merge to `main`, then the rest of "Before the first release".
 - No .NET SDK on the maintainer's Linux machine: sessions ran it in the `mcr.microsoft.com/dotnet/sdk:10.0` container (repo mounted at the same path, host Docker socket and CLI mounted so the Testcontainers tests run).
 
 ## Before the first release
