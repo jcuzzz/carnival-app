@@ -201,7 +201,9 @@ test("a template is previewed against the catalogue and applied with a reason", 
 
   await signIn(page);
   await page.goto("/#/school/templates");
-  await expect(page.getByRole("heading", { name: "Event templates", level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Update the event catalogue", level: 1 }),
+  ).toBeVisible();
   // The picker names the document the last deploy shipped, not a database row.
   await expect(page.getByLabel("Template")).toContainText("Swimming carnival");
   await expect(page.getByText("swimming.json")).toBeVisible();

@@ -20,14 +20,6 @@ vi.mock("../api/resources", () => ({
   putSchoolSettings: vi.fn(),
   getBranding: vi.fn(),
   getHouseMarks: vi.fn(),
-  // The Roles section (ADR-0048) reads on the same screen; its own suite covers it.
-  listRoleAssignments: vi.fn(async () => []),
-  grantRole: vi.fn(),
-  revokeRole: vi.fn(),
-  // The Event templates section (ADR-0050) reads here too; its own suite covers it.
-  listEventTemplates: vi.fn(async () => []),
-  previewTemplateReconcile: vi.fn(),
-  applyTemplateReconcile: vi.fn(),
 }));
 
 vi.mock("../branding/branding", async (importOriginal) => ({

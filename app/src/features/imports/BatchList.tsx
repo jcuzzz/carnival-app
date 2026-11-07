@@ -1,6 +1,15 @@
 import type { ImportBatchSummary } from "../../api/types";
 import type { ApiState } from "../../api/useApiQuery";
 
+/** A batch as the organiser knows it: the file and when it went up, never its id. */
+export function batchLabel(batch: Pick<ImportBatchSummary, "sourceFileName" | "importedAtUtc">) {
+  return `${batch.sourceFileName}, uploaded ${uploadedAt(batch.importedAtUtc)}`;
+}
+
+function uploadedAt(utc: string): string {
+  return new Date(utc).toLocaleString();
+}
+
 /** Import batches, most recent first — pick one to review. */
 export function BatchList({
   state,
@@ -57,7 +66,7 @@ export function BatchList({
               <td>{batch.changedCount}</td>
               <td>{batch.inactiveCount}</td>
               <td>{batch.rejectedCount}</td>
-              <td>{new Date(batch.importedAtUtc).toLocaleString()}</td>
+              <td>{uploadedAt(batch.importedAtUtc)}</td>
               <td className="mono">{batch.importedBySubject}</td>
               <td>
                 {batch.id === selectedId ? (

@@ -94,7 +94,7 @@ export default function App() {
     );
     screenName = "Sign in";
   } else if (path === "/import") {
-    screen = <ImportReviewScreen />;
+    screen = <ImportReviewScreen carnivalId={new URLSearchParams(query).get("carnival")} />;
     screenName = "Roster import";
   } else if (path === "/school") {
     screen = <SchoolScreen />;
@@ -111,7 +111,7 @@ export default function App() {
     screenName = "Roles";
   } else if (path === "/school/templates") {
     screen = <SchoolTemplatesScreen />;
-    screenName = "Event templates";
+    screenName = "Update the event catalogue";
   } else if (path === "/school/events/new") {
     // Before the :definitionId route: identical segment counts, so the literal must win.
     screen = <NewEventScreen carnivalId={null} />;

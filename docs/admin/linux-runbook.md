@@ -160,11 +160,13 @@ docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt ./carnival-ro
 
 ### B7. First carnival
 
-Open the first-administrator link on a device that trusts the certificate (B6). Choose a username such as `backup-admin`, a display name and a password of at least 15 characters, and set up an authenticator app or skip it. You are signed in as a System administrator. Then:
+Open the first-administrator link on a device that trusts the certificate (B6). Choose a username such as `backup-admin`, a display name and a password of at least 15 characters, and set up an authenticator app or skip it. You are signed in as a System administrator and land on **School**, whose **Set up your school** list holds the next steps:
 
-1. **School → School settings**: name and colours. The houses default to BANKSIA, WATTLE, MOUNTAIN ASH and GREVILLEA (`SCHOOL_HOUSE_1`…`4`), which the synthetic rosters use.
-2. **School → Roster import**: upload `data/synthetic/ST_SYNTH.csv` (120 students, a few with deliberate errors for the review to flag). Review, approve, promote.
-3. **Carnivals → New carnival**, then **Manage** to apply the swimming or athletics event template, open the carnival and record some results.
+1. **School name, colours and houses** (School settings). The houses default to BANKSIA, WATTLE, MOUNTAIN ASH and GREVILLEA (`SCHOOL_HOUSE_1`…`4`), which the synthetic rosters use. The step is done once the school has a name other than the placeholder `(unconfigured)`; a `SCHOOL_NAME` set in `.env` already counts.
+2. **Staff accounts** (optional): add people under People, each with a role. Done once anyone besides you holds a role you granted.
+3. **Your first carnival**: **Carnivals → New carnival**, then the carnival's **Manage** checklist. Import the students from it: upload `data/synthetic/ST_SYNTH.csv` (120 students, a few with deliberate errors for the review to flag), review it and update the student list. Then add the standard swimming or athletics events, open the carnival and record some results.
+
+Once the school is named and has a carnival, the list folds to "School set up".
 
 ### B8. Update
 
@@ -210,7 +212,7 @@ docker compose down -v      # -v deletes the database and backup volumes
 |---|---|
 | `curl` fails the TLS handshake | Requests must use `SITE_ADDRESS` from B2; with a name set, the certificate names only that name, so `localhost` or the IP get a certificate error |
 | Sign-in loops or returns an error page | Redirect URI does not match `https://<name>/signin-oidc` exactly, or the secret's ID was pasted instead of its Value |
-| Signed in but every screen says you lack access | A local account: no role granted yet under School → Roles. An Entra account: `BOOTSTRAP_ADMIN_UPN` differs from its sign-in address and no group or in-app grant applies |
+| Signed in but every screen says you lack access | A local account: no role granted (People grants one when it adds someone; if that grant failed, grant it under School → Roles). An Entra account: `BOOTSTRAP_ADMIN_UPN` differs from its sign-in address and no group or in-app grant applies |
 | No first-administrator link after the deploy | `SITE_ADDRESS` is `localhost`, a smoke check failed, or a local account already exists (the script says which); see B9 |
 | "This setup link has expired or has already been used" | Links are single use and last 24 hours; an administrator resets the account, or run the host command (B9) |
 | `backup` keeps restarting | `BACKUP_AGE_RECIPIENT` empty and `BACKUP_ENCRYPTION` not `off` |

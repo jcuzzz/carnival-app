@@ -410,9 +410,27 @@ test("a fresh carnival: the setup checklist, the template picker, the blocked ad
     await settled(page.getByText("No roster is promoted yet", { exact: false }));
     await capture(page, "divisions-no-roster", width);
 
-    // And the deck's empty state names the step rather than "Manage".
+    // ADR-0066 §7: the Deck teaches no setup; a manager gets the one way to Manage.
     await page.goto(`/#/carnivals/${fresh.carnivalId}`);
-    await settled(page.getByRole("link", { name: "Add divisions" }));
+    await settled(page.getByRole("link", { name: "Set the carnival up" }));
+    await capture(page, "deck-not-set-up", width);
+  }
+});
+
+/**
+ * ADR-0066 §4: Event setup over an empty catalogue points at the standard events. The
+ * catalogue is school-wide and seeded, so its read is answered empty here.
+ */
+test("event setup with an empty catalogue", async ({ page }) => {
+  await signIn(page);
+  await page.route("**/api/v1/event-definitions?*", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
+  );
+  for (const width of WIDTHS) {
+    await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
+    await settled(page.getByText("The event catalogue is empty."));
+    await expect(page.getByRole("link", { name: "Start from the standard events" })).toBeVisible();
+    await capture(page, "event-setup-empty-catalogue", width);
   }
 });
 
@@ -476,11 +494,11 @@ test("the setup checklist warning a roster imported for another year", async ({ 
   });
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${rostered.carnivalId}/manage`);
-    const warning = page.getByText(`age groups are for ${rosterYear}`, { exact: false });
-    await settled(warning);
     const checklist = page.locator("section").filter({
       has: page.getByRole("heading", { name: "Set the carnival up" }),
     });
+    // Scoped: Ready to open repeats the sentence under Carnival status.
+    await settled(checklist.getByText(`ages are for ${rosterYear}`, { exact: false }));
     await captureRegion(page, checklist, "manage-checklist-roster-year", width);
   }
 });
@@ -710,6 +728,33 @@ test("event setup: adding a catalogue event in one press (ADR-0059)", async ({ p
   // paints it over the middle of the list rather than at the foot of the screen.
   await expect(page.locator(".toast")).toHaveCount(0);
   for (const width of WIDTHS) await capture(page, "event-setup-added", width);
+});
+
+/**
+ * ADR-0066 §5–6: Ready to open over the divisions the one-press add just wrote (ages 12–14),
+ * against a roster pinned to 12 and 13 and to last year, so two warnings have something to say.
+ */
+test("Manage's Ready to open, warning before the open", async ({ page }) => {
+  const rosterYear = (FIXED ? 2026 : new Date().getFullYear()) - 1;
+  await signIn(page);
+  await page.route(`**/api/v1/carnivals/${adding.carnivalId}/settings`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({
+      json: { ...(await response.json()), rosterAgeGroups: ["12", "13"], rosterYear },
+    });
+  });
+  const status = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Carnival status" }),
+  });
+  for (const width of WIDTHS) {
+    await page.goto(`/#/carnivals/${adding.carnivalId}/manage`);
+    await settled(status.getByText("an age no current student has", { exact: false }));
+    await expect(status.getByText(`ages are for ${rosterYear}`, { exact: false })).toBeVisible();
+    await expect(status.getByRole("button", { name: "Open carnival" })).toBeVisible();
+    await expect(status.getByRole("button", { name: "Open the carnival only" })).toBeVisible();
+    await captureRegion(page, status, "manage-ready-to-open", width);
+  }
 });
 
 /**
@@ -1205,7 +1250,7 @@ test("the roles list, with a revoke asking for its reason", async ({ page }) => 
 });
 
 /**
- * Event templates (ADR-0050 §9): the preview table a system administrator reads
+ * Updating the event catalogue from a template (ADR-0050 §9): the preview table a system administrator reads
  * before overwriting the shared catalogue. The dev catalogue is seeded from the
  * same template it is diffed against, so a KNOWN drift is created first — the
  * pre-ADR-0018 event name — and put back straight after: this pass must not
@@ -1221,7 +1266,7 @@ test("the event-template preview, with a real diff to read", async ({ playwright
   try {
     await signIn(page);
     await page.goto("/#/school/templates");
-    await settled(page.getByRole("heading", { name: "Event templates", level: 1 }));
+    await settled(page.getByRole("heading", { name: "Update the event catalogue", level: 1 }));
     // Named, not defaulted: the section selects the first readable template,
     // which since ADR-0052 is athletics — and the drift below is swimming's.
     await page.getByLabel("Template").selectOption("swimming");
@@ -1244,7 +1289,9 @@ test("the School hub, the event catalogue and a new definition", async ({ page }
   await page.goto("/#/school");
   await settled(page.getByRole("heading", { name: "School", level: 1 }));
   await expect(page.getByRole("link", { name: /Event catalogue/ })).toBeVisible();
-  for (const width of WIDTHS) await capture(page, "school-hub", width);
+  // The dev school is named and has carnivals, so "Set up your school" has folded.
+  await settled(page.getByText("School set up"));
+  for (const width of WIDTHS) await capture(page, "school-hub-setup-done", width);
 
   await page.goto("/#/school/events");
   await settled(page.getByRole("heading", { name: "Event catalogue", level: 1 }));
@@ -1257,6 +1304,36 @@ test("the School hub, the event catalogue and a new definition", async ({ page }
   await settled(page.getByRole("heading", { name: "New definition", level: 1 }));
   await expect(page.getByRole("option", { name: "Swimming" })).toBeAttached();
   for (const width of WIDTHS) await capture(page, "school-catalogue-new", width);
+});
+
+/**
+ * ADR-0066 §2: a school nobody has set up yet. The dev school is named and has carnivals, so
+ * the three reads that decide the list are answered as a fresh deployment's would be.
+ */
+test("a fresh school: the School checklist and the empty carnival list", async ({ page }) => {
+  // Before signing in: sign-in lands on the carnival list, whose read would otherwise be cached.
+  await page.route("**/api/v1/school/settings", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({ json: { ...(await response.json()), name: "(unconfigured)" } });
+  });
+  await page.route("**/api/v1/admin/role-assignments", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
+  );
+  await page.route("**/api/v1/carnivals", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
+  );
+  // Only the settings read is stubbed, so the shell header still shows the seeded branding name.
+  await signIn(page);
+
+  await page.goto("/#/school");
+  await settled(page.getByRole("heading", { name: "Set up your school" }));
+  await expect(page.getByText("Do this next")).toHaveCount(1);
+  for (const width of WIDTHS) await capture(page, "school-hub-setup", width);
+
+  await page.goto("/#/carnivals");
+  await settled(page.getByRole("link", { name: "Set up the school first" }));
+  for (const width of WIDTHS) await capture(page, "carnivals-empty", width);
 });
 
 test("the new carnival form, and a roster import with validation issues", async ({ page }) => {
@@ -1281,6 +1358,45 @@ test("the new carnival form, and a roster import with validation issues", async 
   for (const width of WIDTHS) {
     await capture(page, "import-review", width);
   }
+
+  // ADR-0066 §4: launched from a carnival's Students step, the year is the carnival's.
+  await page.goto(`/#/import?carnival=${fresh.carnivalId}`);
+  await settled(page.getByRole("link", { name: "← Manage" }));
+  await expect(year).toHaveValue(FIXED ? "2026" : String(new Date().getFullYear()));
+  await settled(page.getByRole("heading", { name: /Reconciliation preview/ }));
+  for (const width of WIDTHS) await capture(page, "import-from-carnival", width);
+
+  // ADR-0066 §8: the one press. Both writes are answered here: promoting the synthetic file's
+  // deliberate issues would change the roster every other capture and journey reads.
+  let promotedBatch: string | null = null;
+  await page.route("**/api/v1/imports/*/approve", (route) =>
+    route.fulfill({ json: { id: "screens-batch", status: "Approved" } }),
+  );
+  await page.route("**/api/v1/imports/*/promote", (route) => {
+    promotedBatch = new URL(route.request().url()).pathname.split("/").at(-2)!;
+    return route.fulfill({
+      json: { id: promotedBatch, status: "Promoted", promotedAtUtc: new Date().toISOString() },
+    });
+  });
+  // The re-reads after the press then say what a real promote would have left.
+  await page.route("**/api/v1/imports**", async (route) => {
+    if (route.request().method() !== "GET" || promotedBatch === null) return route.fallback();
+    const response = await route.fetch();
+    const body = (await response.json()) as { id?: string; status?: string }[] | { status?: string };
+    const promote = (row: { id?: string; status?: string }) =>
+      row.id === promotedBatch ? { ...row, status: "Promoted" } : row;
+    await route.fulfill({
+      json: Array.isArray(body)
+        ? body.map(promote)
+        : route.request().url().includes(promotedBatch)
+          ? { ...body, status: "Promoted" }
+          : body,
+    });
+  });
+  await page.getByRole("button", { name: "Approve and update the student list" }).click();
+  await settled(page.getByRole("link", { name: /^Back to / }));
+  await expect(page.locator(".toast")).toHaveCount(0);
+  for (const width of WIDTHS) await capture(page, "import-promoted-back", width);
 });
 
 /**
@@ -1451,8 +1567,28 @@ test("People: every account state, and a new person's one-time link", async ({ p
   await expect(page.getByText(/\(you\)/)).toBeVisible();
   for (const width of WIDTHS) await capture(page, "school-people", width);
 
+  // Answered here: the dev API would otherwise keep a real grant for jsmith.
+  await page.route("**/api/v1/admin/role-assignments", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 201,
+          json: {
+            id: "01900000-0000-7000-8000-00000000a006", upn: "jsmith", displayName: null,
+            role: "CarnivalAdministrator", bootstrap: false, boundToSubject: false,
+            localAccount: true, reason: "Added on People", assignedBySubject: "local:screens-1",
+            assignedAtUtc: day(0), revokedAtUtc: null, revokedBySubject: null,
+            revocationReason: null,
+          },
+        })
+      : route.fallback(),
+  );
   await page.getByLabel("Username").fill("jsmith");
   await page.getByLabel("Display name").fill("Jo Smith");
+  await page.getByLabel("Role").selectOption("CarnivalAdministrator");
+  const form = page.locator("form").filter({
+    has: page.getByRole("heading", { name: "Add a person" }),
+  });
+  for (const width of WIDTHS) await captureRegion(page, form, "school-people-role", width);
   await page.getByRole("button", { name: "Add person" }).click();
   await settled(page.getByRole("img", { name: /QR code of the setup link/ }));
   for (const width of WIDTHS) await capture(page, "school-people-link", width);

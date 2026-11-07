@@ -1,7 +1,13 @@
+import { Check } from "lucide-react";
 import { isDemoBuild } from "../api/client";
-import { useApiQuery } from "../api/useApiQuery";
+import { keys } from "../api/queryKeys";
+import { getSchoolSettings, listCarnivals, listRoleAssignments } from "../api/resources";
+import { useApiQuery, type ApiState } from "../api/useApiQuery";
 import { getMyAccount, localAccountKeys } from "../auth/localAccounts";
 import { hasRole, useSession, type Session } from "../auth/session";
+import { SetupChecklist } from "../features/carnivals/SetupChecklist";
+import type { SetupStep } from "../features/carnivals/setupSteps";
+import { schoolSteps } from "../features/school/schoolSteps";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 
@@ -43,13 +49,13 @@ const ROWS: readonly HubRow[] = [
   {
     path: "/import",
     title: "Roster import",
-    summary: "Load a student export, review what it would change, then promote it",
+    summary: "Load a student export, review what it would change, then update the student list",
     visible: schoolAdmin,
   },
   {
     path: "/school/templates",
-    title: "Event templates",
-    summary: "Preview what a deployed template would change in the catalogue, then apply it",
+    title: "Update the event catalogue",
+    summary: "Take a newer template's events into the catalogue",
     visible: schoolAdmin,
   },
   {
@@ -72,6 +78,10 @@ export default function SchoolScreen() {
   const rows = ROWS.filter((row) => row.visible(session));
   const localAdmin = session?.localAccount === true && schoolAdmin(session);
   const account = useApiQuery(localAccountKeys.myAccount(), getMyAccount, { enabled: localAdmin });
+  const setup = schoolAdmin(session) && gate === "allowed";
+  const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: setup });
+  const assignments = useApiQuery(keys.roleAssignments(), listRoleAssignments, { enabled: setup });
+  const carnivals = useApiQuery(keys.carnivals(), listCarnivals, { enabled: setup });
 
   if (gate === "loading") return <p>Loading…</p>;
   if (gate === "signedOut")
@@ -97,13 +107,24 @@ export default function SchoolScreen() {
           open the school's settings. <a href={href("/account")}>Set one up on My account</a>.
         </div>
       )}
+      {setup && session && [settings, assignments, carnivals].every(settled) && (
+        <SchoolSetup
+          steps={schoolSteps({
+            settings: settings.error ? null : settings.data,
+            assignments: assignments.error ? null : assignments.data,
+            subject: session.subject,
+            carnivals: carnivals.error ? null : carnivals.data,
+            localAccounts: !isDemoBuild(),
+          })}
+        />
+      )}
       {rows.length === 0 ? (
         <p>
           Nothing here is available to your roles. Ask a system administrator if you need one of
           the school-wide screens.
         </p>
       ) : (
-        <ul className="row-list card">
+        <ul className={setup ? "row-list card subsection" : "row-list card"}>
           {rows.map((row) => (
             <li key={row.path}>
               <a className="row-link" href={href(row.path)}>
@@ -117,5 +138,27 @@ export default function SchoolScreen() {
         </ul>
       )}
     </>
+  );
+}
+
+// Until every read answers, a finished school would flash the list before it folds.
+function settled(query: ApiState<unknown>): boolean {
+  return query.data !== undefined || query.error !== undefined;
+}
+
+function SchoolSetup({ steps }: { steps: readonly SetupStep[] }) {
+  const required = steps.filter((step) => !step.optional);
+  if (required.every((step) => step.done === true))
+    return (
+      <p className="row-sub">
+        School set up
+        <Check size={20} className="chip-tick" aria-hidden="true" />
+      </p>
+    );
+  return (
+    <section className="subsection">
+      <h2>Set up your school</h2>
+      <SetupChecklist steps={steps} />
+    </section>
   );
 }

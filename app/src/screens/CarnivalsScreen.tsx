@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "../api/client";
 import { keys } from "../api/queryKeys";
-import { listCarnivals } from "../api/resources";
+import { getSchoolSettings, listCarnivals } from "../api/resources";
 import { useApiQuery } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
 import { landingPath } from "../carnivals/landing";
 import { getSelectedCarnival, selectCarnival } from "../carnivals/selectedCarnival";
 import { SWITCHER_ROW_LIMIT, switcherList } from "../carnivals/switcherModel";
 import { NewCarnivalForm } from "../features/carnivals/NewCarnivalForm";
+import { schoolNamed } from "../features/school/schoolSteps";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { Freshness } from "../shell/Freshness";
@@ -19,6 +20,10 @@ export default function CarnivalsScreen({ autoSelect = false }: { autoSelect?: b
   const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
   const gate = useAccessGate(true);
   const carnivals = useApiQuery(keys.carnivals(), listCarnivals, { enabled: gate === "allowed" });
+  // Only a SystemAdministrator may read the settings, and only they can finish them.
+  const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, {
+    enabled: carnivals.data?.length === 0 && hasRole(session, "SystemAdministrator"),
+  });
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -80,7 +85,17 @@ export default function CarnivalsScreen({ autoSelect = false }: { autoSelect?: b
           Showing the first {SWITCHER_ROW_LIMIT} of {view.matched} — type to narrow.
         </p>
       )}
-      {list && view.total === 0 && <p>No carnivals yet.</p>}
+      {list && view.total === 0 && (
+        <p>
+          No carnivals yet.
+          {canManage && schoolNamed(settings.data) === false && (
+            <>
+              {" "}
+              <a href={href("/school")}>Set up the school first</a>
+            </>
+          )}
+        </p>
+      )}
       {list && view.total > 0 && view.matched === 0 && <p>No carnivals match that search.</p>}
       {view.rows.length > 0 && (
         <ul className="row-list card">

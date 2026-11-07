@@ -40,7 +40,7 @@ Only these transitions exist (`ILLEGAL_CARNIVAL_TRANSITION` otherwise), each aud
 
 ### Division status
 
-Each division (`CarnivalEvent`) has its own status, set by a carnival administrator: `Scheduled → Open ⇄ Closed`. "Open all scheduled" opens every scheduled division in one act. A legacy `Finalised` division can only move back to `Closed`; nothing enters `Finalised`. Division status changes are refused once the carnival is finalised.
+Each division (`CarnivalEvent`) has its own status, set by a carnival administrator: `Scheduled → Open ⇄ Closed`. "Open all scheduled" opens every scheduled division in one act; Manage's primary "Open carnival" opens the carnival and then does the same, and "Open the carnival only" leaves the divisions Scheduled ([ADR-0066](../adr/0066-the-setup-flow.md) §6). A legacy `Finalised` division can only move back to `Closed`; nothing enters `Finalised`. Division status changes are refused once the carnival is finalised.
 
 ### What each state allows
 
@@ -52,7 +52,7 @@ Each division (`CarnivalEvent`) has its own status, set by a carnival administra
 | Correct a result | any, while the result is not Final | any |
 | Remove an entry (no result), change a category override | not Finalised | any |
 | Edit a division's settings or status, races, the schedule, scoring settings, adjustments | not Finalised | |
-| Edit carnival details, add, generate or remove divisions, apply a template | Draft or Open | |
+| Edit carnival details, add, generate or remove divisions, add the standard events (apply a template) | Draft or Open | |
 
 State refusals on capture paths (`CARNIVAL_NOT_OPEN`, `EVENT_NOT_OPEN`) are retryable: the outbox keeps the item and sends it again once an administrator opens the carnival or division. Refusals on administration paths (`CARNIVAL_NOT_EDITABLE`) are final.
 

@@ -13,7 +13,7 @@ export default function SchoolTemplatesScreen() {
   if (gate === "loading") return <p>Loading…</p>;
   if (gate === "signedOut") {
     return (
-      <SignInOffer title="Event templates">
+      <SignInOffer title="Update the event catalogue">
         <p>Sign in to preview and apply the school's event templates.</p>
       </SignInOffer>
     );
@@ -21,7 +21,7 @@ export default function SchoolTemplatesScreen() {
   if (gate === "refused") {
     return (
       <>
-        <h1>Event templates</h1>
+        <h1>Update the event catalogue</h1>
         <div className="alert error" role="alert">
           Applying an event template needs the system administrator role.
         </div>
@@ -37,7 +37,7 @@ export default function SchoolTemplatesScreen() {
       <p>
         <a href={href("/school")}>← School</a>
       </p>
-      <h1>Event templates</h1>
+      <h1>Update the event catalogue</h1>
       <TemplatesSection offline={offline} />
     </>
   );

@@ -84,7 +84,7 @@ Once results exist, the measure type, units and attempt count are frozen (`MEASU
 - `HeightsJson` is the bar heights contested so far (Height events): ascending and append-only. `AttemptsPerHeight` is fixed once the first mark lands.
 - `Status` (`Scheduled`, `Open`, `Closed`) gates capture; `Version` is its concurrency token and also serialises heat numbering.
 
-`CarnivalEventOfficial` records which officials are assigned to a division. It is advisory and never gates capture: a race can span two divisions, and a recorder may capture for any of them.
+`CarnivalEventOfficial` records which officials are assigned to a division. It is advisory and never gates capture: a race can span two divisions, and a recorder may capture for any of them. The app no longer offers assignment ([ADR-0066](../adr/0066-the-setup-flow.md) §7); the API stays, and existing rows still drive "My events".
 
 ### Division profile
 

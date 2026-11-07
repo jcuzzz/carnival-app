@@ -95,7 +95,7 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
   return (
     <>
       <p>
-        <a href={href(`/carnivals/${carnivalId}`)}>← Carnival</a>
+        <a href={href(`/carnivals/${carnivalId}/manage`)}>← Manage</a>
       </p>
       <h1>Event setup</h1>
       {carnival.data && (
@@ -138,7 +138,18 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
       {!definitions.loading && !divisionsKnown && !events.error && (
         <p>Counting this carnival's divisions…</p>
       )}
-      {definitions.data && rows.length === 0 && <p>The event catalogue is empty.</p>}
+      {definitions.data && rows.length === 0 && (
+        <>
+          <p>The event catalogue is empty.</p>
+          {canManage && !locked && (
+            <div className="button-row">
+              <a className="button primary-link" href={href(`/carnivals/${carnivalId}/manage`)}>
+                Start from the standard events
+              </a>
+            </div>
+          )}
+        </>
+      )}
       {!divisionsKnown && rows.length > 0 && (
         <ul className="row-list card">
           {rows.map((row) => (

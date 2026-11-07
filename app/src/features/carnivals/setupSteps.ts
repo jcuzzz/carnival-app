@@ -12,11 +12,12 @@ import { codesSummary } from "../events/ageCodes";
 import { counted } from "../events/counted";
 import { categoryLabel } from "../events/eventLabels";
 import { buildEventSetupRows, splitSetupRows } from "../events/setupRows";
+import { rosterYearMismatch } from "./readiness";
 
 export type SetupStepId = "roster" | "divisions" | "events" | "program" | "open";
 
 export interface SetupStep {
-  id: SetupStepId;
+  id: string;
   title: string;
   /** The meta line: what the step is for, or what it now holds. */
   detail: string;
@@ -36,7 +37,7 @@ export interface SetupFacts {
   status: CarnivalStatus | undefined;
   /** Null when the read failed, not zero. */
   participation: readonly HouseParticipation[] | null | undefined;
-  /** SystemAdministrator: the roster step may then link at the import screen. */
+  /** SystemAdministrator: the Students step may then link at the import screen. */
   canImport: boolean;
   /** The year the promoted roster's ages are for; null = no roster, undefined = unread. */
   rosterYear?: number | null;
@@ -56,7 +57,7 @@ export interface SetupFacts {
 export function setupSteps(facts: SetupFacts): SetupStep[] {
   const base = `/carnivals/${facts.carnivalId}`;
   return [
-    rosterStep(facts),
+    studentsStep(facts),
     divisionsStep(facts, `${base}/setup/divisions`),
     eventsStep(facts, `${base}/setup/events`),
     programStep(facts, `${base}/schedule`),
@@ -69,38 +70,42 @@ export function firstUndoneStep(steps: readonly SetupStep[]): SetupStep | undefi
   return steps.find((step) => step.done === false && !step.optional);
 }
 
-function rosterStep(facts: SetupFacts): SetupStep {
+function studentsStep(facts: SetupFacts): SetupStep {
   const rows = facts.participation;
   const students = (rows ?? []).reduce((total, house) => total + house.competitors, 0);
   return {
     id: "roster",
-    title: "Roster",
-    action: "Import the roster",
+    title: "Students",
+    action: "Import the students",
     done: rows === undefined || rows === null ? null : students > 0,
     optional: false,
     // Imports are SystemAdministrator-only both ways: no link that only refuses.
-    path: facts.canImport ? "/import" : null,
+    path: facts.canImport ? `/import?carnival=${facts.carnivalId}` : null,
     detail:
       rows === null
-        ? "Check School → Roster import — the roster count couldn’t be read here"
+        ? "The student count couldn’t be read here"
         : rows === undefined
-          ? "The promoted snapshot every entry is drawn from"
+          ? "The student list every entry is drawn from"
           : students > 0
-            ? `${counted(students, "student")} in the promoted roster`
-            : "No roster has been promoted, so no student is eligible for an entry",
+            ? facts.rosterYear != null
+              ? `${counted(students, "student")} · ages for ${facts.rosterYear}`
+              : counted(students, "student")
+            : facts.canImport
+              ? "No students yet, so nobody can be entered"
+              : "No students yet: a system administrator imports the student list",
     warning: rosterYearWarning(facts),
   };
 }
 
 // A school may run on last year's roster on purpose, so this warns and never blocks.
 function rosterYearWarning(facts: SetupFacts): string | undefined {
-  const carnivalYear = Number(facts.carnivalDate?.slice(0, 4));
-  if (facts.rosterYear == null || !carnivalYear || facts.rosterYear === carnivalYear) {
-    return undefined;
-  }
+  const years = rosterYearMismatch(facts.rosterYear, facts.carnivalDate);
+  if (!years) return undefined;
   return (
-    `The roster’s age groups are for ${facts.rosterYear}, but this carnival is in ` +
-    `${carnivalYear}. Import the roster again for ${carnivalYear} under School → Roster import.`
+    `${years.text} ` +
+    (facts.canImport
+      ? `Import the students again for ${years.carnivalYear} from this step.`
+      : `A system administrator can import them again for ${years.carnivalYear}.`)
   );
 }
 

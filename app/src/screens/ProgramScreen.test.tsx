@@ -3,6 +3,7 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { keys } from "../api/queryKeys";
 import type { Carnival, CarnivalEvent, Schedule } from "../api/types";
+import { signIn, signOut } from "../auth/session";
 import { renderWithQuery } from "../test/queryWrapper";
 
 /**
@@ -114,6 +115,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   cleanup();
+  signOut();
   vi.mocked(getCarnival).mockReset();
   vi.mocked(getCarnivalSchedule).mockReset();
   vi.mocked(listCarnivalEvents).mockReset();
@@ -229,6 +231,29 @@ describe("ProgramScreen", () => {
     expect(mark.textContent).toMatch(/may still change/);
     expect(container.querySelector(".program")!.contains(mark)).toBe(true);
     expect(mark.closest(".no-print")).toBeNull();
+  });
+
+  it("leads a manager back to Manage, where the program is set up", async () => {
+    signIn({ subject: "admin-1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+    vi.mocked(getCarnival).mockResolvedValue(carnival);
+    vi.mocked(getCarnivalSchedule).mockResolvedValue(schedule);
+    vi.mocked(listCarnivalEvents).mockResolvedValue(events);
+
+    renderWithQuery(<ProgramScreen carnivalId="c-1" />);
+    const back = await screen.findByRole("link", { name: "← Manage" });
+    expect(back.getAttribute("href")).toBe("#/carnivals/c-1/manage");
+  });
+
+  it("leads anyone else back to the Deck", async () => {
+    signIn({ subject: "rec-1", displayName: "Rae Recorder", roles: ["Recorder"] });
+    vi.mocked(getCarnival).mockResolvedValue(carnival);
+    vi.mocked(getCarnivalSchedule).mockResolvedValue(schedule);
+    vi.mocked(listCarnivalEvents).mockResolvedValue(events);
+
+    renderWithQuery(<ProgramScreen carnivalId="c-1" />);
+    const back = await screen.findByRole("link", { name: "← Carnival" });
+    expect(back.getAttribute("href")).toBe("#/carnivals/c-1");
+    expect(screen.queryByRole("link", { name: "← Manage" })).toBeNull();
   });
 
   it("prints an open carnival's program clean", async () => {

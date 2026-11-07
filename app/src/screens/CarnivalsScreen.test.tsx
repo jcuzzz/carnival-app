@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { _resetReachabilityForTests } from "../api/reachability";
-import type { Carnival, CarnivalStatus } from "../api/types";
+import type { Carnival, CarnivalStatus, SchoolSettings } from "../api/types";
 import { signIn, signOut } from "../auth/session";
 import {
   _resetSelectedCarnivalForTests,
@@ -21,9 +21,10 @@ import { renderWithQuery } from "../test/queryWrapper";
 vi.mock("../api/resources", () => ({
   listCarnivals: vi.fn(),
   createCarnival: vi.fn(),
+  getSchoolSettings: vi.fn(),
 }));
 
-import { listCarnivals } from "../api/resources";
+import { getSchoolSettings, listCarnivals } from "../api/resources";
 import CarnivalsScreen from "./CarnivalsScreen";
 
 function carnival(
@@ -61,6 +62,9 @@ beforeEach(() => {
   _resetSelectedCarnivalForTests();
   Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
   vi.mocked(listCarnivals).mockReset().mockResolvedValue([]);
+  vi.mocked(getSchoolSettings)
+    .mockReset()
+    .mockResolvedValue({ name: "(unconfigured)" } as SchoolSettings);
   signIn({ subject: "s1", displayName: "Rae Recorder", roles: ["Recorder"] });
 });
 
@@ -166,5 +170,50 @@ describe("CarnivalsScreen", () => {
     await waitFor(() => expect(rows()).toHaveLength(SWITCHER_ROW_LIMIT));
 
     expect(getSelectedCarnival()).toBeNull();
+  });
+});
+
+describe("CarnivalsScreen with no carnivals", () => {
+  const SYSADMIN = {
+    subject: "s4",
+    displayName: "Sam Sysadmin",
+    roles: ["SystemAdministrator" as const],
+  };
+
+  it("sends a system administrator to the school while it is unnamed", async () => {
+    signIn(SYSADMIN);
+    renderWithQuery(<CarnivalsScreen />);
+
+    const link = await screen.findByRole("link", { name: "Set up the school first" });
+    expect((link as HTMLAnchorElement).hash).toBe("#/school");
+    expect(screen.getByText(/No carnivals yet\./)).toBeTruthy();
+  });
+
+  it("drops the link once the school is named", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue({ name: "Riverbend College" } as SchoolSettings);
+    signIn(SYSADMIN);
+    renderWithQuery(<CarnivalsScreen />);
+
+    await waitFor(() => expect(getSchoolSettings).toHaveBeenCalled());
+    expect(await screen.findByText("No carnivals yet.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Set up the school first" })).toBeNull();
+  });
+
+  it("reads no school settings once a carnival exists", async () => {
+    vi.mocked(listCarnivals).mockResolvedValue(history(1));
+    signIn(SYSADMIN);
+    renderWithQuery(<CarnivalsScreen />);
+
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(getSchoolSettings).not.toHaveBeenCalled();
+  });
+
+  it("reads no school settings for a carnival administrator", async () => {
+    signIn({ subject: "s2", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+    renderWithQuery(<CarnivalsScreen />);
+
+    expect(await screen.findByText("No carnivals yet.")).toBeTruthy();
+    expect(getSchoolSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: "Set up the school first" })).toBeNull();
   });
 });

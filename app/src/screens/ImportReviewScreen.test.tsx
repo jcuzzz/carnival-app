@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { _resetReachabilityForTests } from "../api/reachability";
 import type {
+  Carnival,
   ImportBatchSummary,
   ReconciliationReport,
   ValidationDocument,
@@ -13,6 +14,7 @@ import { signIn, signOut } from "../auth/session";
 import { renderWithQuery } from "../test/queryWrapper";
 
 vi.mock("../api/resources", () => ({
+  getCarnival: vi.fn(),
   listImportBatches: vi.fn(),
   getImportDefaults: vi.fn(),
   getImportValidation: vi.fn(),
@@ -23,15 +25,33 @@ vi.mock("../api/resources", () => ({
 }));
 
 import {
+  approveImport,
+  getCarnival,
   getImportDefaults,
   getImportReconciliation,
   getImportValidation,
   listImportBatches,
+  promoteImport,
   stageImport,
 } from "../api/resources";
 import ImportReviewScreen from "./ImportReviewScreen";
 
 const BATCH = "0190f3a0-0000-7000-8000-000000000001";
+const CARNIVAL = "0190f3a0-0000-7000-8000-0000000000c1";
+
+function carnival(date = "2026-02-20"): Carnival {
+  return {
+    id: CARNIVAL,
+    name: "Swimming Carnival",
+    date,
+    ownerSubject: "s1",
+    ruleVersion: "1",
+    status: "Draft",
+    type: "Swimming",
+    venue: null,
+    version: 1,
+  };
+}
 
 function batch(): ImportBatchSummary {
   return {
@@ -104,6 +124,9 @@ beforeEach(() => {
     latestYear: 2027,
     cutOff: "12-31",
   });
+  vi.mocked(getCarnival).mockReset().mockResolvedValue(carnival());
+  vi.mocked(approveImport).mockReset().mockResolvedValue(undefined as never);
+  vi.mocked(promoteImport).mockReset().mockResolvedValue(undefined as never);
   vi.mocked(stageImport).mockReset().mockResolvedValue({
     id: BATCH,
     status: "Validated",
@@ -114,12 +137,15 @@ beforeEach(() => {
   signIn({ subject: "s1", displayName: "Sys Admin", roles: ["SystemAdministrator"] });
 });
 
-afterEach(() => signOut());
+afterEach(() => {
+  signOut();
+  vi.unstubAllEnvs();
+});
 
 describe("ImportReviewScreen", () => {
   it("renders the batch list and, once a batch is picked, both reports", async () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     await screen.findByText("ST_SYNTH.csv");
     await screen.findByText(/Reconciliation preview/);
     expect(screen.getByText("No validation issues.")).toBeTruthy();
@@ -127,14 +153,14 @@ describe("ImportReviewScreen", () => {
   });
 
   it("renders with no batch selected", async () => {
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     await screen.findByText("ST_SYNTH.csv");
     expect(screen.getByRole("button", { name: "Review" })).toBeTruthy();
   });
 
   it("offers a sign-in to a signed-out visitor rather than the role notice", async () => {
     signOut();
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     expect(await screen.findByRole("link", { name: "Sign in" })).toBeTruthy();
     expect(screen.queryByText(/available to system administrators/)).toBeNull();
@@ -144,7 +170,7 @@ describe("ImportReviewScreen", () => {
 
   it("still names the role to a signed-in visitor without it", async () => {
     signIn({ subject: "s2", displayName: "Rae Recorder", roles: ["Recorder"] });
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     expect(await screen.findByText(/available to system administrators/)).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
@@ -153,34 +179,34 @@ describe("ImportReviewScreen", () => {
   // Roster import is a School hub row (ADR-0055 §1), so it carries the same
   // way back the other section screens do.
   it("goes back to the School hub", async () => {
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     await screen.findByText("ST_SYNTH.csv");
     expect(screen.getByRole("link", { name: "← School" }).getAttribute("href")).toBe("#/school");
   });
 
   // ADR-0060 §3: the year is on screen, and changeable, before anything is staged.
   it("pre-fills the competition year from the server and stages the file for it", async () => {
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     const year = await screen.findByLabelText<HTMLSelectElement>("Competition year");
     expect(year.value).toBe("2027");
     expect([...year.options].map((o) => o.value)).toEqual(["2025", "2026", "2027"]);
     expect(screen.getByText(/Ages as at 31 December 2027\./)).toBeTruthy();
 
     const file = new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" });
-    fireEvent.change(screen.getByLabelText(/CASES21 student export/), {
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
       target: { files: [file] },
     });
     await waitFor(() => expect(stageImport).toHaveBeenCalledWith(file, 2027));
   });
 
   it("stages the file for the year the organiser changes it to", async () => {
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     const year = await screen.findByLabelText<HTMLSelectElement>("Competition year");
     fireEvent.change(year, { target: { value: "2026" } });
     expect(screen.getByText(/Ages as at 31 December 2026\./)).toBeTruthy();
 
     const file = new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" });
-    fireEvent.change(screen.getByLabelText(/CASES21 student export/), {
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
       target: { files: [file] },
     });
     await waitFor(() => expect(stageImport).toHaveBeenCalledWith(file, 2026));
@@ -188,12 +214,12 @@ describe("ImportReviewScreen", () => {
 
   it("leaves the year to the server, and says so, when the defaults can't be read", async () => {
     vi.mocked(getImportDefaults).mockRejectedValue(new Error("offline"));
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     await screen.findByText(/the server will choose it/);
     expect(screen.queryByLabelText("Competition year")).toBeNull();
 
     const file = new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" });
-    fireEvent.change(screen.getByLabelText(/CASES21 student export/), {
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
       target: { files: [file] },
     });
     await waitFor(() => expect(stageImport).toHaveBeenCalledWith(file, undefined));
@@ -201,7 +227,7 @@ describe("ImportReviewScreen", () => {
 
   it("states the day the staged ages are as at", async () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     const heading = await screen.findByText(/Reconciliation preview — competition year 2026/);
     expect(heading.nextElementSibling?.textContent).toBe("Ages as at 31 December 2026.");
   });
@@ -229,7 +255,7 @@ describe("ImportReviewScreen", () => {
       }),
     );
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     await screen.findByText(/2 row\(s\) carry DUPLICATE_STKEY \/ MISSING_HOUSE exceptions/);
     expect(screen.getByText("DUPLICATE_STKEY")).toBeTruthy();
@@ -248,17 +274,18 @@ describe("ImportReviewScreen", () => {
       ),
     );
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     const notices = await screen.findAllByText(/This batch expired.*Upload the file again\./);
     expect(notices.length).toBe(2);
     await waitFor(() =>
-      expect((screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(
-        true,
-      ),
+      expect(
+        (screen.getByRole("button", { name: "Approve and update the student list" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true),
     );
     expect((screen.getByRole("button", { name: "Reject" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Promote" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Promote" })).toBeNull();
   });
 
   it("says a rejected batch's report was discarded", async () => {
@@ -268,9 +295,148 @@ describe("ImportReviewScreen", () => {
       validation: null,
     });
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
-    renderWithQuery(<ImportReviewScreen />);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     await screen.findByText(/discarded when this batch was rejected/);
     expect(screen.queryByText(/This batch expired/)).toBeNull();
+  });
+
+  // ADR-0066 §4: launched from a carnival, the year is that carnival's.
+  it("pre-fills the carnival's year when the server allows it", async () => {
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    const year = await screen.findByLabelText<HTMLSelectElement>("Competition year");
+    expect(year.value).toBe("2026");
+    expect(getCarnival).toHaveBeenCalledWith(CARNIVAL);
+    expect(screen.queryByText(/This carnival is in/)).toBeNull();
+    expect(screen.getByRole("link", { name: "← Manage" }).getAttribute("href")).toBe(
+      `#/carnivals/${CARNIVAL}/manage`,
+    );
+
+    const file = new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
+      target: { files: [file] },
+    });
+    await waitFor(() => expect(stageImport).toHaveBeenCalledWith(file, 2026));
+  });
+
+  it("keeps the server's year, and says why, when the carnival's is out of range", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("2030-03-01"));
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    await screen.findByText(
+      "This carnival is in 2030; a roster can be imported for 2025–2027 only.",
+    );
+    expect(screen.getByLabelText<HTMLSelectElement>("Competition year").value).toBe("2027");
+  });
+
+  it("names the batch by its file and upload time, never its id", async () => {
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    const { container } = renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+    await screen.findByText(/^ST_SYNTH\.csv, uploaded /);
+    expect(container.textContent).not.toContain(BATCH);
+  });
+
+  // ADR-0066 §8: one press, still two calls, so the batch passes through Approved.
+  it("approves then promotes in one press, and offers the way back to the carnival", async () => {
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    const press = await screen.findByRole("button", { name: "Approve and update the student list" });
+    await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    fireEvent.click(press);
+
+    const back = await screen.findByRole("link", { name: "Back to Swimming Carnival" });
+    expect(back.getAttribute("href")).toBe(`#/carnivals/${CARNIVAL}/manage`);
+    expect(back.className).toBe("button primary-link");
+    expect(approveImport).toHaveBeenCalledWith(BATCH, true);
+    expect(promoteImport).toHaveBeenCalledWith(BATCH);
+    expect(vi.mocked(approveImport).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(promoteImport).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("offers no way back to a carnival when not launched from one", async () => {
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+    const press = await screen.findByRole("button", { name: "Approve and update the student list" });
+    await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(press);
+
+    await waitFor(() => expect(promoteImport).toHaveBeenCalledWith(BATCH));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Approve and update the student list" })).toBeNull(),
+    );
+    expect(screen.queryByRole("link", { name: /^Back to/ })).toBeNull();
+    expect(getCarnival).not.toHaveBeenCalled();
+  });
+
+  it("leaves an approved batch with Promote on offer when the promote fails", async () => {
+    vi.mocked(promoteImport).mockRejectedValueOnce(new Error("Database unavailable."));
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    const press = await screen.findByRole("button", { name: "Approve and update the student list" });
+    await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false));
+    vi.mocked(getImportValidation).mockResolvedValue({ ...validation(), status: "Approved" });
+    fireEvent.click(press);
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "The batch is approved, but the student list was not updated. Database unavailable. " +
+        "Press Promote to try again.",
+    );
+    const promote = await screen.findByRole("button", { name: "Promote" });
+    expect(screen.queryByRole("link", { name: /^Back to/ })).toBeNull();
+
+    fireEvent.click(promote);
+    await screen.findByRole("link", { name: "Back to Swimming Carnival" });
+    expect(promoteImport).toHaveBeenCalledTimes(2);
+    expect(approveImport).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers only Promote at once after a failed promote, before the re-read lands", async () => {
+    vi.mocked(promoteImport).mockRejectedValueOnce(new Error("Database unavailable."));
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+    const press = await screen.findByRole("button", { name: "Approve and update the student list" });
+    await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false));
+    vi.mocked(getImportValidation).mockReturnValue(new Promise(() => {}));
+    vi.mocked(getImportReconciliation).mockReturnValue(new Promise(() => {}));
+    fireEvent.click(press);
+
+    const promote = await screen.findByRole("button", { name: "Promote" });
+    expect(screen.queryByRole("button", { name: "Approve and update the student list" })).toBeNull();
+    fireEvent.click(promote);
+    await waitFor(() => expect(promoteImport).toHaveBeenCalledTimes(2));
+    expect(approveImport).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the server's year when the carnival can't be read", async () => {
+    vi.mocked(getCarnival).mockRejectedValue(new Error("offline"));
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    const year = await screen.findByLabelText<HTMLSelectElement>("Competition year");
+    expect(year.value).toBe("2027");
+    expect(screen.queryByText(/This carnival is in/)).toBeNull();
+  });
+
+  describe("the synthetic-data line", () => {
+    const line = "Synthetic or de-identified data only in this build.";
+
+    it("shows in a development build", async () => {
+      renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+      expect(await screen.findByText(line)).toBeTruthy();
+    });
+
+    it("shows in a demo build", async () => {
+      vi.stubEnv("DEV", false);
+      vi.stubEnv("VITE_DEMO_MODE", "true");
+      renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+      expect(await screen.findByText(line)).toBeTruthy();
+    });
+
+    it("is absent from a school build", async () => {
+      vi.stubEnv("DEV", false);
+      vi.stubEnv("VITE_DEMO_MODE", "false");
+      renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+      await screen.findByLabelText(/Student list: a CSV export/);
+      expect(screen.queryByText(line)).toBeNull();
+    });
   });
 });

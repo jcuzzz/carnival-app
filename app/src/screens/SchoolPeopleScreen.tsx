@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
-import { getSchoolSettings } from "../api/resources";
-import type { IssuedSetupLink, LocalAccount } from "../api/types";
+import { getSchoolSettings, grantRole } from "../api/resources";
+import type { IssuedSetupLink, LocalAccount, PlatformRole } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import {
   changeLocalAccount,
@@ -15,6 +15,7 @@ import {
 } from "../auth/localAccounts";
 import { hasRole, useSession } from "../auth/session";
 import { QrCode } from "../features/accounts/QrCode";
+import { ROLES } from "../features/roles/RolesSection";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { showToast } from "../shell/toast";
@@ -37,8 +38,10 @@ export default function SchoolPeopleScreen() {
   const [issued, setIssued] = useState<IssuedSetupLink | null>(null);
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<PlatformRole>("Recorder");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [grantError, setGrantError] = useState<string | null>(null);
 
   const refresh = () => invalidate(localAccountKeys.localAccounts());
   const access = settings.data;
@@ -49,13 +52,25 @@ export default function SchoolPeopleScreen() {
     if (adding || username.trim() === "" || displayName.trim() === "") return;
     setAdding(true);
     setAddError(null);
+    setGrantError(null);
+    let created: IssuedSetupLink;
     try {
-      setIssued(await createLocalAccount(username.trim(), displayName.trim()));
-      setUsername("");
-      setDisplayName("");
-      refresh();
+      created = await createLocalAccount(username.trim(), displayName.trim());
     } catch (err) {
       setAddError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      setAdding(false);
+      return;
+    }
+    setIssued(created);
+    setUsername("");
+    setDisplayName("");
+    setRole("Recorder");
+    refresh();
+    try {
+      await grantRole({ upn: created.account.username, role, reason: "Added on People" });
+      invalidate(keys.roleAssignments());
+    } catch (err) {
+      setGrantError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
     } finally {
       setAdding(false);
     }
@@ -92,8 +107,8 @@ export default function SchoolPeopleScreen() {
       </p>
       <h1>People</h1>
       <p className="row-sub">
-        Accounts that sign in with a username and password here. Add someone, hand them their
-        setup link, then give them a role on the Roles page.
+        Accounts that sign in with a username and password here. Add someone and hand them
+        their setup link.
       </p>
       {adminsOnly && (
         <div className="alert notice" role="status">
@@ -112,6 +127,12 @@ export default function SchoolPeopleScreen() {
         </div>
       )}
 
+      {grantError && (
+        <div className="alert warn" role="alert">
+          Account created; the role wasn't granted: {grantError} Grant it on{" "}
+          <a href={href("/school/roles")}>Roles</a>.
+        </div>
+      )}
       {issued && <SetupLinkPanel issued={issued} onDone={() => setIssued(null)} />}
 
       {accounts.loading ? (
@@ -136,18 +157,25 @@ export default function SchoolPeopleScreen() {
       <form className="card settings-form" onSubmit={(e) => void add(e)}>
         <h2>Add a person</h2>
         <div className="form-grid">
-          <label className="field">
-            <span>Username</span>
-            <input
-              value={username}
-              maxLength={64}
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="e.g. jsmith"
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </label>
+          <div>
+            <label className="field">
+              <span>Username</span>
+              <input
+                value={username}
+                maxLength={64}
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="e.g. jsmith"
+                aria-describedby="add-person-username-hint"
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </label>
+            <p id="add-person-username-hint" className="row-sub">
+              A plain name, never an email address: lower-case letters, digits, dots, dashes and
+              underscores.
+            </p>
+          </div>
           <label className="field">
             <span>Display name</span>
             <input
@@ -158,10 +186,25 @@ export default function SchoolPeopleScreen() {
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </label>
+          <label className="field">
+            <span>Role</span>
+            <select
+              // Explicit: a wrapping label's accessible name would otherwise
+              // absorb the selected option's text ("RoleRecorder").
+              aria-label="Role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as PlatformRole)}
+            >
+              {ROLES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <p className="row-sub">
-          A plain name, never an email address: lower-case letters, digits, dots, dashes and underscores. The
-          app makes a setup link, valid 24 hours, for you to pass on in person or by message.
+          The app makes a setup link, valid 24 hours, for you to pass on in person or by message.
         </p>
         {addError && (
           <div className="alert error" role="alert">

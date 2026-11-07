@@ -2,8 +2,9 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 
 /**
  * ADR-0065 end to end, through the production build and real local accounts: the first
- * administrator from the host command, sign-out and sign-in, adding a person, an authenticator
- * enrolled with codes the test computes, the require-authenticator setting, reset and disable.
+ * administrator from the host command, sign-out and sign-in, adding a person with a role, an
+ * authenticator enrolled with codes the test computes, the require-authenticator setting, reset
+ * and disable.
  * One journey: every step depends on the accounts the steps before it made.
  */
 
@@ -121,6 +122,10 @@ test("local accounts, from the first administrator to a disabled account", async
     await choosePassword(page, ADMIN.password);
     await page.getByRole("button", { name: "Skip for now" }).click();
     await signedInAs(page, ADMIN.displayName);
+    await expect(page).toHaveURL(/#\/school$/);
+    await expect(
+      page.getByRole("heading", { name: "Set up your school", level: 2 }),
+    ).toBeVisible();
 
     const stored = await page.evaluate(() =>
       JSON.stringify([{ ...localStorage }, { ...sessionStorage }]),
@@ -151,16 +156,22 @@ test("local accounts, from the first administrator to a disabled account", async
   });
 
   let helperLink = "";
-  await test.step("the administrator adds a person and gets a one-time link", async () => {
+  await test.step("the administrator adds a person with a role and gets a one-time link", async () => {
     await page.goto("/#/school/people");
     await expect(page.getByRole("heading", { name: "People", level: 1 })).toBeVisible();
     await page.getByLabel("Username").fill(HELPER.username);
     await page.getByLabel("Display name").fill(HELPER.displayName);
+    await page.getByRole("combobox", { name: "Role" }).selectOption("Recorder");
     await page.getByRole("button", { name: "Add person" }).click();
     helperLink = await issuedLink(page);
     await expect(page.getByRole("img", { name: /QR code of the setup link/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add person" })).toBeVisible();
+    await expect(page.getByText(/the role wasn't granted/)).toHaveCount(0);
     await page.getByRole("button", { name: "Done" }).click();
     await expect(page.getByText("awaiting setup")).toBeVisible();
+
+    await page.goto("/#/school/roles");
+    await expect(page.getByText(`${HELPER.displayName} · Recorder`)).toBeVisible();
   });
 
   const helper = await freshContext(browser);

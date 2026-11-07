@@ -214,7 +214,7 @@ School → People (`/admin/local-accounts`, `accounts:administer`) lists every l
 
 | Action | Effect |
 |---|---|
-| Add | Creates the account (username, display name) with no password and returns a setup link, shown once. Roles are granted separately, under School → Roles |
+| Add | Creates the account (username, display name) with no password and returns a setup link, shown once. The same form names a role (Recorder by default), which the screen then grants by username through `POST /admin/role-assignments` with the reason "Added on People"; if that grant is refused, the account and its link stand and the screen says to grant the role under School → Roles |
 | Reset | Clears the password, the authenticator and the recovery codes, ends every session of the account at its next request, and returns a new setup link. Refused for a disabled account (`409 ACCOUNT_DISABLED`) |
 | Disable | Stops sign-in, ends every session at its next request and revokes the live setup link. Accounts are disabled, never deleted |
 | Enable | Lifts a disable; the person signs in with their existing password |

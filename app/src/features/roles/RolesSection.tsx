@@ -12,7 +12,7 @@ import { showToast } from "../../shell/toast";
  * role is not a row here.
  */
 
-const ROLES: readonly { value: PlatformRole; label: string; note: string }[] = [
+export const ROLES: readonly { value: PlatformRole; label: string; note: string }[] = [
   {
     value: "SystemAdministrator",
     label: "System administrator",

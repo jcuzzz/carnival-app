@@ -56,7 +56,10 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `dashboard-standings-{w}.png` | The Dashboard (ADR-0043 layout A) with house colours configured — standings beside program progress, then records today, participation and the organiser device row |
 | `dashboard-text-only-{w}.png` | The same board at a school that configured no house colours (ADR-0044 §3): every row carried by the house name alone |
 | `manage-{w}.png` | Manage — setup links, house points, lifecycle, and Finalise fenced at the foot |
-| `manage-checklist-{w}.png` | Manage on a carnival created and left alone (ADR-0054 §1): the ordered setup checklist, only Roster done, Divisions marked as the step to do next |
+| `manage-checklist-{w}.png` | Manage on a carnival created and left alone (ADR-0054 §1, ADR-0066 §4): the ordered setup checklist, only Students done, Divisions marked as the step to do next |
+| `manage-ready-to-open-{w}.png` | **A region** — Carnival status on a Draft carnival (ADR-0066 §5–6): the event and division count, the "Before you open" warnings, and the two opens |
+| `deck-not-set-up-{w}.png` | The Deck of a carnival not yet set up (ADR-0066 §7): one "Set the carnival up" link to Manage |
+| `event-setup-empty-catalogue-{w}.png` | Event setup over an empty catalogue: the link to the standard events |
 | `manage-apply-template-{w}.png` | **A region, not a full page** — the Apply-a-template panel on that same carnival: the picker pre-selected from the carnival's type, and the sentence stating what applying will do |
 | `event-new-blocked-{w}.png` | "Add an event" on a carnival with no divisions profile (ADR-0054 §3): the blocking notice, both ways out of it, and a submit that cannot fire |
 | `carnival-switcher-{w}.png` | The switcher, reached the way an official reaches it: the header carnival chip |
@@ -65,7 +68,12 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `outbox-discard-armed-{w}.png` | The two-step discard, armed — the confirm strip open over the row it would let go |
 | `outbox-discarded-{w}.png` | The same capture after it was let go: `⊘ discarded`, and who let it go and when |
 | `outbox-time-edit-{w}.png` | Edit-and-requeue in progress: the corrected-time field on a parked result |
-| `school-hub-{w}.png` | The School hub (ADR-0055 §1): one row per school-wide section, each on its own address |
+| `school-hub-setup-{w}.png` | The School hub of a fresh school (ADR-0066 §2): "Set up your school" above the section rows |
+| `school-hub-setup-done-{w}.png` | The School hub (ADR-0055 §1) once the school is set up: the folded "School set up" line, then one row per school-wide section |
+| `carnivals-empty-{w}.png` | The carnival list with no carnivals at a school with no name: "Set up the school first" |
+| `import-from-carnival-{w}.png` | The roster import launched from a carnival (ADR-0066 §4): the year from the carnival, the way back to Manage |
+| `import-promoted-back-{w}.png` | The same import after the one press (ADR-0066 §8): "Back to" the carnival |
+| `school-people-role-{w}.png` | **A region** — People's Add a person form with a role chosen |
 | `school-catalogue-{w}.png` | The event catalogue with no carnival behind it: grouped by sport, with the filters and each definition's blast radius |
 | `school-catalogue-new-{w}.png` | "New definition" at rest — the catalogue-only create ADR-0054 §3 took off the carnival |
 

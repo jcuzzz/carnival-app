@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
-import { getCarnival, getCarnivalSettings, listCarnivalEvents } from "../api/resources";
+import { getCarnival, listCarnivalEvents } from "../api/resources";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
-import { firstUndoneStep, setupSteps } from "../features/carnivals/setupSteps";
 import { EventList } from "../features/events/EventList";
 import { EventTiles } from "../features/events/EventTiles";
 import { queuedProgressByEvent, UNDELIVERED_STATUSES } from "../features/events/progress";
@@ -21,13 +20,7 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
   const events = useApiQuery(keys.carnivalEvents(carnivalId), () =>
     listCarnivalEvents(carnivalId),
   );
-  // Only for the empty state, and only for someone who can act on it.
   const empty = events.data !== undefined && events.data.length === 0;
-  const settings = useApiQuery(
-    keys.carnivalSettings(carnivalId),
-    () => getCarnivalSettings(carnivalId),
-    { enabled: canManage && empty },
-  );
   const invalidate = useInvalidate();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,19 +58,6 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
       </div>
     ) : null;
   const loadError = carnival.error ?? events.error;
-  const manage = `/carnivals/${carnivalId}/manage`;
-  const nextStep = firstUndoneStep(
-    setupSteps({
-      carnivalId,
-      status: c.status,
-      participation: null,
-      canImport: false,
-      profile: settings.data?.divisions,
-      profileDefault: settings.data?.divisionsDefault,
-      events: events.data,
-      schedule: undefined,
-    }),
-  );
 
   return (
     <>
@@ -107,14 +87,20 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
       {empty && (
         <>
           <h2>Events</h2>
-          <p>No events scheduled yet.</p>
-          {/* Without it a Draft carnival's deck is a dead end for the person who can fix it. */}
-          {canManage && !settings.loading && (
-            <div className="button-row">
-              <a className="button primary-link" href={href(nextStep?.path ?? manage)}>
-                {nextStep?.action ?? "Set the carnival up"}
-              </a>
-            </div>
+          {/* The Deck is for the day (ADR-0066 §7): setup lives on Manage. */}
+          {c.status !== "Draft" ? (
+            <p>No events in this carnival.</p>
+          ) : canManage ? (
+            <>
+              <p>This carnival isn't set up yet.</p>
+              <div className="button-row">
+                <a className="button primary-link" href={href(`/carnivals/${carnivalId}/manage`)}>
+                  Set the carnival up
+                </a>
+              </div>
+            </>
+          ) : (
+            <p>Nothing to capture yet: this carnival is still being set up.</p>
           )}
         </>
       )}

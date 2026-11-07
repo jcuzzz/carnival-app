@@ -63,7 +63,7 @@ export default function ScheduleBuilderScreen({ carnivalId }: { carnivalId: stri
   return (
     <>
       <p>
-        <a href={href(`/carnivals/${carnivalId}`)}>← Carnival</a>
+        <a href={href(`/carnivals/${carnivalId}/manage`)}>← Manage</a>
       </p>
       <h1>Program</h1>
       <p className="row-sub">

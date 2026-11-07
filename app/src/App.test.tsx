@@ -16,6 +16,8 @@ import { _resetSelectedCarnivalForTests } from "./carnivals/selectedCarnival";
 vi.mock("./api/resources", () => ({
   listCarnivals: vi.fn().mockResolvedValue([]),
   getCarnival: vi.fn().mockResolvedValue(null),
+  getSchoolSettings: vi.fn().mockResolvedValue({ name: "(unconfigured)", houses: [] }),
+  listRoleAssignments: vi.fn().mockResolvedValue([]),
   getRecordsForAdministration: vi.fn().mockResolvedValue([]),
 }));
 
@@ -129,7 +131,7 @@ describe("the School hub (ADR-0055 §1)", () => {
     expect(screen.queryByRole("link", { name: /Roster import/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /School settings/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /^Roles/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: /Event templates/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Update the event catalogue/ })).toBeNull();
   });
 
   it("gives a system administrator every row, in the ADR's order", async () => {
@@ -137,18 +139,20 @@ describe("the School hub (ADR-0055 §1)", () => {
     renderWithQuery(<App />);
 
     await screen.findByRole("heading", { name: "School", level: 1 });
-    const rows = [...document.querySelectorAll(".row-list .row-link .row-title")];
+    const rows = [...document.querySelectorAll("ul.row-list .row-link .row-title")];
     expect(rows.map((row) => row.textContent)).toEqual([
       "School settings",
       "People",
       "Roles",
       "Roster import",
-      "Event templates",
+      "Update the event catalogue",
       "Event catalogue",
       "School records",
     ]);
     expect(
-      [...document.querySelectorAll<HTMLAnchorElement>(".row-list .row-link")].map((a) => a.hash),
+      [...document.querySelectorAll<HTMLAnchorElement>("ul.row-list .row-link")].map(
+        (a) => a.hash,
+      ),
     ).toEqual([
       "#/school/settings",
       "#/school/people",

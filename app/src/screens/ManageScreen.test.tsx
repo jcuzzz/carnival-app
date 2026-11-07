@@ -109,7 +109,14 @@ const settings: CarnivalSettings = {
 
 /** A division of the carnival, in whatever state the checklist is being read in. */
 function division(id: string, status: CarnivalEventStatus = "Scheduled"): CarnivalEvent {
-  return { id, carnivalId: "c-1", eventDefinitionId: "def-1", status } as CarnivalEvent;
+  return {
+    id,
+    carnivalId: "c-1",
+    eventDefinitionId: "def-1",
+    ageGroup: "12",
+    scheduleSlotId: null,
+    status,
+  } as CarnivalEvent;
 }
 
 /** The catalogue behind the checklist's Events row (ADR-0059 §3). */
@@ -186,13 +193,13 @@ describe("ManageScreen", () => {
     vi.mocked(getProgress).mockResolvedValue(progress(412));
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    const roster = await screen.findByText(/^1\. Roster/);
-    const row = roster.closest("li")!;
+    const students = await screen.findByText(/^1\. Students/);
+    const row = students.closest("li")!;
     expect(row.textContent).toContain("Done");
-    expect(row.textContent).toContain("412 students in the promoted roster");
+    expect(row.textContent).toContain("412 students");
     expect(row.className).not.toContain("awaiting");
 
-    // Nothing is configured past the roster, so Divisions is what to do next —
+    // Nothing is configured past the students, so Divisions is what to do next —
     // and it is the ONLY step marked so.
     const divisions = screen.getByText(/^2\. Divisions/).closest("li")!;
     expect(divisions.textContent).toContain("Do this next");
@@ -213,7 +220,7 @@ describe("ManageScreen", () => {
     } as never);
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    await screen.findByText(/^1\. Roster/);
+    await screen.findByText(/^1\. Students/);
     expect(screen.getByText(/^2\. Divisions/).closest("li")!.textContent).toContain(
       "1 age · 1 category · 1 tier",
     );
@@ -244,15 +251,18 @@ describe("ManageScreen", () => {
     expect(program.textContent).not.toContain("Do this next");
   });
 
-  it("warns on the roster step when the roster's year is not the carnival's", async () => {
+  it("warns on the Students step when the roster's year is not the carnival's", async () => {
     vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, rosterYear: 2026 });
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    const warning = await screen.findByText(/age groups are for 2026, but this carnival is in 2027/);
-    expect(warning.className).toBe("alert warn");
-    expect(warning.textContent).toContain("School → Roster import");
-    const row = screen.getByText(/^1\. Roster/).closest("li")!;
+    const row = (await screen.findByText(/^1\. Students/)).closest("li")!;
+    const warning = await waitFor(() => {
+      const found = row.querySelector(".alert.warn");
+      expect(found?.textContent).toMatch(/ages are for 2026, but this carnival is in 2027/);
+      return found!;
+    });
+    expect(warning.textContent).toContain("A system administrator can import them again for 2027");
     expect(row.contains(warning)).toBe(true);
     expect(row.textContent).toContain("Done");
   });
@@ -262,22 +272,22 @@ describe("ManageScreen", () => {
     // The lanes editor renders off the settings read, so the year has landed by then.
     const { unmount } = renderWithQuery(<ManageScreen carnivalId="c-1" />);
     await screen.findByRole("heading", { name: "Lanes" });
-    expect(screen.queryByText(/age groups are for/)).toBeNull();
+    expect(screen.queryByText(/ages are for/)).toBeNull();
     unmount();
 
     vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, rosterYear: null });
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
     await screen.findByRole("heading", { name: "Lanes" });
-    expect(screen.queryByText(/age groups are for/)).toBeNull();
+    expect(screen.queryByText(/ages are for/)).toBeNull();
   });
 
   it("says so rather than guessing when the roster count can't be read", async () => {
     vi.mocked(getProgress).mockRejectedValue(new TypeError("Failed to fetch"));
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    const roster = (await screen.findByText(/^1\. Roster/)).closest("li")!;
-    expect(roster.textContent).toContain("Check School → Roster import");
-    expect(roster.textContent).not.toContain("Done");
+    const students = (await screen.findByText(/^1\. Students/)).closest("li")!;
+    expect(students.textContent).toContain("The student count couldn’t be read here");
+    expect(students.textContent).not.toContain("Done");
     // Unknown is not undone: the pointer moves on to the step that IS.
     expect(screen.getByText(/^2\. Divisions/).closest("li")!.textContent).toContain(
       "Do this next",
@@ -314,16 +324,18 @@ describe("ManageScreen", () => {
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
     await screen.findByRole("link", { name: /Divisions/ });
-    expect(screen.getByText(/^1\. Roster/)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Roster/ })).toBeNull();
+    expect(screen.getByText(/^1\. Students/).closest("li")!.textContent).toContain(
+      "a system administrator imports the student list",
+    );
+    expect(screen.queryByRole("link", { name: /Students/ })).toBeNull();
   });
 
-  it("links the import screen for a system administrator", async () => {
+  it("links the import, launched from this carnival, for a system administrator", async () => {
     signIn({ subject: "s0", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    expect((await screen.findByRole("link", { name: /Roster/ })).getAttribute("href")).toBe(
-      "#/import",
+    expect((await screen.findByRole("link", { name: /Students/ })).getAttribute("href")).toBe(
+      "#/import?carnival=c-1",
     );
   });
 
@@ -388,7 +400,7 @@ describe("ManageScreen", () => {
     expect(screen.queryByRole("button", { name: /Finalise/ })).toBeNull();
   });
 
-  // ---- Apply a template (ADR-0054 §2) ----
+  // ---- Start from the standard events (ADR-0054 §2) ----
 
   it("pre-selects the template matching the carnival's type and states what it will do", async () => {
     vi.mocked(listEventTemplates).mockResolvedValue([
@@ -403,8 +415,9 @@ describe("ManageScreen", () => {
     await waitFor(() => expect(picker.value).toBe("swimming"));
     expect([...picker.options].map((o) => o.value)).toEqual(["athletics", "swimming"]);
     const section = picker.closest("section")!;
+    expect(section.querySelector("h2")!.textContent).toBe("Start from the standard events");
     expect(section.textContent).toContain("created in the shared catalogue or reused");
-    expect(section.textContent).toContain("divisions profile is seeded");
+    expect(section.textContent).not.toContain("divisions profile");
     expect(section.textContent).toContain("age × category × tier");
   });
 
@@ -419,7 +432,9 @@ describe("ManageScreen", () => {
     const picker = (await screen.findByLabelText("Carnival template")) as HTMLSelectElement;
     expect(picker.value).toBe("");
     expect(picker.options[0]!.text).toBe("Choose a template…");
-    const apply = screen.getByRole("button", { name: "Apply template" }) as HTMLButtonElement;
+    const apply = screen.getByRole("button", {
+      name: "Add the standard events",
+    }) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
 
     // And it arms once the organiser says which one.
@@ -452,7 +467,7 @@ describe("ManageScreen", () => {
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
     await screen.findByLabelText("Carnival template");
-    fireEvent.click(screen.getByRole("button", { name: "Apply template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add the standard events" }));
 
     await waitFor(() => expect(applyCarnivalTemplate).toHaveBeenCalledWith("c-1", "swimming"));
     expect(await screen.findByText(/96 divisions/)).toBeTruthy();
@@ -477,19 +492,141 @@ describe("ManageScreen", () => {
     await waitFor(() => expect(getToasts().map((t) => t.message)).toContain("2 divisions opened."));
   });
 
-  it("offers the bulk open in the same press that opens the carnival", async () => {
+  // ---- Opening, and Ready to open (ADR-0066 §5–6) ----
+
+  it("opens the carnival and every scheduled division with the primary", async () => {
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
     vi.mocked(openScheduledEvents).mockResolvedValue({ opened: 2, eventIds: ["e-1", "e-2"] });
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    // Both offered: opening the carnival alone stays the plain press.
-    expect(await screen.findByRole("button", { name: "Open carnival" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open carnival and all 2 divisions" }));
+    await screen.findByRole("button", { name: "Open the carnival only" });
+    const primary = screen.getByRole("button", { name: "Open carnival" });
+    expect(primary.className).toBe("primary");
+    fireEvent.click(primary);
+
+    await waitFor(() => expect(openScheduledEvents).toHaveBeenCalledWith("c-1"));
+    expect(changeCarnivalStatus).toHaveBeenCalledWith("c-1", "Open");
+    expect(vi.mocked(changeCarnivalStatus).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(openScheduledEvents).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("opens only the carnival with the secondary", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const secondary = await screen.findByRole("button", { name: "Open the carnival only" });
+    expect(secondary.className).not.toContain("primary");
+    fireEvent.click(secondary);
 
     await waitFor(() => expect(changeCarnivalStatus).toHaveBeenCalledWith("c-1", "Open"));
-    await waitFor(() => expect(openScheduledEvents).toHaveBeenCalledWith("c-1"));
+    expect(openScheduledEvents).not.toHaveBeenCalled();
+  });
+
+  it("opens the divisions too while the event list is loading, or after it failed", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
+    const loading = () => new Promise<never>(() => {});
+    const failed = () => Promise.reject(new Error("nope"));
+    for (const events of [loading, failed]) {
+      cleanup();
+      vi.mocked(changeCarnivalStatus).mockClear();
+      vi.mocked(openScheduledEvents).mockClear();
+      vi.mocked(listCarnivalEvents).mockImplementation(events);
+      renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+      const primary = await screen.findByRole("button", { name: "Open carnival" });
+      expect(primary.className).toBe("primary");
+      expect(screen.queryByRole("button", { name: "Open the carnival only" })).toBeNull();
+      fireEvent.click(primary);
+
+      await waitFor(() => expect(openScheduledEvents).toHaveBeenCalledWith("c-1"));
+      expect(changeCarnivalStatus).toHaveBeenCalledWith("c-1", "Open");
+    }
+  });
+
+  it("opens no divisions when opening the carnival was refused", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    vi.mocked(changeCarnivalStatus).mockRejectedValue(new TypeError("Failed to fetch"));
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByRole("button", { name: "Open the carnival only" });
+    fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
+
+    await waitFor(() => expect(changeCarnivalStatus).toHaveBeenCalledWith("c-1", "Open"));
+    await screen.findByRole("alert");
+    expect(openScheduledEvents).not.toHaveBeenCalled();
+  });
+
+  it("says the carnival opened when only its divisions failed, and offers the retry", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
+    vi.mocked(changeCarnivalStatus).mockImplementation(async () => {
+      vi.mocked(getCarnival).mockResolvedValue(carnival("Open"));
+      return carnival("Open");
+    });
+    vi.mocked(openScheduledEvents).mockRejectedValue(
+      new ApiError(409, { error: "CONFLICT", detail: "Try again." }, "/x"),
+    );
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByRole("button", { name: "Open the carnival only" });
+    fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
+
+    expect(
+      await screen.findByText(/^The carnival is open, but its divisions weren’t opened: /),
+    ).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Open all divisions (2)" })).toBeTruthy();
+  });
+
+  it("lists what to check before opening, without disabling Open", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      rosterAgeGroups: ["12", "13"],
+      rosterYear: 2026,
+    });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([
+      { ...division("e-1"), ageGroup: "12", scheduleSlotId: "sl-1" },
+      { ...division("e-2"), ageGroup: "19", scheduleSlotId: null },
+    ]);
+    vi.mocked(getCarnivalSchedule).mockResolvedValue({
+      carnivalId: "c-1",
+      streams: [{ id: "s-1", name: "Pool", sortOrder: 0, slots: [{ id: "sl-1" }] }],
+    } as never);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const status = (await screen.findByRole("heading", { name: "Carnival status" })).closest(
+      "section",
+    )!;
+    await waitFor(() =>
+      expect([...status.querySelectorAll(".alert.warn li")].map((li) => li.textContent)).toEqual([
+        "The student list’s ages are for 2026, but this carnival is in 2027.",
+        "1 division has an age no current student has (age 19).",
+        "1 division is not in the program.",
+      ]),
+    );
+    expect(status.textContent).toContain("1 event · 2 divisions");
+    expect(
+      (screen.getByRole("button", { name: "Open carnival" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("shows no readiness check once the carnival is open", async () => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const status = (await screen.findByRole("heading", { name: "Carnival status" })).closest(
+      "section",
+    )!;
+    await screen.findByRole("button", { name: "Close carnival" });
+    expect(status.textContent).not.toContain("No events yet");
+    expect(status.textContent).not.toContain("Before you open");
   });
 
   it("shows the server's refusal beside the button it belongs to", async () => {

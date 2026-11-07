@@ -30,6 +30,8 @@ An administrator gives you a **setup link**, in person, as a QR code, or by mess
 3. Type it again and press **Save password**. You are now signed in.
 4. The app offers an authenticator app. Press **Set up an authenticator app (recommended)**, or **Skip for now** and do it later on My account. If your school requires one, you can't skip it.
 
+The school's first system administrator also chooses a username (a plain name such as `jsmith`) and a display name, and then lands on **School**. Its **Set up your school** list holds three steps, each ticked off as it is done: the school's name, colours and houses; staff accounts (optional); and your first carnival. Once the school is named and has a carnival, the list folds to one line, "School set up". Everyone else lands on the app's home screen.
+
 If the link says it has expired or has already been used, ask a system administrator for a new one. Opening a link without saving a password doesn't use it up.
 
 ## Setting up an authenticator app
@@ -80,9 +82,9 @@ Under **My account → Change password**, type your current password, then the n
 
 **Add a person**
 
-1. Under **Add a person**, enter a username (a plain name such as `jsmith`: lower-case letters, digits, dots, dashes and underscores, never an email address) and a display name, and press **Add person**.
+1. Under **Add a person**, enter a username (a plain name such as `jsmith`: lower-case letters, digits, dots, dashes and underscores, never an email address), a display name and a **Role** (Recorder unless you choose another), and press **Add person**. The app creates the account and grants the role, with the reason "Added on People".
 2. The app shows the person's **setup link** once, with a QR code. Let them scan it, or press **Copy link** and send it by message. It works once and lasts 24 hours.
-3. Give them a role under **School → Roles**, using their username. Without a role they can sign in but can't see or change anything.
+3. If the app says the account was created but the role wasn't granted, grant it under **School → Roles**, using their username. Without a role they can sign in but can't see or change anything.
 
 **Look after an account**
 

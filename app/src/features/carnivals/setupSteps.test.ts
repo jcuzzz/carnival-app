@@ -141,18 +141,48 @@ describe("setupSteps — the Events row", () => {
   });
 });
 
+/** ADR-0066 §4: the Students step imports from this carnival, for those who can import. */
+describe("setupSteps — the Students step", () => {
+  it("links a system administrator to the import launched from this carnival", () => {
+    const students = step({ ...known, canImport: true }, "roster");
+    expect(students.title).toBe("Students");
+    expect(students.action).toBe("Import the students");
+    expect(students.path).toBe("/import?carnival=c-1");
+  });
+
+  it("has no link for anyone else, and names who imports", () => {
+    expect(step(known, "roster").path).toBeNull();
+    const empty = step({ ...known, participation: [] }, "roster");
+    expect(empty.done).toBe(false);
+    expect(empty.detail).toBe("No students yet: a system administrator imports the student list");
+  });
+
+  it("counts the students and names the year their ages are for", () => {
+    expect(step({ ...known, rosterYear: 2027 }, "roster").detail).toBe(
+      "40 students · ages for 2027",
+    );
+    expect(step({ ...known, rosterYear: undefined }, "roster").detail).toBe("40 students");
+  });
+});
+
 /** ADR-0060 §4: a roster imported for another year is loud here, never blocking. */
 describe("setupSteps — the roster's year", () => {
   const dated: SetupFacts = { ...known, carnivalDate: "2027-02-25" };
 
-  it("warns, naming both years and the import, while the step stays done", () => {
-    const roster = step({ ...dated, rosterYear: 2026 }, "roster");
+  it("warns, naming both years and this step, while the step stays done", () => {
+    const roster = step({ ...dated, canImport: true, rosterYear: 2026 }, "roster");
     expect(roster.done).toBe(true);
     expect(roster.warning).toBe(
-      "The roster’s age groups are for 2026, but this carnival is in 2027. " +
-        "Import the roster again for 2027 under School → Roster import.",
+      "The student list’s ages are for 2026, but this carnival is in 2027. " +
+        "Import the students again for 2027 from this step.",
     );
     expect(firstUndoneStep(setupSteps({ ...dated, rosterYear: 2026 }))).toBeUndefined();
+  });
+
+  it("names who can import when this actor cannot", () => {
+    expect(step({ ...dated, rosterYear: 2026 }, "roster").warning).toContain(
+      "A system administrator can import them again for 2027.",
+    );
   });
 
   it("says nothing when the years agree", () => {

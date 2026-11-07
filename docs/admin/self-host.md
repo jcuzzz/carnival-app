@@ -81,7 +81,7 @@ Open it on a device that trusts the certificate, choose a username (a plain name
 
 ### Adding people
 
-In the app, **School → People → Add a person**: a username and a display name. The app shows a setup link, valid 24 hours and shown once, with a QR code; hand it over in person or by message. The person opens it and chooses their password. Then give them a role under **School → Roles**, by their username. People also lists each account's status, authenticator, lockout and last sign-in, and has Reset (a new link, clearing the password and authenticator), Disable, Enable and Clear lockout. Staff instructions are in [signing in](../guide/signing-in.md).
+In the app, **School → People → Add a person**: a username, a display name and a role (Recorder by default). The app creates the account, grants the role and shows a setup link, valid 24 hours and shown once, with a QR code; hand it over in person or by message. The person opens it and chooses their password. If the grant fails, the app says so: grant the role under **School → Roles**, by their username. People also lists each account's status, authenticator, lockout and last sign-in, and has Reset (a new link, clearing the password and authenticator), Disable, Enable and Clear lockout. Staff instructions are in [signing in](../guide/signing-in.md).
 
 ### Sign-in settings
 

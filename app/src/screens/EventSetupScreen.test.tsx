@@ -190,6 +190,36 @@ describe("EventSetupScreen", () => {
   });
 });
 
+describe("EventSetupScreen — the way back and the empty catalogue (ADR-0066 §4)", () => {
+  it("leads back to Manage", async () => {
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const back = await screen.findByRole("link", { name: "← Manage" });
+    expect(back.getAttribute("href")).toBe("#/carnivals/c-1/manage");
+  });
+
+  it("steers a manager from an empty catalogue to the standard events on Manage", async () => {
+    signIn({ subject: "admin-1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+    vi.mocked(listEventDefinitions).mockResolvedValue([]);
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    await screen.findByText("The event catalogue is empty.");
+    const start = await screen.findByRole("link", { name: "Start from the standard events" });
+    expect(start.getAttribute("href")).toBe("#/carnivals/c-1/manage");
+    expect(start.className).toBe("button primary-link");
+  });
+
+  it("offers no start link to someone who could not apply the standard events", async () => {
+    vi.mocked(listEventDefinitions).mockResolvedValue([]);
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    await screen.findByText("The event catalogue is empty.");
+    expect(screen.queryByRole("link", { name: "Start from the standard events" })).toBeNull();
+  });
+});
+
 describe("EventSetupScreen — the sport dimension (ADR-0052 §9)", () => {
   const shotPut = {
     id: "def-shot",

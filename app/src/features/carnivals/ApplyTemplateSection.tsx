@@ -61,10 +61,10 @@ export function ApplyTemplateSection({
 
   return (
     <section className="subsection">
-      <h2>Apply a template</h2>
+      <h2>Start from the standard events</h2>
       <p className="row-sub">
-        The fastest way to set a carnival up: one press does Divisions and Events, and builds the
-        program. Applying twice adds nothing it already has.
+        The fastest way to set a carnival up: one press adds the events and their divisions, and
+        builds the program. Pressing it twice adds nothing it already has.
       </p>
 
       {templates.error && (
@@ -73,7 +73,7 @@ export function ApplyTemplateSection({
             templates.error,
             "Can’t reach the server, so the templates couldn’t be listed.",
           )}{" "}
-          Divisions and Events can still be built by hand.
+          Events can still be added by hand on Event setup.
         </div>
       )}
       {error && (
@@ -105,9 +105,9 @@ export function ApplyTemplateSection({
             </select>
           </label>
           <p className="row-sub">
-            Its events are created in the shared catalogue or reused where they already exist, this
-            carnival’s divisions profile is seeded, one division is scheduled per event × age ×
-            category × tier, and the template’s program is built. Nothing is removed.
+            Its events are created in the shared catalogue or reused where they already exist, one
+            division is scheduled per event × age × category × tier, and the template’s program is
+            built. Nothing is removed.
           </p>
           <div className="button-row">
             <button
@@ -116,7 +116,7 @@ export function ApplyTemplateSection({
               disabled={applying || locked || template === ""}
               onClick={() => void apply()}
             >
-              {applying ? "Applying…" : "Apply template"}
+              {applying ? "Adding…" : "Add the standard events"}
             </button>
           </div>
         </div>
@@ -137,8 +137,8 @@ export function ApplyTemplateSection({
           </div>
           <div>
             {outcome.divisionProfileSeeded
-              ? "The divisions profile was seeded from the template."
-              : "The divisions profile was already set, and was left as it is."}{" "}
+              ? "This carnival’s ages and categories were set from the template."
+              : "This carnival’s ages and categories were already set, and were left as they are."}{" "}
             {counted(outcome.slotsCreated, "slot")} across{" "}
             {counted(outcome.streamsCreated, "stream")}.
           </div>

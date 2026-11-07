@@ -4,13 +4,14 @@ import { keys } from "../../api/queryKeys";
 import { createCarnival } from "../../api/resources";
 import type { CarnivalType } from "../../api/types";
 import { useInvalidate } from "../../api/useApiQuery";
+import { landingPath } from "../../carnivals/landing";
 import { navigate } from "../../router";
 import { LANE_COUNT_INVALID_TEXT, parseLaneCount } from "../races/laneCountField";
 
 export const CREATED_WITHOUT_ID_TEXT =
   "The server accepted the carnival but did not say which one it made — find it in the list before creating it again.";
 
-/** Create a carnival, then go straight to its detail screen. */
+/** Create a carnival, then go straight to its Manage tab, where setup starts. */
 export function NewCarnivalForm({ onCancel }: { onCancel: () => void }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<CarnivalType>("Swimming");
@@ -56,7 +57,8 @@ export function NewCarnivalForm({ onCancel }: { onCancel: () => void }) {
         setError(CREATED_WITHOUT_ID_TEXT);
         return;
       }
-      navigate(`/carnivals/${created.id}`);
+      // Only a manager sees this form, and a new carnival is a Draft.
+      navigate(landingPath(created.id, "Draft", true));
     } catch (err) {
       setError(errorText(err));
     } finally {

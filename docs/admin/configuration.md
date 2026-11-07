@@ -53,7 +53,7 @@ On its first start against an empty database the API writes one `SchoolConfigura
 | Connection strings, `APPLY_MIGRATIONS` | At start-up | `.env`, then recreate |
 | Import mapping file | Every roster import | Edit the file in `./config` |
 | Event template files | Every list, apply and reconcile | Edit the files in `./config/event-templates` (no restart) |
-| Event catalogue | Database; created from templates | School → Event catalogue, School → Event templates |
+| Event catalogue | Database; created from templates | School → Event catalogue, School → Update the event catalogue |
 | Carnival settings (scoring, lanes, divisions) | Database, per carnival | Manage carnival |
 
 ## `.env` variables
@@ -236,7 +236,7 @@ The start-up log reports how many bootstrap administrators are configured. A cou
 
 ## School settings in the app
 
-The School hub holds what belongs to the school rather than to one carnival. Settings, Roles, People, Roster import and Event templates are for System administrators only. Event catalogue and School records are also open to Carnival administrators. The server enforces each one.
+The School hub holds what belongs to the school rather than to one carnival. Settings, Roles, People, Roster import and Update the event catalogue are for System administrators only. Event catalogue and School records are also open to Carnival administrators. The server enforces each one.
 
 ### School settings
 
@@ -265,13 +265,13 @@ For local accounts. Kept in the database and edited here, not in `.env` or any c
 
 ### People
 
-Local accounts: add a person (username and display name), then hand over the setup link the app shows once. Reset, Disable, Enable and Clear lockout act on one account; you cannot act on your own. See [self-hosting § sign-in](self-host.md#adding-people).
+Local accounts: add a person (username, display name and role, Recorder by default), then hand over the setup link the app shows once. Adding grants the role in the same press, audited like a grant on Roles with the reason "Added on People"; if the grant is refused, the account still exists and the screen says to grant the role on Roles. Reset, Disable, Enable and Clear lockout act on one account; you cannot act on your own. See [self-hosting § sign-in](self-host.md#adding-people).
 
 ### Roles
 
 Grant a role to a person by their sign-in address (UPN or email) or a local account's username, with a reason. Revoking also needs a reason. Both are audited and take effect on that person's next request. An assignment is first matched by UPN; after the person's first sign-in it is bound to their stable account ID, so a later UPN rename does not lose it. A username must already be a local account under People, and is bound to it at once. You cannot revoke your own System administrator role.
 
-### Event templates
+### Update the event catalogue
 
 Lists the template files the server holds and lets a System administrator preview and apply a **reconcile** of one onto the school's event catalogue (see [below](#reconciling-a-changed-template)). Applying a template to a carnival is done from the carnival itself.
 
@@ -361,7 +361,7 @@ A minimal template:
 
 ### Applying a template to a carnival
 
-A Carnival administrator applies a template from **Manage carnival** while the carnival is neither Closed nor Finalised. One apply, in one transaction with its audit record:
+A Carnival administrator applies a template from **Manage carnival → Start from the standard events** (the **Add the standard events** button) while the carnival is neither Closed nor Finalised. One apply, in one transaction with its audit record:
 
 1. **Catalogue:** creates each definition whose code the school's catalogue does not have. Existing definitions are never changed, even if the template now says something different.
 2. **Events:** for each active definition, creates one event per age × category × tier (plus `OPEN` where `openDivision` is set), skipping any that already exist.
@@ -372,7 +372,7 @@ Applying again is safe: it only adds what is missing.
 
 ### Reconciling a changed template
 
-Because applying never changes an existing definition, a corrected template reaches the catalogue through **School → Event templates → reconcile**:
+Because applying never changes an existing definition, a corrected template reaches the catalogue through **School → Update the event catalogue → reconcile**:
 
 - **Preview** compares the template with the catalogue, definition by definition: *unchanged*, *update* (with each changed field, old and new value), *missing* (would be created), or *catalogue only* (in the catalogue but not the template; left alone). A row shows whether the definition was edited in the app.
 - **Guards** freeze fields that existing data depends on. A guarded change cannot be applied: leave that definition out and apply the rest.

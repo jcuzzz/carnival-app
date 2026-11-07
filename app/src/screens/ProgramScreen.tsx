@@ -1,6 +1,7 @@
 import { keys } from "../api/queryKeys";
 import { getCarnival, getCarnivalSchedule, listCarnivalEvents } from "../api/resources";
 import { useApiQuery } from "../api/useApiQuery";
+import { hasRole, useSession } from "../auth/session";
 import { ProgramView } from "../features/schedule/ProgramView";
 import { href } from "../router";
 
@@ -12,6 +13,7 @@ const HINT_ABOVE_STREAMS = LANDSCAPE_ABOVE_STREAMS - 1;
 
 // Everything but the program itself is no-print, so the printout is the program alone.
 export default function ProgramScreen({ carnivalId }: { carnivalId: string }) {
+  const canManage = hasRole(useSession(), "CarnivalAdministrator", "SystemAdministrator");
   const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
   const schedule = useApiQuery(keys.schedule(carnivalId), () => getCarnivalSchedule(carnivalId));
   const events = useApiQuery(keys.carnivalEvents(carnivalId), () => listCarnivalEvents(carnivalId));
@@ -30,7 +32,11 @@ export default function ProgramScreen({ carnivalId }: { carnivalId: string }) {
   return (
     <>
       <div className="button-row no-print">
-        <a href={href(`/carnivals/${carnivalId}`)}>← Carnival</a>
+        {canManage ? (
+          <a href={href(`/carnivals/${carnivalId}/manage`)}>← Manage</a>
+        ) : (
+          <a href={href(`/carnivals/${carnivalId}`)}>← Carnival</a>
+        )}
         <a href={href(`/carnivals/${carnivalId}/schedule`)}>Edit the program</a>
         <button type="button" className="primary" onClick={() => window.print()}>
           🖨 Print

@@ -124,7 +124,7 @@ Absent from every entity, every migration and the example import mapping:
 
 1. **Export.** A `SystemAdministrator` produces a roster export from the student information system (for Victorian government schools, a CASES21 `ST_*.csv`).
 2. **Upload and staging.** `POST /api/v1/imports`: `SystemAdministrator` only, `.csv` with a CSV or plain-text content type, size-capped, rate-limited (10 a minute per subject by default). The file is hashed, read through the deployment's import mapping, validated and staged. Only mapped columns are read; `BIRTHDATE` becomes an age group and is discarded.
-3. **Review and promotion.** The administrator reads validation and reconciliation, approves, then promotes. Promotion writes `Students` and `RosterSnapshots` and, in the same transaction, discards the staged rows and row issues.
+3. **Review and promotion.** The administrator reads validation and reconciliation, then presses one button that approves and promotes (two recorded steps). Promotion writes `Students` and `RosterSnapshots` and, in the same transaction, discards the staged rows and row issues.
 4. **Storage.** PostgreSQL 17 in the school's own Docker Compose stack, on an internal Docker network with port 5432 unpublished. Backups are encrypted; the live database volume is encrypted only if the host's disk is. **This deployment: hosted at `[location]`, disk encryption `[yes / no, how]`.**
 5. **Devices (PWA).** Officials sign in with a local account or through the school's identity provider; no token reaches JavaScript. A device holds:
    - the **outbox** (IndexedDB): captured results and entries, each with its capture-time official. `accepted` and `discarded` rows are pruned **7 days** after resolution, and an accepted row's student name is stripped **1 hour** after acceptance. `queued` and `syncing` rows are never pruned. **`conflict` and `rejected` rows keep the student name until a person resolves them**: a retention exception the PIA should name. The stored acknowledgement is narrowed and carries no names.
@@ -141,7 +141,7 @@ Absent from every entity, every migration and the example import mapping:
 flowchart TD
   A["Student information system<br/>(system of record)"] -->|"authorised roster export"| B["Upload: POST /api/v1/imports<br/>SystemAdministrator only"]
   B --> C["Staging: hash, map, validate<br/>BIRTHDATE becomes an age group, then discarded"]
-  C --> D["Review, approve, promote<br/>staged rows discarded in the same transaction"]
+  C --> D["Review, then approve and promote in one press<br/>staged rows discarded in the same transaction"]
   D --> E["PostgreSQL in the school's stack<br/>internal network, 5432 unpublished"]
   E <-->|"HTTPS, server-side cookie session"| F["PWA on staff and shared devices"]
   F --> G["IndexedDB outbox: 7-day prune,<br/>name stripped 1 h after acceptance,<br/>conflict and rejected rows keep the name until resolved"]

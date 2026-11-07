@@ -143,7 +143,7 @@ The age group is the student's exact age on the cut-off day of the **competition
 | 2016-01-01 | 2027 | `12-31` | `11` |
 | 2009-06-01 | 2027 | `12-31`, `openFromAge: 17` | `SNR` |
 
-The competition year is chosen per import, not configured. If the upload names none, the server uses the year of the earliest carnival dated today or later (looking no further than the end of next year), else the current year, so a November import for a February carnival lands on the carnival's year. "Today" is the school's date in `School:Timezone` (`Australia/Melbourne` when absent or blank; UTC when the zone is unknown). A year more than one from the current year is refused with `400 IMPORT_COMPETITION_YEAR_INVALID`, and nothing is staged. `GET /api/v1/imports/defaults` returns the default, the allowed range and the cut-off, which the upload form uses to pre-fill a year picker and state "Ages as at 31 December 2027". Ages only move when the roster is imported again. See [ADR-0060](../adr/0060-the-competition-year-is-chosen-at-import.md).
+The competition year is chosen per import, not configured. If the upload names none, the server uses the year of the earliest carnival dated today or later (looking no further than the end of next year), else the current year, so a November import for a February carnival lands on the carnival's year. "Today" is the school's date in `School:Timezone` (`Australia/Melbourne` when absent or blank; UTC when the zone is unknown). A year more than one from the current year is refused with `400 IMPORT_COMPETITION_YEAR_INVALID`, and nothing is staged. `GET /api/v1/imports/defaults` returns the default, the allowed range and the cut-off, which the upload form uses to pre-fill a year picker and state "Ages as at 31 December 2027". An import launched from a carnival pre-fills that carnival's year instead ([the review screen](#the-review-screen)). Ages only move when the roster is imported again. See [ADR-0060](../adr/0060-the-competition-year-is-chosen-at-import.md).
 
 The **competition category** comes from `GENDER`: `M` → `M`, `F` → `F`, any other non-blank value → `S`. It is a competition grouping default used only for server-side eligibility, and it does not leave the server except in the import review below ([ADR-0026](../adr/0026-the-student-category-is-server-side-only.md)).
 
@@ -167,7 +167,7 @@ Intake always stores the rows, so a batch without them was promoted, rejected or
 | Promoted or rejected | `409 IMPORT_ROWS_PURGED` | `409 IMPORT_BATCH_WRONG_STATE` |
 | Not promoted within 7 days of upload (any other status) | `409 IMPORT_BATCH_EXPIRED` | Approve or promote: `409 IMPORT_BATCH_EXPIRED`. Reject: accepted on a `Validated` batch, which becomes `Rejected` |
 
-`…/validation` returns the batch metadata with `validation: null` in every case. The review screen says the report was discarded on rejection, or that the batch expired and the file must be uploaded again, and disables all three review buttons on an expired batch (Reject included, although the API accepts it).
+`…/validation` returns the batch metadata with `validation: null` in every case. The review screen says the report was discarded on rejection, or that the batch expired and the file must be uploaded again, and disables the update and Promote buttons on an expired batch. Reject stays available, as the API accepts it.
 
 The 7-day expiry is applied by the retention sweep, a background job that runs at startup and daily on school deployments (PostgreSQL only; not in demo mode or local SQLite development). It clears the two columns and keeps the batch row and its counts. See [ADR-0032](../adr/0032-staged-rosters-are-not-kept.md) and [ADR-0062](../adr/0062-retention-windows-for-operational-data.md).
 
@@ -181,9 +181,18 @@ In one database transaction, for every non-rejected row:
 
 The batch becomes `Promoted`, the staged payloads are dropped, and the audit event is written in the same transaction. A failed promotion rolls back and leaves the batch `Approved` with its rows.
 
+## The review screen
+
+`/import` uploads a file, lists the batches, and reviews the selected one. A batch is named by its file and upload time; its id is never shown.
+
+- **Launched from a carnival.** The carnival checklist's Students step opens `/import?carnival=<id>` ([ADR-0066](../adr/0066-the-setup-flow.md) §4). The year picker pre-fills the carnival date's year when it lies within the range `…/defaults` allows; otherwise it keeps the server's default and says "This carnival is in 2030; a roster can be imported for 2025–2027 only". The back link leads to the carnival's Manage page instead of School. The roster is still school-wide: the carnival supplies only the default year.
+- **One press.** "Approve and update the student list" approves the batch and then promotes it, as two calls, so the batch passes through `Approved` and both `import.approve` and `import.promote` are written ([ADR-0066](../adr/0066-the-setup-flow.md) §8). If the promote fails, the batch stays `Approved`: the screen says so and offers Promote in place of the one press. Reject is its own button.
+- **The way back.** After a successful promote from a carnival, the screen offers "Back to *carnival name*", which leads to that carnival's Manage page.
+- The file field reads "Student list: a CSV export from your student system". Development and demo builds add "Synthetic or de-identified data only in this build".
+
 ## Who can do what
 
-Every import endpoint, reads included, needs **SystemAdministrator** (`imports:manage` and `imports:view` both map to that role alone): reconciliation returns staged roster rows verbatim, and an import is where real student data enters the system. The app shows the import screen (`/import`, reached from the School hub) to system administrators only, and the service worker never caches `/api/v1/imports/*`.
+Every import endpoint, reads included, needs **SystemAdministrator** (`imports:manage` and `imports:view` both map to that role alone): reconciliation returns staged roster rows verbatim, and an import is where real student data enters the system. The app shows the import screen (`/import`, reached from the School hub and from a carnival's Students step) to system administrators only, and the service worker never caches `/api/v1/imports/*`.
 
 The reconciliation table is the one screen that shows a student's raw `M`/`F`/`S` category beside their name, so an administrator can check the derivation before promoting.
 

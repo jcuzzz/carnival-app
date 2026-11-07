@@ -58,7 +58,15 @@ describe("NewCarnivalForm", () => {
 
     await waitFor(() => expect(createCarnival).toHaveBeenCalledTimes(1));
     expect(body()).toMatchObject({ laneCount: 8, autoFillLanes: true });
-    await waitFor(() => expect(location.hash).toBe("#/carnivals/c-1"));
+  });
+
+  // ADR-0066 §3: a new carnival lands on Manage, where its setup starts.
+  it("lands on the new carnival's Manage tab", async () => {
+    renderWithQuery(<NewCarnivalForm onCancel={vi.fn()} />);
+    fillRequired();
+    fireEvent.click(screen.getByText("Create"));
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c-1/manage"));
   });
 
   it("stays put and says so when the create answers without an id", async () => {

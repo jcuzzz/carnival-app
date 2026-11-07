@@ -19,6 +19,7 @@ import { adjustmentItemsForCarnival } from "../adjustments/submitAdjustment";
 import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
 import { ApplyTemplateSection } from "../features/carnivals/ApplyTemplateSection";
+import { readiness } from "../features/carnivals/readiness";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
 import { setupSteps } from "../features/carnivals/setupSteps";
 import { counted } from "../features/events/counted";
@@ -135,19 +136,25 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
     }
   }
 
+  // Called whatever the event list says: open-scheduled is idempotent, and the list may be unread.
   async function openCarnivalAndDivisions(): Promise<void> {
-    if (await change("Open")) await openAll();
+    if (await change("Open")) await openAll(true);
   }
 
-  async function openAll(): Promise<void> {
+  async function openAll(afterOpen = false): Promise<void> {
     setOpenError(null);
     setBusy(true);
     try {
       const result = await openScheduledEvents(carnivalId);
       invalidate(keys.carnival(carnivalId));
-      showToast(`${counted(result.opened, "division")} opened.`);
+      if (result.opened > 0 || !afterOpen) {
+        showToast(`${counted(result.opened, "division")} opened.`);
+      }
     } catch (err) {
-      setOpenError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      const reason = errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT);
+      setOpenError(
+        afterOpen ? `The carnival is open, but its divisions weren’t opened: ${reason}` : reason,
+      );
     } finally {
       setBusy(false);
     }
@@ -202,6 +209,16 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
     schedule: schedule.data,
   });
   const scheduled = (events.data ?? []).filter((e) => e.status === "Scheduled").length;
+  const ready =
+    c.status === "Draft"
+      ? readiness({
+          carnival: c,
+          events: events.data,
+          rosterAgeGroups: settings.data?.rosterAgeGroups,
+          rosterYear: settings.data?.rosterYear,
+          schedule: schedule.data,
+        })
+      : null;
 
   return (
     <>
@@ -296,17 +313,44 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
           Currently <strong>{c.status}</strong>. Closing is recoverable; finalising is not.
         </p>
         {isFinal && <p className="row-sub">Finalised carnivals cannot be reopened.</p>}
+        {ready && (
+          <>
+            {ready.summary && <p className="row-sub mono">{ready.summary}</p>}
+            {ready.warnings.length > 0 && (
+              <div className="alert warn" role="status">
+                <strong>Before you open</strong>
+                <ul>
+                  {ready.warnings.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
         <div className="button-row">
-          {next && next !== "Finalised" && (
-            <button className="primary" disabled={busy} onClick={() => void change(next)}>
-              {busy ? "Saving…" : next === "Open" ? "Open carnival" : "Close carnival"}
-            </button>
-          )}
-          {/* Every division is born Scheduled, so opening the carnival offers the bulk open. */}
-          {c.status === "Draft" && scheduled > 0 && (
-            <button disabled={busy} onClick={() => void openCarnivalAndDivisions()}>
-              {busy ? "Saving…" : `Open carnival and all ${scheduled} divisions`}
-            </button>
+          {/* Every division is born Scheduled, so the primary open opens them too. */}
+          {c.status === "Draft" ? (
+            <>
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void openCarnivalAndDivisions()}
+              >
+                {busy ? "Saving…" : "Open carnival"}
+              </button>
+              {scheduled > 0 && (
+                <button disabled={busy} onClick={() => void change("Open")}>
+                  {busy ? "Saving…" : "Open the carnival only"}
+                </button>
+              )}
+            </>
+          ) : (
+            next === "Closed" && (
+              <button className="primary" disabled={busy} onClick={() => void change(next)}>
+                {busy ? "Saving…" : "Close carnival"}
+              </button>
+            )
           )}
           {c.status !== "Draft" && !isFinal && scheduled > 0 && (
             <button disabled={busy} onClick={() => void openAll()}>

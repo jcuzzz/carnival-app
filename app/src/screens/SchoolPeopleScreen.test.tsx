@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { _resetReachabilityForTests } from "../api/reachability";
-import type { LocalAccount, SchoolSettings } from "../api/types";
+import type { LocalAccount, RoleAssignment, SchoolSettings } from "../api/types";
 import { signIn, signOut } from "../auth/session";
 import { _resetToastsForTests, getToasts } from "../shell/toast";
 import { renderWithQuery } from "../test/queryWrapper";
@@ -15,9 +15,9 @@ vi.mock("../auth/localAccounts", async (importOriginal) => ({
   changeLocalAccount: vi.fn(),
 }));
 
-vi.mock("../api/resources", () => ({ getSchoolSettings: vi.fn() }));
+vi.mock("../api/resources", () => ({ getSchoolSettings: vi.fn(), grantRole: vi.fn() }));
 
-import { getSchoolSettings } from "../api/resources";
+import { getSchoolSettings, grantRole } from "../api/resources";
 import {
   changeLocalAccount,
   createLocalAccount,
@@ -75,6 +75,7 @@ beforeEach(() => {
   vi.mocked(listLocalAccounts).mockReset().mockResolvedValue([ME, account()]);
   vi.mocked(getSchoolSettings).mockReset().mockResolvedValue({} as SchoolSettings);
   vi.mocked(createLocalAccount).mockReset();
+  vi.mocked(grantRole).mockReset().mockResolvedValue({} as RoleAssignment);
   vi.mocked(resetLocalAccount).mockReset();
   vi.mocked(changeLocalAccount).mockReset();
 });
@@ -119,19 +120,36 @@ describe("SchoolPeopleScreen", () => {
     expect(within(rowOf("Helper One")).getByRole("button", { name: "Reset Helper One" })).toBeTruthy();
   });
 
-  it("adds a person and shows the setup link and its QR code once", async () => {
+  it("adds a person with the chosen role and shows the setup link and its QR code once", async () => {
     vi.mocked(createLocalAccount).mockResolvedValue(
       issued(account({ id: "a9", username: "jsmith", displayName: "Jo Smith" })),
     );
     renderWithQuery(<SchoolPeopleScreen />);
 
     await screen.findByText("Helper One");
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: " jsmith " } });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: " JSmith " } });
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Jo Smith" } });
+    expect((screen.getByRole("combobox", { name: "Role" }) as HTMLSelectElement).value).toBe(
+      "Recorder",
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Role" }), {
+      target: { value: "CarnivalAdministrator" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add person" }));
 
     const panel = await screen.findByRole("region", { name: "Setup link for Jo Smith" });
-    expect(createLocalAccount).toHaveBeenCalledWith("jsmith", "Jo Smith");
+    expect(createLocalAccount).toHaveBeenCalledWith("JSmith", "Jo Smith");
+    await waitFor(() =>
+      expect(grantRole).toHaveBeenCalledWith({
+        upn: "jsmith",
+        role: "CarnivalAdministrator",
+        reason: "Added on People",
+      }),
+    );
+    expect(screen.queryByText(/the role wasn't granted/)).toBeNull();
+    expect((screen.getByRole("combobox", { name: "Role" }) as HTMLSelectElement).value).toBe(
+      "Recorder",
+    );
     expect((within(panel).getByLabelText("Setup link") as HTMLInputElement).value).toBe(
       `${location.origin}/#/setup/tok-abc`,
     );
@@ -140,6 +158,29 @@ describe("SchoolPeopleScreen", () => {
 
     fireEvent.click(within(panel).getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("region", { name: /Setup link for/ })).toBeNull();
+  });
+
+  it("keeps the setup link and points to Roles when the role is refused", async () => {
+    vi.mocked(createLocalAccount).mockResolvedValue(
+      issued(account({ id: "a9", username: "jsmith", displayName: "Jo Smith" })),
+    );
+    vi.mocked(grantRole).mockRejectedValue(
+      new ApiError(403, { error: "FORBIDDEN", detail: "Not allowed." }, "/api/v1/admin/role-assignments"),
+    );
+    renderWithQuery(<SchoolPeopleScreen />);
+
+    await screen.findByText("Helper One");
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "jsmith" } });
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Jo Smith" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add person" }));
+
+    const warning = await screen.findByText(/Account created; the role wasn't granted: Not allowed\./);
+    expect(warning.className).toBe("alert warn");
+    expect(within(warning).getByRole("link", { name: "Roles" }).getAttribute("href")).toBe(
+      "#/school/roles",
+    );
+    expect(screen.getByRole("region", { name: "Setup link for Jo Smith" })).toBeTruthy();
+    expect(grantRole).toHaveBeenCalledWith({ upn: "jsmith", role: "Recorder", reason: "Added on People" });
   });
 
   it("shows the server's refusal of a username", async () => {
@@ -154,6 +195,7 @@ describe("SchoolPeopleScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add person" }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/already taken/);
+    expect(grantRole).not.toHaveBeenCalled();
   });
 
   it("resets behind an armed confirm and hands over a new link", async () => {

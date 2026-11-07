@@ -57,6 +57,7 @@ export default function SetupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [inspection, setInspection] = useState(0);
+  const [firstAdministrator, setFirstAdministrator] = useState(false);
 
   // The screen holds its own copy; nothing outlives it.
   useEffect(() => () => dropSetupToken(), []);
@@ -86,7 +87,7 @@ export default function SetupScreen() {
   }
 
   function finish(): void {
-    navigate("/", { replace: true });
+    navigate(firstAdministrator ? "/school" : "/", { replace: true });
   }
 
   async function run(work: () => Promise<void>): Promise<void> {
@@ -118,6 +119,7 @@ export default function SetupScreen() {
       });
       dropSetupToken();
       setUsername(name);
+      setFirstAdministrator(first);
       if (answer.status === "enrolmentRequired") {
         setPhase({
           kind: "enrol",
@@ -217,8 +219,8 @@ export default function SetupScreen() {
                 />
               </label>
               <p className="row-sub">
-                A plain name such as backup-admin: lower-case letters, digits, dots, dashes and underscores,
-                never an email address.
+                A plain name such as jsmith: lower-case letters, digits, dots, dashes and
+                underscores, never an email address.
               </p>
               {fieldErrorFor("username") && (
                 <p className="field-error" role="alert">

@@ -104,8 +104,22 @@ describe("SetupScreen", () => {
     // Used: nothing keeps it after this.
     expect(setupToken()).toBeNull();
 
+    // The first administrator goes on to set up the school (ADR-0066 §1).
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await waitFor(() => expect(location.hash).toBe("#/"));
+    await waitFor(() => expect(location.hash).toBe("#/school"));
+  });
+
+  it("sends a first administrator whose sign-in needs a code to the sign-in screen", async () => {
+    vi.mocked(completeSetup).mockResolvedValue({ status: "codeRequired" });
+    renderWithQuery(<SetupScreen />);
+
+    await screen.findByText(/first system administrator/);
+    type("Username", "backup-admin");
+    type("Display name", "Backup Admin");
+    choosePassword();
+    fireEvent.click(screen.getByRole("button", { name: "Save password" }));
+
+    await waitFor(() => expect(location.hash).toBe("#/login"));
   });
 
   it("enrols from the offer and shows the recovery codes once", async () => {
@@ -137,6 +151,7 @@ describe("SetupScreen", () => {
     const stored = JSON.stringify([{ ...localStorage }, { ...sessionStorage }]);
     for (const secret of [TOKEN, PASSWORD, ENROLMENT.secret, "aaaa-1111"])
       expect(stored).not.toContain(secret);
+    // Anyone else's link, a reset's included, lands on the carnivals.
     fireEvent.click(screen.getByRole("button", { name: /I've saved them/ }));
     await waitFor(() => expect(location.hash).toBe("#/"));
   });

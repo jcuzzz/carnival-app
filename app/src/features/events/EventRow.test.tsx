@@ -12,7 +12,6 @@ import { EventRow } from "./EventRow";
  */
 
 vi.mock("../../api/resources", () => ({
-  assignOfficials: vi.fn(),
   changeEventStatus: vi.fn(),
 }));
 
@@ -42,10 +41,10 @@ const base: CarnivalEvent = {
   officials: [],
 };
 
-function renderRow(event: CarnivalEvent) {
+function renderRow(event: CarnivalEvent, canManage = false) {
   return render(
     <ul>
-      <EventRow event={event} canManage={false} busy={false} onAction={vi.fn()} />
+      <EventRow event={event} canManage={canManage} busy={false} onAction={vi.fn()} />
     </ul>,
   );
 }
@@ -96,5 +95,17 @@ describe("EventRow", () => {
   it("shows the division's own age beside its category", () => {
     renderRow({ ...base, ageGroup: "SNR", category: "M" });
     expect(screen.getByText(/SNR · Boys/)).toBeTruthy();
+  });
+
+  // ADR-0066 §7: assigning officials is planning, not capture, so it left the Deck.
+  it("offers a manager no Officials button but still lists who is assigned", () => {
+    renderRow(
+      { ...base, officials: [{ subjectId: "s-9", subjectDisplayName: "Olive Official" }] },
+      true,
+    );
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Officials/ })).toBeNull();
+    expect(screen.getByText(/officials: Olive Official/)).toBeTruthy();
   });
 });

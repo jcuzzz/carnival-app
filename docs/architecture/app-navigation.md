@@ -20,11 +20,11 @@ The app uses **hash routing** (`#/carnivals/…`), so the static host needs no r
 | `/carnivals/:id/setup/events`, `…/setup/events/new`, `…/setup/events/:definitionId` | Event setup, add an event, edit one |
 | `/carnivals/:id/setup/divisions` | Divisions profile |
 | `/school` | **School** hub |
-| `/school/settings`, `/school/roles`, `/school/templates` | School settings (including Sign-in), role assignment, event templates |
+| `/school/settings`, `/school/roles`, `/school/templates` | School settings (including Sign-in), role assignment, Update the event catalogue (take a newer template's events into the catalogue) |
 | `/school/people` | Local accounts: add, reset, disable, enable, clear a lockout (not in a demo build) |
 | `/school/events`, `/school/events/new`, `/school/events/:definitionId` | Event catalogue |
 | `/school/records` | School records (`/records-admin` redirects here) |
-| `/import` | Roster import |
+| `/import` | Roster import. `?carnival=<id>` when launched from a carnival's Students step: the competition year pre-fills from the carnival's date, the back link and the link after a promote lead to that carnival's Manage ([roster import](imports.md)) |
 | `/outbox` | This device's outbox |
 | `/login` | Sign in: the one sign-in box (local password, or the hand-off to the identity provider), or the development identity picker on the Vite dev server. `?returnUrl=` names where to go afterwards |
 | `/setup/:token` | A setup link: the token is moved into memory and the address replaced with `/setup` before paint (not in a demo build) |
@@ -51,12 +51,12 @@ The Outbox is reached from the header indicator, never from behind a role-gated 
 
 | Screen | Job |
 |---|---|
-| **Carnivals** | Pick the carnival this device works in. Open carnivals first, then most recent; 12 rows with a search box. Administrators create carnivals here; a create the server answers without an id stays on the form and says so. Signed out, or when the list read answers `401`, it offers Sign in instead of the list, so a cold signed-out start never shows a raw error. |
-| **Deck** | Get to the event being captured: event tiles ("My events" for an official assigned to divisions, then all events) and the event list. Works from the cached event list with no uplink. On a carnival not yet set up, a manager sees one "Set the carnival up" link. |
+| **Carnivals** | Pick the carnival this device works in. Open carnivals first, then most recent; 12 rows with a search box. Administrators create carnivals here, and a new carnival lands on its Manage; a create the server answers without an id stays on the form and says so. With no carnivals the list reads "No carnivals yet."; a System administrator whose school has no name yet also gets a "Set up the school first" link to School. Signed out, or when the list read answers `401`, it offers Sign in instead of the list, so a cold signed-out start never shows a raw error. |
+| **Deck** | Get to the event being captured on the day: event tiles ("My events" for an official assigned to divisions, then all events), the event list and per-division Open and Close. Works from the cached event list with no uplink. Nothing here sets a carnival up ([ADR-0066](../adr/0066-the-setup-flow.md) §7): on a Draft carnival with no events a manager sees one "Set the carnival up" link to Manage, and anyone else a line saying the carnival is still being set up. Officials are not assigned here; existing assignments still show on each row's meta line and still drive "My events". |
 | **Capture deck** | Enter entries, lanes and results for one division, one heat at a time, with a "Next event" link to the next division on the program ([races, heats and lanes](races-and-lanes.md)). |
 | **Dashboard** | How the carnival is going: house standings and progress, read-only. Administrators also see the devices panel. |
-| **Manage** | The organiser's changes: setup checklist, links to reports and records, scoring rules, lanes, carnival status, and Finalise at the foot with its own confirmation. |
-| **School** | A hub of school-wide sections, each on its own route: settings and houses, roles, people (local accounts), roster import and event templates (System administrator); event catalogue and school records (Carnival or System administrator). A System administrator signed in with a local account that has no authenticator app sees a warning linking to My account. |
+| **Manage** | The organiser's changes: the setup checklist (Students, Divisions, Events, Program (optional), Open, each linking to its screen), "Start from the standard events" (the template apply), links to reports and records, scoring rules, lanes, carnival status, and Finalise at the foot with its own confirmation. While the carnival is Draft, Carnival status shows Ready to open: a count of events and divisions and a "Before you open" list of warnings (a roster year that is not the carnival's, divisions whose age no current student has, divisions outside a program that has slots, no events). It never blocks. The primary "Open carnival" opens the carnival and every Scheduled division; "Open the carnival only" leaves the divisions Scheduled, for schools that open events as they are called ([ADR-0066](../adr/0066-the-setup-flow.md) §5–6). |
+| **School** | A hub of school-wide sections, each on its own route: settings and houses, people (local accounts), roles, roster import and Update the event catalogue (System administrator); event catalogue and school records (Carnival or System administrator). A System administrator first sees "Set up your school": School name, colours and houses; Staff accounts (optional); Your first carnival. Each row's done-state is derived from data (a school name other than the bootstrap placeholder, a role granted by this administrator, any carnival), never stored; once the two required rows are done the list folds to one "School set up" line ([ADR-0066](../adr/0066-the-setup-flow.md) §2). A System administrator signed in with a local account that has no authenticator app sees a warning linking to My account. |
 | **Outbox** | This device's queue: what is waiting, what needs a person, what has synced. |
 
 ## The selected carnival
@@ -89,6 +89,9 @@ flowchart TD
   | Closed, Finalised | Dashboard |
 
   Role never chooses between Deck and Dashboard: administrators record results on the day too. Home waits for the session to settle before deciding, so it does not decide against an empty role list.
+- **New carnival**: the rule applies from creation, so a new carnival opens on its Manage.
+- **First administrator**: finishing the first administrator's setup link lands on School, where "Set up your school" is the next step; any other setup link lands on `/`.
+- **Back links**: Event setup, the program builder and the printable program lead back to Manage (`← Manage`), as does a roster import launched from a carnival.
 - **Silent auto-selection**: from `/` only, with nothing selected, a school with exactly one Open carnival has it selected without a prompt. The header chip names it. With two carnivals open, nothing is auto-selected. Visiting `/carnivals` directly never auto-selects, so an official who came to switch is not bounced away.
 - **Deep links adopt**: opening any `/carnivals/:id/…` address makes that carnival the selection. The selection is a default, never a lock, so printed and shared links keep working.
 - **Dropping it**: the selection is cleared only when the server answers `404` for it. A network failure or a `401` is not evidence the carnival is gone, and a dead uplink at the venue must not drop officials out of their own carnival. The carnival is only re-read while signed in.
@@ -110,7 +113,7 @@ The **Outdoor** toggle in the header switches to high-contrast tokens for bright
 
 The app reads the session's roles (`hasRole` in `auth/session.ts`) to decide what to **show**: the Manage and School tabs, the School hub's rows, create and edit controls, administrator-only panels. This is a convenience, not access control. **The server decides**: every endpoint names a policy, and a `403` is the rule ([authorisation and audit](authorisation-and-audit.md)).
 
-Role-gated screens are built on `useAccessGate` (`features/ui/SignInOffer.tsx`: the carnival switcher, the School hub, School settings, Roles, roster import, Event templates, the event catalogue, School records, Add an event and Manage) and tell three states apart:
+Role-gated screens are built on `useAccessGate` (`features/ui/SignInOffer.tsx`: the carnival switcher, the School hub, School settings, Roles, roster import, Update the event catalogue, the event catalogue, School records, Add an event and Manage) and tell three states apart:
 
 - **loading**: the session has not settled yet.
 - **signed out**: offers Sign in, because a role-named refusal would be confusing advice to someone whose session simply lapsed.

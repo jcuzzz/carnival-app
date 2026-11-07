@@ -25,11 +25,11 @@ test("an organiser builds a stream, a slot and a placement", async ({ page }) =>
   await signIn(page);
   await page.goto(`/#/carnivals/${seed.carnivalId}`);
 
-  // The builder is an organiser surface now, reached through Manage rather than
-  // from a button row on the deck (ADR-0024 §4/§7).
+  // The builder is an organiser surface, reached through Manage's setup checklist
+  // rather than from the deck (ADR-0024 §4/§7, ADR-0066 §4).
   await page.getByRole("link", { name: "Manage" }).click();
   await expect(page.getByRole("heading", { name: "Manage carnival", level: 1 })).toBeVisible();
-  await page.getByRole("link", { name: /^Program/ }).click();
+  await page.getByRole("link", { name: /^\d+\. Program/ }).click();
   await expect(page.getByRole("heading", { name: "Program", level: 1 })).toBeVisible();
   // A fresh carnival has no program, and every event is unscheduled — which is
   // an ordinary state, not a fault: all of them are already enterable.
