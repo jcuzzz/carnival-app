@@ -1,6 +1,6 @@
 # ADR-0060: The competition year is chosen at roster import
 
-- **Status:** Accepted (2026-09). Amends [ADR-0054](0054-setting-up-a-carnival.md) §1: the setup checklist's Roster step gains a roster-year warning.
+- **Status:** Accepted (2026-09). Amends [ADR-0054](0054-setting-up-a-carnival.md) §1: the setup checklist's Roster step gains a roster-year warning. Partly superseded by [ADR-0066](0066-the-setup-flow.md): §3, an import launched from a carnival pre-fills that carnival's year.
 
 ## Context
 

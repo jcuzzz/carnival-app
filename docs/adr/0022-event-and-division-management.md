@@ -1,6 +1,6 @@
 # ADR-0022: Event management — the catalogue gets a screen, and the division profile becomes data
 
-- **Status:** Accepted (2026-08). Partly superseded: the division profile is stored in its own table, not in the carnival's settings ([ADR-0027](0027-the-division-profile-gets-its-own-table.md)); a division's age is one age or `OPEN` ([ADR-0058](0058-one-age-per-division.md)); adding a catalogue event is one press, with the grid as the way to adjust ([ADR-0059](0059-adding-a-catalogue-event-is-one-press.md)). §1's spelling applies to divisions, never to a student ([ADR-0026](0026-the-student-category-is-server-side-only.md)).
+- **Status:** Accepted (2026-08). Partly superseded: the division profile is stored in its own table, not in the carnival's settings ([ADR-0027](0027-the-division-profile-gets-its-own-table.md)); a division's age is one age or `OPEN` ([ADR-0058](0058-one-age-per-division.md)); adding a catalogue event is one press, with the grid as the way to adjust ([ADR-0059](0059-adding-a-catalogue-event-is-one-press.md)). §1's spelling applies to divisions, never to a student ([ADR-0026](0026-the-student-category-is-server-side-only.md)). Partly superseded by [ADR-0067](0067-divisions-come-from-the-student-list.md): §2, the profile is seeded from the roster's ages, not the template's; §8 stands.
 
 ## Context
 

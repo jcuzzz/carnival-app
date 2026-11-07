@@ -1,6 +1,6 @@
 # ADR-0024: A selected carnival, and three tabs instead of a button row
 
-- **Status:** Accepted (2026-08). Partly superseded by [ADR-0055](0055-the-school-area.md): roster import is reached from the School area, not from Manage.
+- **Status:** Accepted (2026-08). Partly superseded by [ADR-0055](0055-the-school-area.md): roster import is reached from the School area, not from Manage. Partly superseded by [ADR-0066](0066-the-setup-flow.md): §5's empty Deck now shows a non-manager a line saying the carnival is not set up yet.
 
 ## Context
 
