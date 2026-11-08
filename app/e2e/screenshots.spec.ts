@@ -1389,9 +1389,10 @@ test("the School hub, the event catalogue and a new definition", async ({ page }
   await page.goto("/#/school");
   await settled(page.getByRole("heading", { name: "School", level: 1 }));
   await expect(page.getByRole("link", { name: /Event catalogue/ })).toBeVisible();
-  // The dev school is named and has carnivals, so "Set up your school" has folded.
-  await settled(page.getByText("School set up"));
-  for (const width of WIDTHS) await capture(page, "school-hub-setup-done", width);
+  // The dev seed sets the school up and adds a carnival, so School shows no setup list.
+  await settled(page.getByRole("link", { name: /School settings/ }));
+  await expect(page.getByRole("heading", { name: "Set up your school" })).toHaveCount(0);
+  for (const width of WIDTHS) await capture(page, "school-hub", width);
 
   await page.goto("/#/school/events");
   await settled(page.getByRole("heading", { name: "Event catalogue", level: 1 }));
@@ -1407,7 +1408,7 @@ test("the School hub, the event catalogue and a new definition", async ({ page }
 });
 
 /**
- * ADR-0066 §2: a school nobody has set up yet. The dev school is named and has carnivals, so
+ * ADR-0066 §2: a school nobody has set up yet. The dev school is set up and has carnivals, so
  * the three reads that decide the list are answered as a fresh deployment's would be.
  */
 test("a fresh school: the School checklist and the empty carnival list", async ({ page }) => {
@@ -1415,7 +1416,9 @@ test("a fresh school: the School checklist and the empty carnival list", async (
   await page.route("**/api/v1/school/settings", async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     const response = await route.fetch();
-    await route.fulfill({ json: { ...(await response.json()), name: "(unconfigured)" } });
+    await route.fulfill({
+      json: { ...(await response.json()), name: "(unconfigured)", setupConfirmed: false },
+    });
   });
   await page.route("**/api/v1/admin/role-assignments", (route) =>
     route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),

@@ -3,10 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
 using CarnivalApp.Api.Http;
 using CarnivalApp.Api.Imports;
+using CarnivalApp.Api.School;
 using Xunit;
 
 namespace CarnivalApp.Api.Tests;
@@ -223,6 +225,21 @@ public sealed class CompetitionYearUploadTests
         await response.AssertErrorAsync(ErrorCodes.ImportCompetitionYearInvalid);
         Assert.Equal(Today.Year - 1, (await response.ErrorContextAsync("earliestYear")).GetInt32());
         Assert.Equal(Today.Year + 1, (await response.ErrorContextAsync("latestYear")).GetInt32());
+        Assert.Equal(0, await CarnivalSeed.QueryAsync(factory, db => db.ImportBatches.CountAsync()));
+    }
+
+    [Fact]
+    public async Task With_no_houses_configured_the_upload_is_refused_and_nothing_is_staged()
+    {
+        using var factory = new ApiTestFactory();
+        await CarnivalSeed.MutateAsync(factory, db => db.SchoolConfigurations.Single().HousesJson = "[]");
+        factory.Services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
+        using var form = Upload(null);
+
+        var response = await Admin(factory).PostAsync("/api/v1/imports", form);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await response.AssertErrorAsync(ErrorCodes.HousesRequired);
         Assert.Equal(0, await CarnivalSeed.QueryAsync(factory, db => db.ImportBatches.CountAsync()));
     }
 

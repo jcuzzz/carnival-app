@@ -48,7 +48,7 @@ Equivalent manual commands: `dotnet run --launch-profile http` in
 
 | What | Detail |
 |---|---|
-| School configuration | bootstrap, from configuration on first run — `Example Synthetic College`, timezone `Australia/Melbourne`, houses BANKSIA / WATTLE / MOUNTAIN ASH / GREVILLEA |
+| School configuration | bootstrap, from `appsettings.Development.json` on first run — `Example Synthetic College`, timezone `Australia/Melbourne`, houses BANKSIA / WATTLE / MOUNTAIN ASH / GREVILLEA; the seed marks it set up, so School shows no setup list |
 | Roster | 40 synthetic ACTV students from `data/synthetic/ST_SYNTH.csv`, promoted through the real import pipeline (stage → approve → promote), so an `ImportBatch`, current `RosterSnapshot`s and audit rows all exist |
 | Carnival | "2026 Swimming Carnival (synthetic)", status **Open**, venue "Synthetic Aquatic Centre" |
 | Events | `SW-50-FREE` (Freestyle 50m, Time/s) scheduled for the four most-populated age-group × M/F divisions in the seeded roster, all **Open** |

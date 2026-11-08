@@ -92,16 +92,15 @@ On its first start against an empty database the API writes one `SchoolConfigura
 
 | Variable | What it does | Default | Required | Notes |
 |---|---|---|---|---|
-| `SCHOOL_NAME` | The school's display name | `(unconfigured)` | Yes, first start | **First start only**; then edited in School settings. An empty or blank value seeds the default. |
+| `SCHOOL_NAME` | Optional seed for the school's display name | empty (seeds `(unconfigured)`) | No | **First start only.** Leave it empty: the first administrator names the school in School settings. A seeded name still waits for that first save before School counts as set up. |
 | `SCHOOL_TIMEZONE` | IANA time zone, e.g. `Australia/Melbourne` | none | Yes | Read every time; not editable in the app. Decides when the year turns for roster imports and is stamped on every audit event. An empty or blank value means `Australia/Melbourne`; an unknown zone is stamped as written but the import year falls back to UTC. |
 | `SCHOOL_BRAND_COLOUR` | Header colour, `#rrggbb` or `#rgb` | empty (neutral palette) | No | **First start only.** On that start a value that cannot be parsed, or that reaches 4.5:1 against neither black nor white, stops the API with a message. |
-| `SCHOOL_HOUSE_1` … `SCHOOL_HOUSE_4` | House codes | `BANKSIA`, `WATTLE`, `MOUNTAIN ASH`, `GREVILLEA` | Yes, first start | **First start only.** Codes must match the roster export's `HOUSE` values. An empty value takes the default, not "no house". For a different number of houses, see [below](#a-different-number-of-houses). |
-| `SCHOOL_HOUSE_1_COLOUR` | Colour for the house whose code is `BANKSIA` | empty (text-only) | No | **First start only.** Compose maps it to `School__HouseColours__BANKSIA`; the key must equal the house code, so rename it with the house. Easier: set colours in the app. |
+| `SCHOOL_HOUSE_1` … `SCHOOL_HOUSE_4` | Optional seeds for house codes | empty (no houses) | No | **First start only.** Leave them empty and add the houses, with their colours, in School settings. An empty value seeds no house. Codes must match the roster export's `HOUSE` values; until the school has a house, a roster upload is refused with `409 HOUSES_REQUIRED`. |
 | `IMPORT_MAPPING_PATH` | Path of the roster import mapping inside the container | `/config/import-mapping.example.json` | Yes | Read on every import. |
 
 #### A different number of houses
 
-Compose has four house slots. **Before the first start**, add houses with extra lines in `docker-compose.override.yml` (`School__Houses__4: KURRAJONG`), or remove one by deleting its `School__Houses__N` line from `docker-compose.yml`: an empty `.env` value falls back to the default name, and an array in `appsettings.School.json` cannot remove an index the environment sets. **After the first start**, add and remove houses in School → School settings (a house in use cannot be removed); configuration is no longer read.
+Houses are normally added in School → School settings, in any number (a house in use cannot be removed). To seed more than four **before the first start**, add lines in `docker-compose.override.yml` (`School__Houses__4: KURRAJONG`). After the first start, configuration is no longer read.
 
 ### Identity
 
@@ -150,7 +149,7 @@ Keys the compose file sets for you, or that you set through the override file or
 | `Database:ApplyMigrationsOnStartup` | Set from `APPLY_MIGRATIONS`. |
 | `School:Name`, `School:BrandColour` | As the `.env` variables above. An absent, empty or blank name seeds `(unconfigured)`. |
 | `School:Timezone` | IANA zone id. Absent, empty or blank, `Australia/Melbourne`; unknown, UTC for the import year (the audit stamp keeps the configured text). Stamped on every audit event and used to decide the roster import's default competition year. |
-| `School:Houses` | Array of house codes (first start only). |
+| `School:Houses` | Array of house codes (first start only). Absent or blank entries seed no house. |
 | `School:HouseColours:<CODE>` | Colour per house code, matched ignoring case (first start only). An unparseable value, or one repeating another house's colour, leaves that house text-only with a warning; it never stops the API. Any colour is allowed. |
 | `School:Identifier` | Internal identifier stored on the school row at first start. Default `SCHOOL`; leave unset. |
 | `Imports:MappingPath` | Set from `IMPORT_MAPPING_PATH`. Read on every upload and on the import screen's defaults; missing, naming no file, unreadable, not valid JSON or not a valid mapping, those requests answer `500 IMPORT_MAPPING_UNAVAILABLE` with the reason in `detail`. |
@@ -253,6 +252,8 @@ One form: school name, brand colour, the houses (code, display name, colour) and
 | Removing or renaming a house | Refused while any roster snapshot, entry, relay leg or house-points adjustment uses its code. The screen disables Remove for such houses. Adding houses is always allowed. |
 
 House codes are what roster imports validate against (ignoring case), so set them to match the export before the first import.
+
+The first successful save also marks the school as set up (`setupConfirmed` on `GET /api/v1/school/settings`, kept in the row's settings blob). Until then School shows "Set up your school" with this form as its first step, and Save is enabled even with nothing changed, so a name and houses seeded from `.env` can be confirmed as they are. Later saves keep the first mark.
 
 #### Sign-in settings
 

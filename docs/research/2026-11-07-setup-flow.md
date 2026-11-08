@@ -23,7 +23,7 @@ These screens make the maintainer's order concrete without changing the data mod
 | # | Screen | What the user sees | Primary action | Leads to |
 |---|---|---|---|---|
 | 1 | **Set up your account** (`/setup/:token`) | Username (hint "a plain name such as jsmith"), display name, password. Then the authenticator offer (skippable, ADR-0065 §5) and recovery codes. | Create account → Continue | 2 |
-| 2 | **School**, with a "Set up your school" list at the top (SystemAdministrator) | Three rows built from the existing `SetupChecklist`: 1 School name, colours and houses; 2 Staff accounts (optional); 3 Your first carnival. Each row has a quiet Done badge, and the hub rows sit below. Once every required row is done, the list folds to one line ("School set up"). | The first undone row | 3, 4 or 5 |
+| 2 | **School**, with a "Set up your school" list at the top (SystemAdministrator) | Three rows built from the existing `SetupChecklist`: 1 School name, colours and houses; 2 Staff accounts (optional); 3 Your first carnival. Each row has a quiet Done badge, and the hub rows sit below. Row 1 is done once an administrator has saved School settings, since a new install seeds no sample school. Once every required row is done, the list disappears and nothing replaces it. | The first undone row | 3, 4 or 5 |
 | 3 | **School settings** | Name, colour, houses, with the note "A house can't be renamed once students are imported" (ADR-0045 §3). | Save | 2 (row ticks) |
 | 4 | **People** (optional) | Add a person and their role in one form. The setup link to hand over. | Add | 2 |
 | 5 | **New carnival** | Name, sport, date, venue. | Create | 6 |

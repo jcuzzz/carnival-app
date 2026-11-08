@@ -29,6 +29,7 @@ import {
   refreshBranding,
 } from "../branding/branding";
 import { refreshHouseMarks } from "../branding/houseMarks";
+import { UNCONFIGURED_SCHOOL_NAME } from "../features/school/schoolSteps";
 import { ColourPickerField } from "../features/ui/ColourPickerField";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
@@ -71,7 +72,8 @@ function formOf(settings: SchoolSettings): FormState {
   return {
     requireAuthenticator: settings.requireAuthenticator,
     localAccounts: settings.localAccounts,
-    name: settings.name,
+    // The bootstrap's placeholder is never a name to keep.
+    name: settings.name === UNCONFIGURED_SCHOOL_NAME ? "" : settings.name,
     brandColour: settings.brandColour ?? "",
     houses: settings.houses.map((house) => ({
       key: `h${++rowKeySeed}`,
@@ -158,6 +160,8 @@ export default function SchoolSettingsScreen() {
   const baselineForm = useMemo(() => (baseline ? formOf(baseline) : null), [baseline]);
   const dirty =
     form !== null && baselineForm !== null && signatureOf(form) !== signatureOf(baselineForm);
+  // Until the first save, Save confirms what was seeded even with nothing changed.
+  const confirmed = baseline?.setupConfirmed !== false;
 
   // A background refetch must never discard typed edits: a newer stamp arriving
   // mid-edit says so and leaves the form alone until Reload asks for it.
@@ -244,6 +248,8 @@ export default function SchoolSettingsScreen() {
       const saved = await putSchoolSettings(request);
       adopt(saved);
       showToast("School settings saved");
+      // The School hub's setup list reads the same key.
+      invalidate(keys.schoolSettings());
       invalidate(keys.houses());
       // The chrome, the sign-in screen and the dashboard read these, not the
       // form — repaint them here rather than making the administrator reload.
@@ -298,6 +304,11 @@ export default function SchoolSettingsScreen() {
         The school's name, its brand colour, its houses and how local accounts sign in. Saving
         repaints the app for every device the next time it reaches the server.
       </p>
+      {!confirmed && (
+        <p className="row-sub">
+          Check the name and the houses, then press Save to finish setting up the school.
+        </p>
+      )}
 
       {offline && (
         <div className="alert notice" role="status">
@@ -396,7 +407,11 @@ export default function SchoolSettingsScreen() {
           )}
 
           <div className="button-row">
-            <button className="primary" type="submit" disabled={saving || !dirty || offline}>
+            <button
+              className="primary"
+              type="submit"
+              disabled={saving || (!dirty && confirmed) || offline}
+            >
               {saving ? "Saving…" : "Save"}
             </button>
             <button type="button" onClick={reset} disabled={saving || !dirty}>

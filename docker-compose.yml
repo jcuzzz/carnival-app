@@ -36,33 +36,20 @@ services:
       ConnectionStrings__CarnivalAppDb: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER:-carnival_app};Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable"
       # Migrations only, as the owner role. Unset = both paths use the string above.
       ConnectionStrings__CarnivalAppDbMigrations: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
-      School__Name: ${SCHOOL_NAME}
+      # First-run seeds only, blank by default: the school is named in the app (ADR-0045).
+      School__Name: ${SCHOOL_NAME:-}
       School__Timezone: ${SCHOOL_TIMEZONE}
       # Optional brand colour (ADR-0040 §3), #rrggbb or #rgb. Empty means the
       # neutral default palette; the API refuses to start on a value it cannot
       # parse or that no readable ink (black or white) reaches 4.5:1 against.
       # First-run seed only — after the first start this is edited in the app (ADR-0045).
       School__BrandColour: ${SCHOOL_BRAND_COLOUR:-}
-      # Houses are configuration data (proposal §7.3): import house validation
-      # and the seed/demo path need them. Four slots match the current school;
-      # a school with a different house count edits this block (or moves the
-      # list into a mounted appsettings.School.json).
-      # First-run seed only — after the first start houses are edited in the app (ADR-0045).
-      School__Houses__0: ${SCHOOL_HOUSE_1:-BANKSIA}
-      School__Houses__1: ${SCHOOL_HOUSE_2:-WATTLE}
-      School__Houses__2: ${SCHOOL_HOUSE_3:-MOUNTAIN ASH}
-      School__Houses__3: ${SCHOOL_HOUSE_4:-GREVILLEA}
-      # Optional per-house colour (ADR-0044 §2): one key per house code, as
-      # below. Empty means that house renders text-only; a value that cannot be
-      # parsed, or that repeats another house's colour, is dropped with a
-      # warning, never a startup failure. Any colour is allowed — the swatch
-      # carries a hairline border, so a pale one stays visible. A code containing a
-      # space (MOUNTAIN ASH) cannot be an environment variable name — configure those
-      # in a mounted appsettings.School.json instead.
-      # The key after HouseColours__ must equal the house CODE above: rename
-      # SCHOOL_HOUSE_1 and this key has to be renamed with it, or it colours nothing.
-      # First-run seed only — after the first start house colours are edited in the app (ADR-0045).
-      School__HouseColours__BANKSIA: ${SCHOOL_HOUSE_1_COLOUR:-}
+      # First-run seed only, blank by default: houses are added in the app (ADR-0045).
+      # An empty slot seeds no house.
+      School__Houses__0: ${SCHOOL_HOUSE_1:-}
+      School__Houses__1: ${SCHOOL_HOUSE_2:-}
+      School__Houses__2: ${SCHOOL_HOUSE_3:-}
+      School__Houses__3: ${SCHOOL_HOUSE_4:-}
       # Config-bootstrap (ADR-0007): the repo ./config directory is mounted
       # read-only at /config, so the import mapping and event templates ship
       # with the deployment without baking them into the API image.

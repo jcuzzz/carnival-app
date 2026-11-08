@@ -11,7 +11,7 @@ The maintainer asked for this order: create the account, configure the school, c
 ## Decision
 
 1. **The first run creates the account and nothing else.** The setup link asks for a username, display name and password. It then offers the authenticator ([ADR-0065](0065-built-in-local-accounts.md) §5) and lands on **School**.
-2. **School opens with "Set up your school"** for a System administrator. It has three rows: school name, colours and houses; staff accounts (optional); your first carnival. Each row's done-state is derived from data and never stored. Done rows stay listed with a quiet badge. Once every required row is done, the list folds to one line. Adding a person names their role in the same form.
+2. **School opens with "Set up your school"** for a System administrator while a required row is undone. It has three rows: school name, colours and houses; staff accounts (optional); your first carnival. The school row is done once an administrator has saved School settings; a name or houses seeded from configuration do not count, and a new install seeds no sample school or houses. The other rows' done-states are derived from data. Done rows stay listed with a quiet badge while the list shows. A set-up school shows nothing of it: the hub speaks for itself. Adding a person names their role in the same form.
 3. **A new carnival lands on Manage.** The landing rule ([ADR-0024](0024-carnival-context-and-primary-navigation.md) §5) applies from the moment of creation.
 4. **Carnival setup has four steps, in order: Students, Events, Program (optional), Open.** Back links from the setup screens lead to Manage.
    - **Students** is done when a promoted roster has students. For a System administrator it links to the roster import launched from this carnival. The import pre-fills the carnival's year and offers a way back afterwards. The student list stays school-wide ([ADR-0060](0060-the-competition-year-is-chosen-at-import.md)): the carnival supplies only the default year, so a second carnival in the same year finds the step done. The step keeps the roster-year warning ([ADR-0060](0060-the-competition-year-is-chosen-at-import.md) §4), and Ready to open repeats it. School → Roster import stays, for re-imports during the year.
@@ -34,6 +34,7 @@ How it looks: [app navigation](../architecture/app-navigation.md), [roster impor
 ## Consequences
 
 - A first-time administrator always has a next step, and the Deck no longer teaches setup.
+- An install whose name and houses were seeded from `.env` shows the school row undone until an administrator opens School settings and saves, even with nothing changed.
 - An organiser who presses the primary out of habit opens every division. Closing a division is the undo.
 - The app offers no way to assign officials, so "My events" shows nothing on new carnivals. The API remains, and a picker in setup is built only if staff ask for "My events".
 - A Carnival administrator still cannot import. The Students step names who can.

@@ -12,17 +12,15 @@ public static class HouseColour
     public const string ConfigKey = "School:HouseColours";
     public const string HousesKey = "School:Houses";
 
-    /// <summary>Used when <c>School:Houses</c> is unset.</summary>
-    public static readonly string[] DefaultHouses = ["BANKSIA", "WATTLE", "MOUNTAIN ASH", "GREVILLEA"];
-
     /// <summary>Lower-case <c>#rrggbb</c>, or null when absent or unparseable.</summary>
     public static string? Normalise(string? configured) => BrandColour.Normalise(configured);
 
     public static IReadOnlyList<HouseMark> Resolve(IConfiguration config, ILogger logger)
     {
-        var houses = config.GetSection(HousesKey).Get<string[]>() is { Length: > 0 } configured
-            ? configured
-            : DefaultHouses;
+        // Compose passes an unset house variable as "": no house, not a house with no code.
+        string[] houses = [.. (config.GetSection(HousesKey).Get<string?[]>() ?? [])
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code!.Trim())];
         return Resolve(houses, config.GetSection(ConfigKey).Get<Dictionary<string, string?>>(), logger);
     }
 

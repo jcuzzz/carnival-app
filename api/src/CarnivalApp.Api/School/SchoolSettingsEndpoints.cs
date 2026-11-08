@@ -16,7 +16,8 @@ public sealed record SchoolSettingsResponse(
     bool RequireAuthenticator,
     LocalAccountAccess LocalAccounts,
     bool ProviderConfigured,
-    DateTimeOffset? UpdatedAtUtc);
+    DateTimeOffset? UpdatedAtUtc,
+    bool SetupConfirmed);
 
 /// <summary>
 /// <c>InUse</c> is the PUT's removal guard read ahead, so the screen can disable Remove.
@@ -66,7 +67,8 @@ public static class SchoolSettingsEndpoints
             settings.RequireAuthenticator,
             settings.LocalAccounts,
             LocalAccountPolicy.ProviderConfigured(configuration),
-            settings.UpdatedAtUtc);
+            settings.UpdatedAtUtc,
+            settings.SetupConfirmed);
 
     private static async Task<IResult> GetAsync(
         [FromServices] SchoolSettingsProvider provider,
@@ -166,6 +168,7 @@ public static class SchoolSettingsEndpoints
             return Invalid(ErrorCodes.HouseInUse, "houses",
                 $"House '{inUse}' is referenced by roster or carnival data and cannot be removed or renamed.");
 
+        var savedAt = Stamp();
         var updated = current with
         {
             Name = name,
@@ -173,13 +176,15 @@ public static class SchoolSettingsEndpoints
             Houses = houses,
             RequireAuthenticator = request.RequireAuthenticator ?? current.RequireAuthenticator,
             LocalAccounts = request.LocalAccounts ?? current.LocalAccounts,
-            UpdatedAtUtc = Stamp(),
+            UpdatedAtUtc = savedAt,
+            SetupConfirmed = true,
         };
         row.Name = updated.Name;
         row.BrandingJson = SchoolSettings.SerialiseBranding(updated.BrandColour, row.BrandingJson);
         row.HousesJson = SchoolSettings.SerialiseHouses(updated.Houses);
         row.SettingsJson = SchoolSettings.SerialiseSignIn(
             updated.RequireAuthenticator, updated.LocalAccounts, row.SettingsJson);
+        row.SettingsJson = SchoolSettings.SerialiseSetupConfirmed(savedAt, row.SettingsJson);
         row.UpdatedAtUtc = updated.UpdatedAtUtc;
 
         audit.Record(SessionActor.From(ctx), AuditActions.SchoolSettings, nameof(SchoolConfiguration),

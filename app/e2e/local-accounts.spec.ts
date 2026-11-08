@@ -126,6 +126,10 @@ test("local accounts, from the first administrator to a disabled account", async
     await expect(
       page.getByRole("heading", { name: "Set up your school", level: 2 }),
     ).toBeVisible();
+    // The Development config seeds a name, which does not count until the settings are saved.
+    await expect(page.locator("ol.row-list a.row-link").first()).toContainText(
+      /School name, colours and houses.*Do this next/,
+    );
 
     const stored = await page.evaluate(() =>
       JSON.stringify([{ ...localStorage }, { ...sessionStorage }]),

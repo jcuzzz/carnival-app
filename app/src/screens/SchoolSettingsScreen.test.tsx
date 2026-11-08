@@ -51,6 +51,7 @@ function settings(overrides: Partial<SchoolSettings> = {}): SchoolSettings {
     localAccounts: "SystemAdministrators",
     providerConfigured: false,
     updatedAtUtc: STAMP,
+    setupConfirmed: true,
     ...overrides,
   };
 }
@@ -97,6 +98,34 @@ describe("SchoolSettingsScreen", () => {
     expect((screen.getByLabelText("House 2 code") as HTMLInputElement).value).toBe("MOUNTAIN ASH");
     // Nothing typed yet: neither Save nor Cancel has anything to do.
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("lets the first save confirm seeded settings with nothing changed", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(
+      settings({ setupConfirmed: false, updatedAtUtc: null }),
+    );
+    vi.mocked(putSchoolSettings).mockResolvedValue(settings({ setupConfirmed: true }));
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    await screen.findByLabelText("School name");
+    expect(screen.getByText(/press Save to finish setting up the school/)).toBeTruthy();
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+
+    await waitFor(() => expect(putSchoolSettings).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(putSchoolSettings).mock.calls[0]![0].name).toBe("Riverbend Secondary College");
+    await waitFor(() => expect(save.disabled).toBe(true));
+    expect(screen.queryByText(/press Save to finish setting up the school/)).toBeNull();
+  });
+
+  it("starts a fresh school's name empty rather than on the placeholder", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(
+      settings({ name: "(unconfigured)", houses: [], setupConfirmed: false, updatedAtUtc: null }),
+    );
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    expect(((await screen.findByLabelText("School name")) as HTMLInputElement).value).toBe("");
   });
 
   it("is name, brand and houses only — roles and templates moved (ADR-0055 §1)", async () => {

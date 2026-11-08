@@ -3,8 +3,8 @@ import type { Carnival, RoleAssignment, SchoolSettings } from "../../api/types";
 import { firstUndoneStep } from "../carnivals/setupSteps";
 import { UNCONFIGURED_SCHOOL_NAME, schoolSteps, type SchoolFacts } from "./schoolSteps";
 
-const settings = (name: string): SchoolSettings =>
-  ({ name, houses: [{ code: "BANKSIA" }, { code: "WATTLE" }] }) as SchoolSettings;
+const settings = (name: string, setupConfirmed = false): SchoolSettings =>
+  ({ name, setupConfirmed, houses: [{ code: "BANKSIA" }, { code: "WATTLE" }] }) as SchoolSettings;
 
 const assignment = (upn: string, extra: Partial<RoleAssignment> = {}): RoleAssignment =>
   ({ upn, bootstrap: false, revokedAtUtc: null, role: "Recorder", ...extra }) as RoleAssignment;
@@ -40,15 +40,19 @@ describe("schoolSteps", () => {
 });
 
 describe("schoolSteps — school name, colours and houses", () => {
-  it("is undone on the placeholder name, or a blank one", () => {
+  it("is undone until an administrator saves, even with a name seeded from .env", () => {
     expect(step(fresh, "settings").done).toBe(false);
-    expect(step({ ...fresh, settings: settings("   ") }, "settings").done).toBe(false);
+    const seeded = step({ ...fresh, settings: settings("Riverbend College") }, "settings");
+    expect(seeded.done).toBe(false);
+    expect(seeded.detail).toBe(
+      "The name and colour every screen shows, and the houses students belong to",
+    );
   });
 
-  it("is done once the school is named", () => {
-    const named = step({ ...fresh, settings: settings("Riverbend College") }, "settings");
-    expect(named.done).toBe(true);
-    expect(named.detail).toBe("Riverbend College · 2 houses");
+  it("is done once School settings have been saved", () => {
+    const saved = step({ ...fresh, settings: settings("Riverbend College", true) }, "settings");
+    expect(saved.done).toBe(true);
+    expect(saved.detail).toBe("Riverbend College · 2 houses");
   });
 
   it("is unknown when the settings read failed or has not landed", () => {

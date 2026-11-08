@@ -76,7 +76,7 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `outbox-discarded-{w}.png` | The same capture after it was let go: `⊘ discarded`, and who let it go and when |
 | `outbox-time-edit-{w}.png` | Edit-and-requeue in progress: the corrected-time field on a parked result |
 | `school-hub-setup-{w}.png` | The School hub of a fresh school (ADR-0066 §2): "Set up your school" above the section rows |
-| `school-hub-setup-done-{w}.png` | The School hub (ADR-0055 §1) once the school is set up: the folded "School set up" line, then one row per school-wide section |
+| `school-hub-{w}.png` | The School hub (ADR-0055 §1) once the school is set up: no setup list, only one row per school-wide section |
 | `carnivals-empty-{w}.png` | The carnival list with no carnivals at a school with no name: "Set up the school first" |
 | `import-from-carnival-{w}.png` | The roster import launched from a carnival (ADR-0066 §4): the year from the carnival, the way back to Manage |
 | `import-promoted-back-{w}.png` | The same import after the one press (ADR-0066 §8): "Back to" the carnival |

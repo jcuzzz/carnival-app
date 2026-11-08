@@ -1,4 +1,3 @@
-import { Check } from "lucide-react";
 import { isDemoBuild } from "../api/client";
 import { keys } from "../api/queryKeys";
 import { getSchoolSettings, listCarnivals, listRoleAssignments } from "../api/resources";
@@ -6,7 +5,6 @@ import { useApiQuery, type ApiState } from "../api/useApiQuery";
 import { getMyAccount, localAccountKeys } from "../auth/localAccounts";
 import { hasRole, useSession, type Session } from "../auth/session";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
-import type { SetupStep } from "../features/carnivals/setupSteps";
 import { schoolSteps } from "../features/school/schoolSteps";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
@@ -82,6 +80,19 @@ export default function SchoolScreen() {
   const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: setup });
   const assignments = useApiQuery(keys.roleAssignments(), listRoleAssignments, { enabled: setup });
   const carnivals = useApiQuery(keys.carnivals(), listCarnivals, { enabled: setup });
+  // Until every read answers, a set-up school would flash the list before it hides.
+  const steps =
+    setup && session && [settings, assignments, carnivals].every(settled)
+      ? schoolSteps({
+          settings: settings.error ? null : settings.data,
+          assignments: assignments.error ? null : assignments.data,
+          subject: session.subject,
+          carnivals: carnivals.error ? null : carnivals.data,
+          localAccounts: !isDemoBuild(),
+        })
+      : null;
+  // A set-up school shows nothing of it: the hub speaks for itself.
+  const pending = steps?.some((step) => !step.optional && step.done !== true) ?? false;
 
   if (gate === "loading") return <p>Loading…</p>;
   if (gate === "signedOut")
@@ -107,16 +118,11 @@ export default function SchoolScreen() {
           open the school's settings. <a href={href("/account")}>Set one up on My account</a>.
         </div>
       )}
-      {setup && session && [settings, assignments, carnivals].every(settled) && (
-        <SchoolSetup
-          steps={schoolSteps({
-            settings: settings.error ? null : settings.data,
-            assignments: assignments.error ? null : assignments.data,
-            subject: session.subject,
-            carnivals: carnivals.error ? null : carnivals.data,
-            localAccounts: !isDemoBuild(),
-          })}
-        />
+      {pending && steps && (
+        <section className="subsection">
+          <h2>Set up your school</h2>
+          <SetupChecklist steps={steps} />
+        </section>
       )}
       {rows.length === 0 ? (
         <p>
@@ -124,7 +130,7 @@ export default function SchoolScreen() {
           the school-wide screens.
         </p>
       ) : (
-        <ul className={setup ? "row-list card subsection" : "row-list card"}>
+        <ul className={pending ? "row-list card subsection" : "row-list card"}>
           {rows.map((row) => (
             <li key={row.path}>
               <a className="row-link" href={href(row.path)}>
@@ -141,24 +147,6 @@ export default function SchoolScreen() {
   );
 }
 
-// Until every read answers, a finished school would flash the list before it folds.
 function settled(query: ApiState<unknown>): boolean {
   return query.data !== undefined || query.error !== undefined;
-}
-
-function SchoolSetup({ steps }: { steps: readonly SetupStep[] }) {
-  const required = steps.filter((step) => !step.optional);
-  if (required.every((step) => step.done === true))
-    return (
-      <p className="row-sub">
-        School set up
-        <Check size={20} className="chip-tick" aria-hidden="true" />
-      </p>
-    );
-  return (
-    <section className="subsection">
-      <h2>Set up your school</h2>
-      <SetupChecklist steps={steps} />
-    </section>
-  );
 }

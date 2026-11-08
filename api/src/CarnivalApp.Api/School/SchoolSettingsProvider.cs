@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,11 @@ public sealed record SchoolSettings(
     IReadOnlyList<HouseMark> Houses,
     bool RequireAuthenticator,
     LocalAccountAccess LocalAccounts,
-    DateTimeOffset? UpdatedAtUtc)
+    DateTimeOffset? UpdatedAtUtc,
+    bool SetupConfirmed)
 {
+    private const string SetupConfirmedKey = "setupConfirmedAtUtc";
+
     public static SchoolSettings From(SchoolConfiguration row, ILogger logger)
     {
         var signIn = ReadSignIn(row.SettingsJson);
@@ -25,7 +29,8 @@ public sealed record SchoolSettings(
             ReadHouses(row.HousesJson, row.Id, logger),
             signIn.RequireAuthenticator,
             signIn.LocalAccounts,
-            row.UpdatedAtUtc);
+            row.UpdatedAtUtc,
+            ReadSetupConfirmed(row.SettingsJson) is not null);
     }
 
     // Merges rather than replaces: unknown keys belong to whoever wrote them.
@@ -43,6 +48,15 @@ public sealed record SchoolSettings(
         var blob = ParseObject(existingJson);
         blob["requireAuthenticator"] = requireAuthenticator;
         blob["localAccounts"] = localAccounts.ToString();
+        return blob.ToJsonString();
+    }
+
+    /// <summary>Keeps the first confirmation: a later save does not move it.</summary>
+    public static string SerialiseSetupConfirmed(DateTimeOffset at, string? existingJson)
+    {
+        var blob = ParseObject(existingJson);
+        if (ReadSetupConfirmed(existingJson) is null)
+            blob[SetupConfirmedKey] = at.ToString("O", CultureInfo.InvariantCulture);
         return blob.ToJsonString();
     }
 
@@ -82,6 +96,14 @@ public sealed record SchoolSettings(
                 : LocalAccountAccess.SystemAdministrators;
         return (require, access);
     }
+
+    // Set by an administrator's first save of School settings; a seeded row has none.
+    private static DateTimeOffset? ReadSetupConfirmed(string? json) =>
+        ParseObject(json)[SetupConfirmedKey] is JsonValue value
+        && value.TryGetValue<string>(out var text)
+        && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
+            ? at
+            : null;
 
     private static JsonObject ParseObject(string? json)
     {

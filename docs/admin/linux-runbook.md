@@ -162,11 +162,11 @@ docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt ./carnival-ro
 
 Open the first-administrator link on a device that trusts the certificate (B6). Choose a username such as `backup-admin`, a display name and a password of at least 15 characters, and set up an authenticator app or skip it. You are signed in as a System administrator and land on **School**, whose **Set up your school** list holds the next steps:
 
-1. **School name, colours and houses** (School settings). The houses default to BANKSIA, WATTLE, MOUNTAIN ASH and GREVILLEA (`SCHOOL_HOUSE_1`…`4`), which the synthetic rosters use. The step is done once the school has a name other than the placeholder `(unconfigured)`; a `SCHOOL_NAME` set in `.env` already counts.
+1. **School name, colours and houses** (School settings). A new install has no name and no houses. For the synthetic rosters, add the houses BANKSIA, WATTLE, MOUNTAIN ASH and GREVILLEA, then press **Save**: the step is done once an administrator has saved School settings, and a `SCHOOL_NAME` or houses set in `.env` do not count until then. A roster upload is refused while the school has no houses.
 2. **Staff accounts** (optional): add people under People, each with a role. Done once anyone besides you holds a role you granted.
 3. **Your first carnival**: **Carnivals → New carnival**, then the carnival's **Manage** checklist. Import the students from it: upload `data/synthetic/ST_SYNTH.csv` (120 students, a few with deliberate errors for the review to flag), review it and update the student list. Then add the standard swimming or athletics events, open the carnival and record some results.
 
-Once the school is named and has a carnival, the list folds to "School set up".
+Once the settings are saved and a carnival exists, the list disappears from School.
 
 ### B8. Update
 

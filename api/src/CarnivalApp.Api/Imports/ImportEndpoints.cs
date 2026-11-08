@@ -245,6 +245,11 @@ public static class ImportEndpoints
         var load = LoadMapping(config);
         if (load.Mapping is not { } mapping) return MappingUnavailable(load);
         var houses = (await school.GetAsync(ct)).Houses.Select(house => house.Code).ToArray();
+        // Otherwise every active row fails as an unknown house.
+        if (houses.Length == 0)
+            return ApiError.Conflict(ErrorCodes.HousesRequired,
+                "The school has no houses yet, so no student's house can be checked. Add the houses "
+                + "in School settings, then upload the export again.");
 
         await using var stream = file.OpenReadStream();
         var outcome = await service.StageAsync(

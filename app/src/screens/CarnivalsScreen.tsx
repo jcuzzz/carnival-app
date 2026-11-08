@@ -8,7 +8,7 @@ import { landingPath } from "../carnivals/landing";
 import { getSelectedCarnival, selectCarnival } from "../carnivals/selectedCarnival";
 import { SWITCHER_ROW_LIMIT, switcherList } from "../carnivals/switcherModel";
 import { NewCarnivalForm } from "../features/carnivals/NewCarnivalForm";
-import { schoolNamed } from "../features/school/schoolSteps";
+import { schoolSetUp } from "../features/school/schoolSteps";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { Freshness } from "../shell/Freshness";
@@ -88,7 +88,7 @@ export default function CarnivalsScreen({ autoSelect = false }: { autoSelect?: b
       {list && view.total === 0 && (
         <p>
           No carnivals yet.
-          {canManage && schoolNamed(settings.data) === false && (
+          {canManage && schoolSetUp(settings.data) === false && (
             <>
               {" "}
               <a href={href("/school")}>Set up the school first</a>

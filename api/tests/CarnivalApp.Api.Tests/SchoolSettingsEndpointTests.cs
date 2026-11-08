@@ -562,6 +562,63 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // ---- Setup confirmed (ADR-0066 §2) -------------------------------------
+
+    private async Task<string?> StoredSettingsJsonAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+        return (await db.SchoolConfigurations.AsNoTracking().SingleAsync()).SettingsJson;
+    }
+
+    [Fact]
+    public async Task A_school_seeded_from_configuration_is_not_set_up_until_an_administrator_saves()
+    {
+        // The factory seeds a name and four houses, as an install with SCHOOL_NAME in .env does.
+        Assert.False((await GetAsync()).GetProperty("setupConfirmed").GetBoolean());
+
+        var response = await _admin.PutAsJsonAsync(Path, Body(updatedAtUtc: await StampAsync()));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var saved = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.True(saved.GetProperty("setupConfirmed").GetBoolean());
+        Assert.True((await GetAsync()).GetProperty("setupConfirmed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_refused_save_does_not_set_the_school_up()
+    {
+        Assert.Equal(ErrorCodes.NameRequired, await RefusalAsync(HttpStatusCode.UnprocessableEntity, name: " "));
+        Assert.False((await GetAsync()).GetProperty("setupConfirmed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task The_first_confirmation_survives_later_saves_and_keeps_unknown_keys()
+    {
+        await MutateRowAsync(row => row.SettingsJson = """{"futureKey":7}""");
+        Assert.Equal(HttpStatusCode.OK,
+            (await _admin.PutAsJsonAsync(Path, Body(updatedAtUtc: await StampAsync()))).StatusCode);
+        var first = JsonDocument.Parse((await StoredSettingsJsonAsync())!).RootElement
+            .GetProperty("setupConfirmedAtUtc").GetString();
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await _admin.PutAsJsonAsync(Path, Body("Renamed College", updatedAtUtc: await StampAsync()))).StatusCode);
+
+        var stored = await StoredSettingsJsonAsync();
+        Assert.Contains("\"futureKey\":7", stored);
+        Assert.Equal(first, JsonDocument.Parse(stored!).RootElement.GetProperty("setupConfirmedAtUtc").GetString());
+        Assert.True((await GetAsync()).GetProperty("setupConfirmed").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("""{"setupConfirmedAtUtc":"not a time"}""")]
+    [InlineData("""{"setupConfirmedAtUtc":true}""")]
+    [InlineData("not json")]
+    public async Task An_unreadable_confirmation_reads_as_not_set_up(string json)
+    {
+        await MutateRowAsync(row => row.SettingsJson = json);
+        Assert.False((await GetAsync()).GetProperty("setupConfirmed").GetBoolean());
+    }
+
     // ---- Sign-in settings (ADR-0065) --------------------------------------
 
     [Fact]

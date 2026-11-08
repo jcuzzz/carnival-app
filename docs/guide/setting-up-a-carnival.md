@@ -25,6 +25,8 @@ There is one student list for the whole school. If another carnival this year al
 
 If you are not a system administrator, the step says so: ask one to import the list.
 
+The import checks each student's house against the school's houses, so the school needs them first. If none are set up yet, the upload is refused: open **School**, follow **Set up your school** to School settings, add the houses and press **Save**.
+
 ## 2. Events
 
 Press **Add events** on Manage to open **Event setup**.

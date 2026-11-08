@@ -30,7 +30,7 @@ An administrator gives you a **setup link**, in person, as a QR code, or by mess
 3. Type it again and press **Save password**. You are now signed in.
 4. The app offers an authenticator app. Press **Set up an authenticator app (recommended)**, or **Skip for now** and do it later on My account. If your school requires one, you can't skip it.
 
-The school's first system administrator also chooses a username (a plain name such as `jsmith`) and a display name, and then lands on **School**. Its **Set up your school** list holds three steps, each ticked off as it is done: the school's name, colours and houses; staff accounts (optional); and your first carnival. Once the school is named and has a carnival, the list folds to one line, "School set up". Everyone else lands on the app's home screen.
+The school's first system administrator also chooses a username (a plain name such as `jsmith`) and a display name, and then lands on **School**. Its **Set up your school** list holds three steps, each ticked off as it is done: the school's name, colours and houses (done once you save School settings); staff accounts (optional); and your first carnival. Once the settings are saved and there is a carnival, the list goes away. Everyone else lands on the app's home screen.
 
 If the link says it has expired or has already been used, ask a system administrator for a new one. Opening a link without saving a password doesn't use it up.
 

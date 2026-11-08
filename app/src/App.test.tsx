@@ -16,7 +16,7 @@ import { _resetSelectedCarnivalForTests } from "./carnivals/selectedCarnival";
 vi.mock("./api/resources", () => ({
   listCarnivals: vi.fn().mockResolvedValue([]),
   getCarnival: vi.fn().mockResolvedValue(null),
-  getSchoolSettings: vi.fn().mockResolvedValue({ name: "(unconfigured)", houses: [] }),
+  getSchoolSettings: vi.fn().mockResolvedValue({ name: "(unconfigured)", houses: [], setupConfirmed: false }),
   listRoleAssignments: vi.fn().mockResolvedValue([]),
   getRecordsForAdministration: vi.fn().mockResolvedValue([]),
 }));

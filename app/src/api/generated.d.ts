@@ -10629,6 +10629,7 @@ export interface components {
             name: string;
             providerConfigured: boolean;
             requireAuthenticator: boolean;
+            setupConfirmed: boolean;
             /** Format: date-time */
             updatedAtUtc: null | string;
         };

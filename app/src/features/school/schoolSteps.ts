@@ -20,14 +20,13 @@ export function schoolSteps(facts: SchoolFacts): SetupStep[] {
   return [settingsStep(facts.settings), staffStep(facts), carnivalStep(facts.carnivals)];
 }
 
-export function schoolNamed(settings: SchoolSettings | null | undefined): boolean | null {
-  if (settings == null) return null;
-  const name = settings.name.trim();
-  return name !== "" && name !== UNCONFIGURED_SCHOOL_NAME;
+/** Done once an administrator has saved School settings; a seeded name does not count. */
+export function schoolSetUp(settings: SchoolSettings | null | undefined): boolean | null {
+  return settings == null ? null : settings.setupConfirmed;
 }
 
 function settingsStep(settings: SchoolSettings | null | undefined): SetupStep {
-  const done = schoolNamed(settings);
+  const done = schoolSetUp(settings);
   return {
     id: "settings",
     title: "School name, colours and houses",

@@ -37,7 +37,7 @@ The settings that matter on day one (every variable is documented in `.env.examp
 | Variable | Set to |
 |---|---|
 | `COMPOSE_PROJECT_NAME` | a short instance name, e.g. `carnival-app-prod` |
-| `SCHOOL_NAME`, `SCHOOL_BRAND_COLOUR` | first-start defaults; edited in the app afterwards (School → School settings) |
+| `SCHOOL_NAME`, `SCHOOL_BRAND_COLOUR`, `SCHOOL_HOUSE_1`…`4` | leave empty: the school's name, colour and houses are set in the app (School → School settings). Any value set here only seeds the first start. |
 | `SCHOOL_TIMEZONE` | the school's IANA timezone, e.g. `Australia/Melbourne`; read from configuration whenever it is needed (not editable in the app) |
 | `SITE_ADDRESS` | the machine's DNS name (or fixed IP address), as devices reach it; the first-administrator and host-command setup links are built from it |
 | `TLS_MODE` | the certificate source (see [TLS](#tls)); `internal` by default |
@@ -154,7 +154,7 @@ No release images are published yet, so `LOCAL_BUILD=1` builds them on the host 
 
 On a database the API has never migrated, the script reports a fresh database, skips the data gates and leaves the schema to the API's first start, which needs `APPLY_MIGRATIONS=true`; without it the script stops before changing anything. It also stops when the database has tables but no migration history, which usually means the wrong `POSTGRES_DB`.
 
-Then, in the browser: open the first-administrator link the script printed (§4) → School settings (houses, colours) → import the roster (a CSV; see `config/`) → create a carnival from a template. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
+Then, in the browser: open the first-administrator link the script printed (§4). You land on School, whose "Set up your school" list leads the way: School settings (name, colours and houses, then Save) → Carnivals → New carnival, whose Manage checklist imports the roster (a CSV; see `config/`) and adds the standard events. The list disappears once the settings are saved and a carnival exists. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
 
 ## 6. Upgrades
 

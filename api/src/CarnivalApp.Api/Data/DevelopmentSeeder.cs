@@ -184,7 +184,11 @@ public static class DevelopmentSeeder
                 eventDefinition = definition.Code,
                 program = new { stream = stream.Name, slots = 3 },
             });
+        // A seeded school is a set-up one: School shows no setup list for it.
+        var school = await db.SchoolConfigurations.TheSchool().FirstAsync(ct);
+        school.SettingsJson = SchoolSettings.SerialiseSetupConfirmed(now, school.SettingsJson);
         await db.SaveChangesAsync(ct);
+        services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
 
         logger.LogInformation(
             "Seeded development database: {Students} synthetic students, carnival '{Carnival}' with {Events} events ({Social} Social-tier).",

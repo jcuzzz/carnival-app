@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Carnival, RoleAssignment, SchoolSettings } from "../api/types";
 import { signIn, signOut } from "../auth/session";
@@ -27,8 +27,8 @@ const ADMIN = {
   localAccount: true,
 };
 
-function named(name: string): SchoolSettings {
-  return { name, houses: [] } as unknown as SchoolSettings;
+function named(name: string, setupConfirmed = false): SchoolSettings {
+  return { name, setupConfirmed, houses: [] } as unknown as SchoolSettings;
 }
 
 const SELF: RoleAssignment = {
@@ -79,14 +79,30 @@ describe("SchoolScreen — Set up your school", () => {
     expect(screen.getByRole("link", { name: /Update the event catalogue/ })).toBeTruthy();
   });
 
-  it("folds to one line once the school is named and has a carnival", async () => {
+  it("still lists the steps for a school whose name was seeded but never saved", async () => {
     vi.mocked(getSchoolSettings).mockResolvedValue(named("Riverbend College"));
     vi.mocked(listCarnivals).mockResolvedValue([{ id: "c-1" } as Carnival]);
     signIn(ADMIN);
     renderWithQuery(<SchoolScreen />);
 
-    expect(await screen.findByText("School set up")).toBeTruthy();
+    await screen.findByRole("heading", { name: "Set up your school", level: 2 });
+    const next = document.querySelector("ol.row-list a.row-link")!;
+    await waitFor(() => expect(next.textContent).toMatch(/School name, colours and houses.*Do this next/));
+  });
+
+  it("shows nothing of setup once the settings are saved and a carnival exists", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(named("Riverbend College", true));
+    vi.mocked(listCarnivals).mockResolvedValue([{ id: "c-1" } as Carnival]);
+    signIn(ADMIN);
+    renderWithQuery(<SchoolScreen />);
+
+    await screen.findByRole("link", { name: /School settings/ });
+    await waitFor(() => expect(listCarnivals).toHaveBeenCalled());
+    // Nothing appears to wait for, so let every read land first.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.querySelector("ul.row-list.subsection")).toBeNull();
     expect(screen.queryByRole("heading", { name: "Set up your school" })).toBeNull();
+    expect(screen.queryByText("School set up")).toBeNull();
     expect(document.querySelector("ol.row-list")).toBeNull();
   });
 
@@ -103,7 +119,7 @@ describe("SchoolScreen — Set up your school", () => {
 
   it("keeps the list, with the step unknown, when a read fails", async () => {
     vi.mocked(listCarnivals).mockRejectedValue(new Error("offline"));
-    vi.mocked(getSchoolSettings).mockResolvedValue(named("Riverbend College"));
+    vi.mocked(getSchoolSettings).mockResolvedValue(named("Riverbend College", true));
     signIn(ADMIN);
     renderWithQuery(<SchoolScreen />);
 

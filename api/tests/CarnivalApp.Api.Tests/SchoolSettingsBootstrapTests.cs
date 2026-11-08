@@ -93,6 +93,44 @@ public sealed class SchoolSettingsBootstrapTests : IDisposable
         Assert.Null(settings.UpdatedAtUtc);
     }
 
+    [Fact]
+    public async Task A_blank_install_seeds_an_unconfigured_school_with_no_houses()
+    {
+        // What compose passes when .env leaves SCHOOL_NAME and every SCHOOL_HOUSE_N empty.
+        using var host = Host(
+            ("School:Name", ""),
+            ("School:Timezone", "Australia/Melbourne"),
+            ("School:Houses:0", ""),
+            ("School:Houses:1", ""),
+            ("School:Houses:2", " "),
+            ("School:Houses:3", ""),
+            ("School:HouseColours:BANKSIA", ""));
+        await SchoolSettingsBootstrap.EnsureAsync(host);
+
+        var settings = await ReadAsync();
+        Assert.Equal("(unconfigured)", settings.Name);
+        Assert.Empty(settings.Houses);
+        Assert.False(settings.SetupConfirmed);
+    }
+
+    [Fact]
+    public async Task A_school_seeded_from_configuration_is_not_yet_set_up()
+    {
+        using var host = Host(FourHouses());
+        await SchoolSettingsBootstrap.EnsureAsync(host);
+
+        Assert.False((await ReadAsync()).SetupConfirmed);
+    }
+
+    [Fact]
+    public async Task A_blank_house_slot_is_skipped_rather_than_seeded_as_a_house()
+    {
+        using var host = Host(FourHouses(("School:Houses:3", "")));
+        await SchoolSettingsBootstrap.EnsureAsync(host);
+
+        Assert.Equal(["BANKSIA", "WATTLE", "MOUNTAIN ASH"], (await ReadAsync()).Houses.Select(house => house.Code));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

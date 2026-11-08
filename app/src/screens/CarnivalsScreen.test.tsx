@@ -64,7 +64,7 @@ beforeEach(() => {
   vi.mocked(listCarnivals).mockReset().mockResolvedValue([]);
   vi.mocked(getSchoolSettings)
     .mockReset()
-    .mockResolvedValue({ name: "(unconfigured)" } as SchoolSettings);
+    .mockResolvedValue({ name: "(unconfigured)", setupConfirmed: false } as SchoolSettings);
   signIn({ subject: "s1", displayName: "Rae Recorder", roles: ["Recorder"] });
 });
 
@@ -180,7 +180,7 @@ describe("CarnivalsScreen with no carnivals", () => {
     roles: ["SystemAdministrator" as const],
   };
 
-  it("sends a system administrator to the school while it is unnamed", async () => {
+  it("sends a system administrator to the school until its settings are saved", async () => {
     signIn(SYSADMIN);
     renderWithQuery(<CarnivalsScreen />);
 
@@ -189,8 +189,22 @@ describe("CarnivalsScreen with no carnivals", () => {
     expect(screen.getByText(/No carnivals yet\./)).toBeTruthy();
   });
 
-  it("drops the link once the school is named", async () => {
-    vi.mocked(getSchoolSettings).mockResolvedValue({ name: "Riverbend College" } as SchoolSettings);
+  it("keeps the link for a name seeded from .env but never saved", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue({
+      name: "Riverbend College",
+      setupConfirmed: false,
+    } as SchoolSettings);
+    signIn(SYSADMIN);
+    renderWithQuery(<CarnivalsScreen />);
+
+    expect(await screen.findByRole("link", { name: "Set up the school first" })).toBeTruthy();
+  });
+
+  it("drops the link once the school settings are saved", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue({
+      name: "Riverbend College",
+      setupConfirmed: true,
+    } as SchoolSettings);
     signIn(SYSADMIN);
     renderWithQuery(<CarnivalsScreen />);
 
