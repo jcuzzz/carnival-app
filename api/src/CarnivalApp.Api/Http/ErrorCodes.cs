@@ -117,6 +117,12 @@ public static class ErrorCodes
     public const string TemplateReconcileStale = "TEMPLATE_RECONCILE_STALE";
 
     /// <summary>
+    /// 409: a template apply needs ages, which come from the student list until the carnival saves
+    /// its own. Promoting a roster import, or saving the carnival's ages, resolves it.
+    /// </summary>
+    public const string RosterRequired = "ROSTER_REQUIRED";
+
+    /// <summary>
     /// A guarded field would move under results, team entries, standings or records.
     /// </summary>
     public const string TemplateReconcileUnsafe = "TEMPLATE_RECONCILE_UNSAFE";

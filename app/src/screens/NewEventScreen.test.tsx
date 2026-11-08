@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
@@ -323,14 +323,27 @@ describe("NewEventScreen", () => {
     expect(screen.getByRole("button", { name: "Create 2 divisions" })).toBeTruthy();
   });
 
+  it("names the ages as unreadable when the settings read fails", async () => {
+    vi.mocked(getCarnivalSettings).mockRejectedValue(new TypeError("Failed to fetch"));
+    renderWithQuery(<NewEventScreen carnivalId="c-1" />);
+
+    const submit = await screen.findByRole("button", { name: "Can’t read the ages" });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(submit.className).toBe("");
+    expect(
+      screen.getByText("Can’t reach the server, so this carnival’s ages couldn’t be read."),
+    ).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).not.toContain("profile");
+  });
+
   it("pre-ticks a profile that only arrives on the second try", async () => {
     vi.mocked(getCarnivalSettings).mockRejectedValueOnce(new TypeError("Failed to fetch"));
     const { client } = renderWithQuery(<NewEventScreen carnivalId="c-1" />);
 
     // The read failed, so the screen does not KNOW there are no divisions: the
     // guard's claim would be false, but nothing can be created either.
-    await screen.findByRole("button", { name: "Add divisions first" });
-    expect(screen.queryByText(/add ages first/)).toBeNull();
+    await screen.findByRole("button", { name: "Can’t read the ages" });
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
 
     await act(async () => {
@@ -498,27 +511,59 @@ describe("NewEventScreen", () => {
     expect(alert.textContent).toContain("the server decides");
   });
 
-  // ADR-0054 §3: a blocking notice above the fields, both ways out of it named,
-  // and a submit that cannot fire.
+  // ADR-0067 §5: with neither a profile nor a roster, the student import comes first,
+  // and the submit cannot fire.
   it("blocks the whole form with neither a profile nor a roster to derive one", async () => {
     vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
     renderWithQuery(<NewEventScreen carnivalId="c-1" />);
 
-    expect(await screen.findByText("Import a roster or add ages first.")).toBeTruthy();
-    // Both escapes are 44px targets in a button row, not inline text links.
-    const divisions = screen.getByRole("link", { name: "Divisions setup" });
-    expect(divisions.getAttribute("href")).toBe("#/carnivals/c-1/setup/divisions");
-    expect(divisions.className).toBe("button primary-link");
-    const template = screen.getByRole("link", { name: "Apply a template on Manage" });
-    expect(template.getAttribute("href")).toBe("#/carnivals/c-1/manage");
-    expect(template.className).toBe("button");
-    expect(divisions.closest(".button-row")).toBe(template.closest(".button-row"));
+    expect(
+      await screen.findByText("Import the student list first: this carnival's ages come from it."),
+    ).toBeTruthy();
+    // Only a system administrator can import, so no link that only refuses.
+    expect(screen.getByText("A system administrator imports it.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Import the students" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Manage/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Divisions" })).toBeNull();
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
 
-    const submit = screen.getByRole("button", { name: "Add divisions first" });
+    const submit = screen.getByRole("button", { name: "Import the student list first" });
     expect((submit as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(submit);
     expect(createEventDefinition).not.toHaveBeenCalled();
+  });
+
+  it("links a system administrator to the import, launched from this carnival", async () => {
+    signIn({ subject: "sys-1", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
+    renderWithQuery(<NewEventScreen carnivalId="c-1" />);
+
+    const link = await screen.findByRole("link", { name: "Import the students" });
+    expect(link.getAttribute("href")).toBe("#/import?carnival=c-1");
+    expect(link.className).toBe("button primary-link");
+    // The blocker's link is the screen's one steer; the blocked submit is not primary.
+    const submit = screen.getByRole("button", { name: "Import the student list first" });
+    expect(submit.className).toBe("");
+    expect(screen.queryByText("A system administrator imports it.")).toBeNull();
+  });
+
+  // Saved ages with nothing to cross them with: the student list is not what is missing.
+  it("points a saved profile with no categories at the ages editor", async () => {
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      divisions: { ...settings.divisions!, categories: [] },
+    });
+    renderWithQuery(<NewEventScreen carnivalId="c-1" />);
+
+    const notice = (
+      await screen.findByText("Set this carnival’s ages and categories first.")
+    ).closest(".alert")! as HTMLElement;
+    expect(
+      within(notice).getByRole("link", { name: "Ages and categories" }).getAttribute("href"),
+    ).toBe("#/carnivals/c-1/setup/divisions");
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
+    const submit = screen.getByRole("button", { name: "Set the ages and categories first" });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -548,12 +593,12 @@ describe("NewEventScreen on the roster default", () => {
     renderWithQuery(<NewEventScreen carnivalId="c-1" />);
 
     expect(
-      await screen.findByText(/^Ages from the roster: 12–13 · Boys, Girls · Competitive\./),
+      await screen.findByText(/^Ages from the student list: 12–13 · Boys, Girls · Competitive\./),
     ).toBeTruthy();
     expect(screen.getByRole("link", { name: "Change" }).getAttribute("href")).toBe(
       "#/carnivals/c-1/setup/divisions",
     );
-    expect(screen.queryByText(/add ages first/)).toBeNull();
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
     expect(await screen.findAllByRole("checkbox")).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Create 4 divisions" })).toBeTruthy();
   });
@@ -662,7 +707,7 @@ describe("NewEventScreen in the catalogue", () => {
 
     await screen.findByRole("heading", { name: "New definition", level: 1 });
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByText(/add ages first/)).toBeNull();
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
     expect(vi.mocked(getCarnival)).not.toHaveBeenCalled();
     expect(vi.mocked(getCarnivalSettings)).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "← Event catalogue" }).getAttribute("href")).toBe(

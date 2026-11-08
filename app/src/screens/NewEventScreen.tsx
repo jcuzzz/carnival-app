@@ -11,6 +11,7 @@ import {
 import type { Carnival, DivisionProfile, EventDefinition } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
+import { RosterRequiredNotice } from "../features/carnivals/RosterRequiredNotice";
 import { ensureProfile, rosterDefaultToSave } from "../features/events/addDivisions";
 import { codesSummary } from "../features/events/ageCodes";
 import { knownSports } from "../features/events/catalogueRows";
@@ -28,23 +29,31 @@ import { useConnectivity } from "../shell/useOnline";
 export default function NewEventScreen({ carnivalId }: { carnivalId: string | null }) {
   const session = useSession();
   const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
+  const canImport = hasRole(session, "SystemAdministrator");
   const connectivity = useConnectivity();
   const offline = connectivity !== "connected";
 
   return carnivalId === null ? (
     <NewDefinition canManage={canManage} offline={offline} />
   ) : (
-    <NewCarnivalEvent carnivalId={carnivalId} canManage={canManage} offline={offline} />
+    <NewCarnivalEvent
+      carnivalId={carnivalId}
+      canManage={canManage}
+      canImport={canImport}
+      offline={offline}
+    />
   );
 }
 
 function NewCarnivalEvent({
   carnivalId,
   canManage,
+  canImport,
   offline,
 }: {
   carnivalId: string;
   canManage: boolean;
+  canImport: boolean;
   offline: boolean;
 }) {
   const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
@@ -77,7 +86,7 @@ function NewCarnivalEvent({
         <div className="alert error" role="alert">
           {errorText(
             settings.error,
-            "Can’t reach the server, so this carnival’s division profile couldn’t be read.",
+            "Can’t reach the server, so this carnival’s ages couldn’t be read.",
           )}
         </div>
       )}
@@ -90,8 +99,10 @@ function NewCarnivalEvent({
           carnival={carnival.data}
           profile={settings.data?.divisions}
           rosterDefault={settings.data?.divisionsDefault}
+          rosterCodes={settings.data?.rosterAgeGroups ?? []}
           profileKnown={settings.data !== undefined}
           canManage={canManage}
+          canImport={canImport}
           offline={offline}
         />
       )}
@@ -104,8 +115,10 @@ function NewEventForm({
   carnival,
   profile,
   rosterDefault,
+  rosterCodes,
   profileKnown,
   canManage,
+  canImport,
   offline,
 }: {
   carnivalId: string;
@@ -113,9 +126,11 @@ function NewEventForm({
   profile: DivisionProfile | null | undefined;
   /** In use until the profile is saved. */
   rosterDefault: DivisionProfile | null | undefined;
+  rosterCodes: readonly string[];
   /** The settings read landed, so an unconfigured profile is a fact. */
   profileKnown: boolean;
   canManage: boolean;
+  canImport: boolean;
   offline: boolean;
 }) {
   const invalidate = useInvalidate();
@@ -141,6 +156,16 @@ function NewEventForm({
   const writable = canManage && !locked && !offline;
   // Configured: a saved profile, or a roster to derive one from.
   const blocked = !model.configured;
+  // ADR-0067 §5: with no saved ages and no roster, the student import comes first.
+  const needsStudents =
+    blocked && profileKnown && (profile?.ageGroups?.length ?? 0) === 0 && rosterCodes.length === 0;
+  const blocker = !blocked
+    ? null
+    : needsStudents
+      ? "Import the student list first"
+      : profileKnown
+        ? "Set the ages and categories first"
+        : "Can’t read the ages";
   // Once the definition exists these fields are saved, and this screen has no
   // update call: editing them here would show an edit that never happened.
   const fieldsWritable = writable && created === null;
@@ -216,18 +241,18 @@ function NewEventForm({
           This carnival is {carnival?.status}, so no divisions can be added to it.
         </div>
       )}
-      {blocked && profileKnown && !locked && (
+      {needsStudents && !locked && (
+        <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+      )}
+      {blocked && profileKnown && !needsStudents && !locked && (
         <div className="alert notice" role="status">
-          <p className="flush-top">Import a roster or add ages first.</p>
+          <p className="flush-top">Set this carnival’s ages and categories first.</p>
           <div className="button-row">
             <a
               className="button primary-link"
               href={href(`/carnivals/${carnivalId}/setup/divisions`)}
             >
-              Divisions setup
-            </a>
-            <a className="button" href={href(`/carnivals/${carnivalId}/manage`)}>
-              Apply a template on Manage
+              Ages and categories
             </a>
           </div>
         </div>
@@ -269,22 +294,24 @@ function NewEventForm({
           }
         />
 
-        <div className="form-divider">
-          <h2 className="flush-top">Divisions</h2>
-          {defaultProfile !== null && (
-            <p className="row-sub">
-              Ages from the roster: {rosterSummary(defaultProfile)}.{" "}
-              <a href={href(`/carnivals/${carnivalId}/setup/divisions`)}>Change</a>
-            </p>
-          )}
-          <DivisionGrid
-            profile={effective}
-            divisions={[]}
-            writable={writable}
-            profilePath={`/carnivals/${carnivalId}/setup/divisions`}
-            mode={{ kind: "draft", ticked, onTickedChange: setTicked }}
-          />
-        </div>
+        {!needsStudents && (
+          <div className="form-divider">
+            <h2 className="flush-top">Divisions</h2>
+            {defaultProfile !== null && (
+              <p className="row-sub">
+                Ages from the student list: {rosterSummary(defaultProfile)}.{" "}
+                <a href={href(`/carnivals/${carnivalId}/setup/divisions`)}>Change</a>
+              </p>
+            )}
+            <DivisionGrid
+              profile={effective}
+              divisions={[]}
+              writable={writable}
+              profilePath={`/carnivals/${carnivalId}/setup/divisions`}
+              mode={{ kind: "draft", ticked, onTickedChange: setTicked }}
+            />
+          </div>
+        )}
 
         {profileError !== null && (
           <div className="alert error" role="alert">
@@ -299,8 +326,9 @@ function NewEventForm({
         )}
         {canManage && (
           <div className="button-row">
+            {/* Blocked, the blocker's link is what this screen steers at. */}
             <button
-              className="primary"
+              className={blocked ? undefined : "primary"}
               type="submit"
               disabled={
                 !writable ||
@@ -308,7 +336,7 @@ function NewEventForm({
                 (created === null && (incomplete || blocked || ticked.size === 0))
               }
             >
-              {submitLabel(saving, created !== null, ticked.size, blocked)}
+              {submitLabel(saving, created !== null, ticked.size, blocker)}
             </button>
           </div>
         )}
@@ -332,11 +360,11 @@ function submitLabel(
   saving: boolean,
   exists: boolean,
   ticked: number,
-  blocked: boolean,
+  blocker: string | null,
 ): string {
   if (saving) return exists ? "Adding divisions…" : "Creating…";
   if (exists && ticked === 0) return "Finish";
-  if (blocked) return "Add divisions first";
+  if (blocker !== null) return blocker;
   if (ticked === 0) return "Tick at least one division";
   return `${exists ? "Add" : "Create"} ${counted(ticked, "division")}`;
 }

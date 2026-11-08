@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  codeRange,
-  codesSummary,
-  FALLBACK_AGE_CODES,
-  nonNumericCodes,
-  numericCodes,
-  orderCodes,
-} from "./ageCodes";
+import { codeRange, codesSummary, nonNumericCodes, numericCodes, orderCodes } from "./ageCodes";
 
 /**
  * The editor never types a code (ADR-0057 §3, ADR-0058 §4), so what these have
@@ -46,12 +39,6 @@ describe("numericCodes and codeRange", () => {
   it("is empty for a reversed or non-numeric range", () => {
     expect(codeRange(["12", "13"], "13", "12")).toEqual([]);
     expect(codeRange(["12", "13"], "SNR", "13")).toEqual([]);
-  });
-
-  it("falls back to 5–21 when the roster names no ages", () => {
-    expect(FALLBACK_AGE_CODES[0]).toBe("5");
-    expect(FALLBACK_AGE_CODES.at(-1)).toBe("21");
-    expect(codesSummary(FALLBACK_AGE_CODES)).toBe("5–21");
   });
 });
 

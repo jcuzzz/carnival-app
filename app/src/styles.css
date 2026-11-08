@@ -322,6 +322,12 @@
       max(var(--space-md), env(safe-area-inset-left));
   }
 
+  /* Focused by the router while a screen is still loading, before its h1 exists: a place to
+     start reading from, not a control, so no ring round the whole page. */
+  main.screen:focus {
+    outline: none;
+  }
+
   /* ---- Cards, lists, tables ---- */
 
   .card {

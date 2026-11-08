@@ -160,10 +160,33 @@ public partial class EventTemplateService(
         int EventsPlaced,
         bool DivisionProfileSeeded);
 
+    // Exactly one is set. A refusal (ADR-0067 §5) has written nothing.
+    public sealed record ApplyOutcome(ApplicationResult? Applied, string? RosterRequiredDetail);
+
     // One SaveChanges, so the audit record commits with the apply.
-    public async Task<ApplicationResult> ApplyAsync(
+    public async Task<ApplyOutcome> ApplyAsync(
         Carnival carnival, EventTemplate template, AuditActor actor, CancellationToken ct)
     {
+        // Tracked: rows that do not read as a profile are replaced by the seed.
+        var profileRows = await db.CarnivalDivisions.Where(d => d.CarnivalId == carnival.Id).ToListAsync(ct);
+        var saved = DivisionProfile.FromRows(profileRows);
+        var ages = saved?.AgeGroups;
+        if (ages is null)
+        {
+            var roster = (await RosterAges.ReadAsync(db, ct)).AgeGroups;
+            ages = DivisionProfile.FromRoster(roster)?.AgeGroups;
+            if (ages is null)
+                return new(null, roster.Count == 0
+                    ? "Import the student list first: this carnival's ages come from it."
+                    : $"The student list has more than {DivisionProfile.MaxAgeGroups} ages, more than a " +
+                      "carnival can hold; check its birth dates.");
+        }
+        var categories = saved?.Categories ?? template.Categories;
+        var tiers = saved?.Tiers ?? template.Tiers;
+        // A template's per-event tiers narrow the carnival's; they never add one it does not contest.
+        IReadOnlyList<EventTier> TiersFor(EventTemplateDefinition definition) =>
+            definition.Tiers is { } own ? [.. tiers.Where(own.Contains)] : tiers;
+
         var now = DateTimeOffset.UtcNow;
         var codes = template.Definitions.Select(d => d.Code).ToList();
         var existing = await db.EventDefinitions
@@ -234,15 +257,14 @@ public partial class EventTemplateService(
         var eventsSkipped = 0;
         // Tracked but unsaved, so schedule seeding must see them from here, not from a query.
         var createdEvents = new List<CarnivalEvent>();
-        var templateAges = template.AgeGroups.Select(a => (string?)a).ToList();
         foreach (var templated in schedulable)
         {
             // A null age is the open (all-ages) division.
-            var ages = new List<string?>(templateAges);
-            if (templated.OpenDivision) ages.Add(null);
+            var divisionAges = ages.Select(a => (string?)a).ToList();
+            if (templated.OpenDivision) divisionAges.Add(null);
             var outcome = DivisionGenerator.Generate(
                 carnival.Id, existing[templated.Code],
-                DivisionGenerator.Matrix(ages, template.Categories, template.TiersFor(templated)),
+                DivisionGenerator.Matrix(divisionAges, categories, TiersFor(templated)),
                 alreadyScheduled);
             db.CarnivalEvents.AddRange(outcome.Created);
             createdEvents.AddRange(outcome.Created);
@@ -250,15 +272,23 @@ public partial class EventTemplateService(
             eventsSkipped += outcome.Skipped;
         }
 
-        var program = await SeedScheduleAsync(carnival, template, existing, createdEvents, ct);
-        var profileSeeded = await SeedDivisionProfileAsync(carnival, template, ct);
+        var program = await SeedScheduleAsync(
+            carnival, template, ages, categories, existing, createdEvents, ct);
+        // Never overwrites a usable profile; unusable rows read as not configured and nothing else
+        // can repair them, so the seed replaces those.
+        var profileSeeded = saved is null;
+        if (profileSeeded)
+        {
+            db.CarnivalDivisions.RemoveRange(profileRows);
+            db.CarnivalDivisions.AddRange(DivisionProfile.ForTemplateApply(ages, template).ToRows(carnival.Id));
+        }
 
         var result = new ApplicationResult(
             carnival.Id, template.Key, template.Name, template.Version,
-            template.AgeGroups,
-            template.Categories.Select(c => c.ToString()).ToList(),
-            // The tiers actually reached: per-definition overrides can differ from the list.
-            schedulable.SelectMany(template.TiersFor).Distinct().Order().Select(t => t.ToString()).ToList(),
+            ages,
+            categories.Select(c => c.ToString()).ToList(),
+            // The tiers actually reached: per-definition tiers can narrow the carnival's.
+            schedulable.SelectMany(TiersFor).Distinct().Order().Select(t => t.ToString()).ToList(),
             definitionsCreated, template.Definitions.Count - definitionsCreated,
             skippedInactive, eventsCreated, eventsSkipped,
             program.StreamsCreated, program.SlotsCreated, program.EventsPlaced,
@@ -271,8 +301,8 @@ public partial class EventTemplateService(
         }
         catch (DbUpdateException ex) when (result.DivisionProfileSeeded && SeededConcurrently(ex))
         {
-            // Another apply seeded the profile first; its rows come from a template too, so this
-            // one drops its own and still succeeds.
+            // Another write saved the profile first, so this apply drops its own seed and still
+            // succeeds.
             foreach (var entry in db.ChangeTracker.Entries<CarnivalDivision>()
                          .Where(e => e.State == EntityState.Added).ToList())
                 entry.State = EntityState.Detached;
@@ -282,23 +312,11 @@ public partial class EventTemplateService(
                 carnival.Id.ToString(), newValues: result, ruleVersion: carnival.RuleVersion);
             await db.SaveChangesAsync(ct);
         }
-        return result;
+        return new(result, null);
     }
 
     private static bool SeededConcurrently(DbUpdateException ex) =>
         ex is not DbUpdateConcurrencyException && ex.Entries.Any(e => e.Entity is CarnivalDivision);
-
-    // Never overwrites a usable profile; unusable rows read as not configured and nothing else can
-    // repair them, so the seed replaces those.
-    private async Task<bool> SeedDivisionProfileAsync(
-        Carnival carnival, EventTemplate template, CancellationToken ct)
-    {
-        var rows = await db.CarnivalDivisions.Where(d => d.CarnivalId == carnival.Id).ToListAsync(ct);
-        if (DivisionProfile.FromRows(rows) is not null) return false;
-        db.CarnivalDivisions.RemoveRange(rows);
-        db.CarnivalDivisions.AddRange(DivisionProfile.FromTemplate(template).ToRows(carnival.Id));
-        return true;
-    }
 
     private readonly record struct ProgramResult(int StreamsCreated, int SlotsCreated, int EventsPlaced);
 
@@ -306,6 +324,7 @@ public partial class EventTemplateService(
     // placed. Slot identity is the label, so a renamed or deleted slot returns on a re-apply.
     private async Task<ProgramResult> SeedScheduleAsync(
         Carnival carnival, EventTemplate template,
+        IReadOnlyList<string> ages, IReadOnlyList<CompetitionCategory> categories,
         IReadOnlyDictionary<string, EventDefinition> definitions,
         IReadOnlyList<CarnivalEvent> createdEvents, CancellationToken ct)
     {
@@ -332,13 +351,16 @@ public partial class EventTemplateService(
                 .DistinctBy(e => e.Id)
                 .ToList();
 
-        var ageRank = template.AgeGroups
+        // The template's slot filters still name its own ages; the order is the carnival's.
+        var ageRank = ages
+            .OrderBy(AgeScope.Order)
+            .ThenBy(age => age, StringComparer.Ordinal)
             .Select((age, index) => (Age: age, Index: index))
             .ToDictionary(a => a.Age, a => a.Index, StringComparer.Ordinal);
         int AgeRank(CarnivalEvent e) => ageRank.TryGetValue(e.AgeGroup, out var rank)
             ? rank
             : int.MaxValue;
-        var categoryRank = template.Categories
+        var categoryRank = categories
             .Select((category, index) => (category, index))
             .ToDictionary(c => c.category, c => c.index);
         int CategoryRank(CarnivalEvent e) =>

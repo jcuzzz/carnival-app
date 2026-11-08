@@ -372,43 +372,65 @@ test("the dashboard, the manage page and the carnival switcher (ADR-0024)", asyn
 });
 
 /**
- * ADR-0054: what a carnival looks like the moment after it is created. The
- * checklist says what is left, the template picker is the one-press way through
- * it, and "Add an event" refuses rather than creating a catalogue definition
- * and scheduling nothing.
+ * ADR-0066 §4 and ADR-0067 §5: a carnival created before any student list is imported. The
+ * roster is school-wide and seeded, so its ages and its student count are answered empty here.
  */
-test("a fresh carnival: the setup checklist, the template picker, the blocked add-event form", async ({
+async function pinNoStudents(page: Page, carnivalId: string): Promise<void> {
+  await pinRosterAges(page, carnivalId, []);
+  await page.route(`**/api/v1/carnivals/${carnivalId}/progress`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const body = (await response.json()) as { participation: object[] };
+    await route.fulfill({
+      json: {
+        ...body,
+        participation: body.participation.map((house) => ({ ...house, competitors: 0 })),
+      },
+    });
+  });
+}
+
+/**
+ * The moment after a carnival is created, with no student list: Students is the step pointed
+ * at, and Event setup, New event and the ages editor all point at the import instead.
+ */
+test("a fresh carnival with no student list: the checklist, the blocked setup screens", async ({
   page,
 }) => {
   await signIn(page);
-  // ADR-0057 §2 leaves this block only for the no-roster case, so the empty
-  // state is shot with no roster ages behind it.
-  await pinRosterAges(page, fresh.carnivalId, []);
+  await pinNoStudents(page, fresh.carnivalId);
+  const notice = page.getByText(
+    "Import the student list first: this carnival's ages come from it.",
+  );
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${fresh.carnivalId}/manage`);
     await settled(page.getByRole("heading", { name: "Manage carnival", level: 1 }));
-    // With no age groups to derive bands from, step 2 is still the one the list
-    // points at — and only one step is ever pointed at.
-    await expect(page.locator("li.awaiting .row-title")).toHaveText(/2\. Divisions/);
+    // Only one step is ever pointed at.
+    await expect(page.locator("li.awaiting .row-title")).toHaveText(/1\. Students/);
     await expect(page.getByText("Do this next")).toHaveCount(1);
+    await expect(page.getByText("Import the students first")).toBeVisible();
     await capture(page, "manage-checklist", width);
 
-    // A region shot, not a second full page: the picker sits under the
-    // checklist, and a reviewer needs to read the confirm sentence.
-    const picker = page.getByLabel("Carnival template");
-    await expect(picker).toHaveValue("swimming");
-    await captureRegion(page, page.locator("section").filter({ has: picker }),
-      "manage-apply-template", width);
+    await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
+    await settled(notice);
+    await expect(page.getByRole("link", { name: "Import the students" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Start from the standard events" }),
+    ).toHaveCount(0);
+    await capture(page, "event-setup-no-roster", width);
 
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events/new`);
-    await settled(page.getByText("Import a roster or add ages first."));
-    await expect(page.getByRole("button", { name: "Add divisions first" })).toBeDisabled();
+    await settled(notice);
+    await expect(
+      page.getByRole("button", { name: "Import the student list first" }),
+    ).toBeDisabled();
     await capture(page, "event-new-blocked", width);
 
-    // The editor with nothing to pick from: it says so and falls back to 5–21.
+    // No fallback range (ADR-0067 §5): with nothing to narrow, there is no form.
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/divisions`);
-    await settled(page.getByText("No roster is promoted yet", { exact: false }));
-    await capture(page, "divisions-no-roster", width);
+    await settled(notice);
+    await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
+    await capture(page, "ages-no-roster", width);
 
     // ADR-0066 §7: the Deck teaches no setup; a manager gets the one way to Manage.
     await page.goto(`/#/carnivals/${fresh.carnivalId}`);
@@ -418,8 +440,8 @@ test("a fresh carnival: the setup checklist, the template picker, the blocked ad
 });
 
 /**
- * ADR-0066 §4: Event setup over an empty catalogue points at the standard events. The
- * catalogue is school-wide and seeded, so its read is answered empty here.
+ * ADR-0066 §4: the standard events are Event setup's own button, even over an empty catalogue.
+ * The catalogue is school-wide and seeded, so its read is answered empty here.
  */
 test("event setup with an empty catalogue", async ({ page }) => {
   await signIn(page);
@@ -429,53 +451,113 @@ test("event setup with an empty catalogue", async ({ page }) => {
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
     await settled(page.getByText("The event catalogue is empty."));
-    await expect(page.getByRole("link", { name: "Start from the standard events" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Add the standard swimming events" }),
+    ).toBeVisible();
     await capture(page, "event-setup-empty-catalogue", width);
   }
 });
 
 /**
- * ADR-0057 §2 and ADR-0058 §4: a carnival whose roster ages are known. The
- * checklist ticks Divisions off the roster, "Add an event" draws its grid from
- * it, and the Divisions screen is a From/To pair over the roster's own ages.
+ * ADR-0067 §1–2 and ADR-0058 §4: a carnival whose student list is in. Event setup states the
+ * ages it will use and offers the standard events as its primary, "New event" draws its grid
+ * from the ages, and the editor is a From/To pair over the student list's own ages.
  */
-test("ages from the roster: the checklist, the add-event grid, the editor", async ({ page }) => {
+test("ages from the student list: event setup, the add-event grid, the editor", async ({
+  page,
+}) => {
   // SNR is in the roster and no From/To range can reach it — the one code that
-  // proves the checkbox keeps it and that an uncontested age is called out.
+  // proves the checkbox keeps it and that a left-out age is called out.
   const roster = ["12", "13", "14", "15", "16", "17", "18", "SNR"];
   await signIn(page);
   await pinRosterAges(page, rostered.carnivalId, roster);
-  await pinRosterAges(page, stale.carnivalId, ["12", "13"]);
 
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${rostered.carnivalId}/manage`);
-    await settled(page.getByText("Ages from the roster: 12–18, SNR · Boys, Girls · Competitive"));
-    await expect(page.locator("li.awaiting .row-title")).toHaveText(/3\. Events/);
+    await settled(page.locator("li.awaiting .row-title"));
+    await expect(page.locator("li.awaiting .row-title")).toHaveText(/2\. Events/);
     await capture(page, "manage-checklist-roster-default", width);
 
+    // An empty carnival: the standard events are the screen's primary.
+    await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/events`);
+    await settled(
+      page.getByText("Ages 12–18, SNR from the student list · Boys, Girls · Competitive"),
+    );
+    await expect(page.getByLabel("Carnival template")).toHaveValue("swimming");
+    await expect(
+      page.getByRole("button", { name: "Add the standard swimming events" }),
+    ).toHaveClass(/primary/);
+    await capture(page, "event-setup-standard-events", width);
+
     await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/events/new`);
-    await settled(page.getByText("Ages from the roster: 12–18, SNR", { exact: false }));
-    // Not "Add divisions first": the default is enough to schedule from.
+    await settled(page.getByText("Ages from the student list: 12–18, SNR", { exact: false }));
+    // Not blocked: the student list's ages are enough to schedule from.
     await expect(page.getByRole("button", { name: /^Create \d+ division/ })).toBeVisible();
     await capture(page, "event-new-roster-default", width);
 
-    // Pre-filled from the default: the screen an organiser lands on before
+    // Pre-filled from the student list: the screen an organiser lands on before
     // anything is saved.
     await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/divisions`);
+    await settled(page.getByRole("heading", { name: "Ages and categories", level: 1 }));
     await expect(page.getByLabel(/^From/)).toHaveValue("12");
     await capture(page, "divisions-roster-default", width);
 
-    // A narrowed range with the seniors unticked: the two ages left out are
-    // named rather than silently dropped.
+    // A narrowed range with the seniors unticked: the ages left out are named
+    // rather than silently dropped.
     await page.getByLabel(/^To/).selectOption("16");
     await page.getByRole("checkbox", { name: "SNR" }).uncheck();
-    await settled(page.getByText("Roster ages not contested: 17, 18, SNR", { exact: false }));
+    await settled(
+      page.getByText("Ages on the student list left out: 17, 18, SNR", { exact: false }),
+    );
     await capture(page, "divisions-narrowed", width);
+  }
+});
 
-    // A saved profile naming an age this roster no longer derives.
-    await page.goto(`/#/carnivals/${stale.carnivalId}/setup/divisions`);
-    await settled(page.getByText("Saved ages the roster no longer derives: 14", { exact: false }));
+/**
+ * ADR-0067 §6: saved ages against a student list that has since changed. The `stale` carnival
+ * saves 12–14; each case pins the student list's ages to say something different about them.
+ */
+test("saved ages against the student list: stale, left out, and no list at all", async ({
+  page,
+}) => {
+  await signIn(page);
+  const editor = `/#/carnivals/${stale.carnivalId}/setup/divisions`;
+  const setup = `/#/carnivals/${stale.carnivalId}/setup/events`;
+
+  // 14 is saved and no current student has it: a warning and one press that removes it.
+  await pinRosterAges(page, stale.carnivalId, ["12", "13"]);
+  for (const width of WIDTHS) {
+    await page.goto(setup);
+    await settled(page.getByText("This carnival has ages no student has: 14.", { exact: false }));
+    await expect(page.getByRole("button", { name: "Remove those ages" })).toBeEnabled();
+    await capture(page, "event-setup-ages-stale", width);
+
+    await page.goto(editor);
+    await settled(page.getByText("Saved ages no current student has: 14", { exact: false }));
     await capture(page, "divisions-stale-age", width);
+  }
+
+  // 15 and 16 are on the student list and not saved: a deliberate narrowing, noted quietly.
+  await page.unroute(`**/api/v1/carnivals/${stale.carnivalId}/settings`);
+  await pinRosterAges(page, stale.carnivalId, ["12", "13", "14", "15", "16"]);
+  // A reload, not a hash change: the settings read is cached for longer than this test runs.
+  await page.reload();
+  for (const width of WIDTHS) {
+    await page.goto(setup);
+    await settled(page.getByText("Left out of this carnival: 15, 16.", { exact: false }));
+    await expect(page.getByRole("button", { name: "Remove those ages" })).toHaveCount(0);
+    await capture(page, "event-setup-ages-left-out", width);
+  }
+
+  // Saved ages and no student list: the ages are read-only, categories and tiers still change.
+  await page.unroute(`**/api/v1/carnivals/${stale.carnivalId}/settings`);
+  await pinRosterAges(page, stale.carnivalId, []);
+  await page.reload();
+  for (const width of WIDTHS) {
+    await page.goto(editor);
+    await settled(page.getByText("No student list is imported yet", { exact: false }));
+    await expect(page.getByLabel(/^From/)).toHaveCount(0);
+    await capture(page, "ages-saved-no-roster", width);
   }
 });
 
@@ -642,7 +724,7 @@ test("the flat deck: lanes, the heat picker, the armed Swap and Remove", async (
   }
 });
 
-test("event setup: the catalogue, the editor's grid, a new event and the profile", async ({
+test("event setup: the catalogue and its ages line, an event, a new event, the ages", async ({
   page,
   playwright,
 }) => {
@@ -654,10 +736,26 @@ test("event setup: the catalogue, the editor's grid, a new event and the profile
   await api.dispose();
 
   await signIn(page);
+  // The saved ages, matched by the student list, so the line stands alone (ADR-0067 §1).
+  await pinRosterAges(page, seed.carnivalId, ["12", "13", "14"]);
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${seed.carnivalId}/setup/events`);
     await settled(page.getByRole("heading", { name: "Event setup", level: 1 }));
+    const line = page.locator(".button-row").filter({
+      has: page.getByRole("link", { name: "Ages and categories" }),
+    });
+    await settled(line.getByText("Ages 12–14 · Boys, Girls · Competitive, Social"));
     await capture(page, "event-setup", width);
+    await captureRegion(page, line, "event-setup-ages-line", width);
+
+    // A carnival with events keeps the standard events behind a disclosure.
+    await page.getByRole("button", { name: "Add the rest of the standard events" }).click();
+    const standard = page.locator("section").filter({
+      has: page.getByRole("button", { name: "Hide the standard events" }),
+    });
+    await settled(standard.getByLabel("Carnival template"));
+    await expect(standard.getByLabel("Carnival template")).toHaveValue("swimming");
+    await captureRegion(page, standard, "event-setup-standard-events-open", width);
 
     await page.getByRole("link").filter({ hasText: seed.eventName }).first().click();
     await settled(page.getByRole("button", { name: "Save event" }));
@@ -681,7 +779,8 @@ test("event setup: the catalogue, the editor's grid, a new event and the profile
     await capture(page, "event-new-bar-ladder", width);
 
     await page.goto(`/#/carnivals/${seed.carnivalId}/setup/divisions`);
-    await settled(page.getByRole("heading", { level: 1 }));
+    await settled(page.getByRole("heading", { name: "Ages and categories", level: 1 }));
+    await expect(page.getByLabel(/^To/)).toHaveValue("14");
     await capture(page, "divisions-profile", width);
   }
 });
@@ -715,7 +814,8 @@ test("event setup: adding a catalogue event in one press (ADR-0059)", async ({ p
   await signIn(page);
   await page.goto(`/#/carnivals/${adding.carnivalId}/setup/events`);
   await settled(page.getByRole("heading", { name: "Available to add" }));
-  const add = page.getByRole("button", { name: /^Add / }).first();
+  // A row's Add, not the standard events' "Add the standard … events" above the list.
+  const add = page.locator("button.add-event").first();
   const name = (await add.getAttribute("aria-label"))!.replace(/^Add /, "");
 
   await add.click();

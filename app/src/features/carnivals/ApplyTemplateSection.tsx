@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ApiError } from "../../api/client";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../../api/errorText";
 import { keys } from "../../api/queryKeys";
 import { applyCarnivalTemplate, listEventTemplates } from "../../api/resources";
@@ -7,24 +8,34 @@ import { useApiQuery, useInvalidate } from "../../api/useApiQuery";
 import { counted } from "../events/counted";
 import { carnivalSport } from "../events/eventLabels";
 import { showToast } from "../../shell/toast";
+import { useConnectivity } from "../../shell/useOnline";
+import { RosterRequiredNotice } from "./RosterRequiredNotice";
 
 // Idempotent, so there is no armed second tap: what it will do is stated above the button.
 export function ApplyTemplateSection({
   carnivalId,
   carnivalType,
-  locked,
+  empty,
+  canImport,
 }: {
   carnivalId: string;
   carnivalType: CarnivalType | undefined;
-  /** Closed or finalised: nothing more is scheduled into it. */
-  locked: boolean;
+  /** No division here yet: the screen's primary. Otherwise a disclosure. */
+  empty: boolean;
+  /** SystemAdministrator: a refusal for want of a roster may link at the import. */
+  canImport: boolean;
 }) {
-  const templates = useApiQuery(keys.eventTemplates(), listEventTemplates);
+  const [open, setOpen] = useState(false);
   const [template, setTemplate] = useState("");
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rosterRequired, setRosterRequired] = useState(false);
   const [outcome, setOutcome] = useState<ApplyTemplateResult | null>(null);
   const invalidate = useInvalidate();
+  const online = useConnectivity() === "connected";
+  // The outcome keeps it open: the press itself is what turns an empty carnival into a full one.
+  const expanded = empty || open || outcome !== null;
+  const templates = useApiQuery(keys.eventTemplates(), listEventTemplates, { enabled: expanded });
 
   const readable = (templates.data ?? []).filter((t) => t.readable);
   // Only the template that MATCHES is chosen for them: a Cross-country carnival
@@ -39,6 +50,7 @@ export function ApplyTemplateSection({
     if (applying || template === "") return;
     setApplying(true);
     setError(null);
+    setRosterRequired(false);
     try {
       const result = await applyCarnivalTemplate(carnivalId, template);
       setOutcome(result);
@@ -54,94 +66,127 @@ export function ApplyTemplateSection({
       );
     } catch (err) {
       setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      setRosterRequired(err instanceof ApiError && err.code === "ROSTER_REQUIRED");
     } finally {
       setApplying(false);
     }
   }
 
+  function toggle(): void {
+    setOpen(!expanded);
+    if (expanded) setOutcome(null);
+  }
+
+  const sport = carnivalSport(carnivalType).toLowerCase();
+  const label =
+    sport !== "" && template === preferred
+      ? `Add the standard ${sport} events`
+      : "Add the standard events";
+
   return (
     <section className="subsection">
-      <h2>Start from the standard events</h2>
-      <p className="row-sub">
-        The fastest way to set a carnival up: one press adds the events and their divisions, and
-        builds the program. Pressing it twice adds nothing it already has.
-      </p>
-
-      {templates.error && (
-        <div className="alert notice" role="status">
-          {errorText(
-            templates.error,
-            "Can’t reach the server, so the templates couldn’t be listed.",
-          )}{" "}
-          Events can still be added by hand on Event setup.
-        </div>
-      )}
-      {error && (
-        <div className="alert error" role="alert">
-          {error}
-        </div>
-      )}
-
-      {templates.loading ? (
-        <p>Loading…</p>
-      ) : readable.length === 0 ? (
-        !templates.error && <p className="row-sub">This server holds no readable template.</p>
+      {empty ? (
+        <h2>Start from the standard events</h2>
       ) : (
-        <div className="card">
-          <label className="field wide flush-top">
-            <span>Carnival template</span>
-            <select
-              aria-label="Carnival template"
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-              disabled={locked}
-            >
-              {template === "" && <option value="">Choose a template…</option>}
-              {readable.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name ?? t.id} ({t.definitions} events)
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="row-sub">
-            Its events are created in the shared catalogue or reused where they already exist, one
-            division is scheduled per event × age × category × tier, and the template’s program is
-            built. Nothing is removed.
-          </p>
-          <div className="button-row">
-            <button
-              className="primary"
-              type="button"
-              disabled={applying || locked || template === ""}
-              onClick={() => void apply()}
-            >
-              {applying ? "Adding…" : "Add the standard events"}
-            </button>
-          </div>
-        </div>
+        <button type="button" aria-expanded={expanded} onClick={toggle}>
+          {expanded ? "Hide the standard events" : "Add the rest of the standard events"}
+        </button>
       )}
+      {expanded && (
+        <div className={empty ? undefined : "disclosure-body"}>
+          <p className="row-sub">
+            {empty
+              ? "The fastest way to set a carnival up: one press adds the events and their " +
+                "divisions, and builds the program. Pressing it twice adds nothing it already has."
+              : "Adds whatever of the standard events this carnival doesn’t have yet. Nothing it " +
+                "already has is changed or removed."}
+          </p>
 
-      {outcome && (
-        <div className="alert success" role="status">
-          <strong>
-            {outcome.templateName} applied — {counted(outcome.eventsCreated, "division")}{" "}
-            scheduled.
-          </strong>
-          <div>
-            {counted(outcome.definitionsCreated, "event")} created in the catalogue,{" "}
-            {outcome.definitionsExisting} reused
-            {outcome.eventsAlreadyScheduled > 0 &&
-              `, ${counted(outcome.eventsAlreadyScheduled, "division")} already scheduled`}
-            .
-          </div>
-          <div>
-            {outcome.divisionProfileSeeded
-              ? "This carnival’s ages and categories were set from the template."
-              : "This carnival’s ages and categories were already set, and were left as they are."}{" "}
-            {counted(outcome.slotsCreated, "slot")} across{" "}
-            {counted(outcome.streamsCreated, "stream")}.
-          </div>
+          {templates.error && (
+            <div className="alert notice" role="status">
+              {errorText(
+                templates.error,
+                "Can’t reach the server, so the templates couldn’t be listed.",
+              )}{" "}
+              Events can still be added one at a time on this screen.
+            </div>
+          )}
+          {rosterRequired ? (
+            <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+          ) : (
+            error && (
+              <div className="alert error" role="alert">
+                {error}
+              </div>
+            )
+          )}
+
+          {templates.loading ? (
+            <p>Loading…</p>
+          ) : readable.length === 0 ? (
+            !templates.error && <p className="row-sub">This server holds no readable template.</p>
+          ) : (
+            <div className="card">
+              <label className="field wide flush-top">
+                <span>Carnival template</span>
+                <select
+                  aria-label="Carnival template"
+                  value={template}
+                  onChange={(e) => setTemplate(e.target.value)}
+                >
+                  {template === "" && <option value="">Choose a template…</option>}
+                  {readable.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name ?? t.id} ({t.definitions} events)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="row-sub">
+                Its events are created in the shared catalogue or reused where they already exist,
+                one division is scheduled for each of this carnival’s ages, categories and tiers,
+                and the template’s program is built. Nothing is removed.
+              </p>
+              <div className="button-row">
+                {/* Refused for want of a roster, the import link is what it steers at. */}
+                <button
+                  className={empty && !rosterRequired ? "primary" : undefined}
+                  type="button"
+                  disabled={applying || template === "" || !online}
+                  onClick={() => void apply()}
+                >
+                  {applying ? "Adding…" : label}
+                </button>
+                {!online && (
+                  <span>Can’t reach the server, so the standard events can’t be added now.</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {outcome && (
+            <div className="alert success" role="status">
+              <strong>
+                {outcome.templateName} applied — {counted(outcome.eventsCreated, "division")}{" "}
+                scheduled.
+              </strong>
+              <div>
+                {counted(outcome.definitionsCreated, "event")} created in the catalogue,{" "}
+                {outcome.definitionsExisting} reused
+                {outcome.eventsAlreadyScheduled > 0 &&
+                  `, ${counted(outcome.eventsAlreadyScheduled, "division")} already scheduled`}
+                .
+              </div>
+              <div>
+                {outcome.divisionProfileSeeded
+                  ? "This carnival’s ages were saved from the student list, and its categories " +
+                    "and tiers from the template."
+                  : "This carnival’s saved ages, categories and tiers were used."}{" "}
+                {counted(outcome.slotsCreated, "slot")} across{" "}
+                {counted(outcome.streamsCreated, "stream")}.
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>

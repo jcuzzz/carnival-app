@@ -16,20 +16,24 @@ import { createTestQueryClient, renderWithQuery } from "../test/queryWrapper";
  */
 
 vi.mock("../api/resources", () => ({
+  applyCarnivalTemplate: vi.fn(),
   generateDivisions: vi.fn(),
   getCarnival: vi.fn(),
   getCarnivalSettings: vi.fn(),
   listCarnivalEvents: vi.fn(),
   listEventDefinitions: vi.fn(),
+  listEventTemplates: vi.fn(),
   updateCarnivalSettings: vi.fn(),
 }));
 
 import {
+  applyCarnivalTemplate,
   generateDivisions,
   getCarnival,
   getCarnivalSettings,
   listCarnivalEvents,
   listEventDefinitions,
+  listEventTemplates,
   updateCarnivalSettings,
 } from "../api/resources";
 import EventSetupScreen from "./EventSetupScreen";
@@ -68,6 +72,22 @@ const definitions = [
     usage: { carnivals: 0, divisions: 0, schoolRecords: 0, results: 0 },
   } as EventDefinition,
 ];
+
+const athletics = {
+  id: "athletics",
+  name: "Athletics carnival",
+  version: "v3",
+  definitions: 14,
+  readable: true,
+};
+
+const swimming = {
+  id: "swimming",
+  name: "Swimming carnival",
+  version: "v3",
+  definitions: 12,
+  readable: true,
+};
 
 const events = ["12", "13"].flatMap((age) =>
   (["M", "F"] as const).map(
@@ -115,6 +135,8 @@ beforeEach(() => {
   vi.mocked(getCarnivalSettings).mockReset().mockResolvedValue(settings);
   vi.mocked(listCarnivalEvents).mockReset().mockResolvedValue(events);
   vi.mocked(listEventDefinitions).mockReset().mockResolvedValue(definitions);
+  vi.mocked(listEventTemplates).mockReset().mockResolvedValue([]);
+  vi.mocked(applyCarnivalTemplate).mockReset();
 });
 
 afterEach(() => {
@@ -198,25 +220,27 @@ describe("EventSetupScreen — the way back and the empty catalogue (ADR-0066 §
     expect(back.getAttribute("href")).toBe("#/carnivals/c-1/manage");
   });
 
-  it("steers a manager from an empty catalogue to the standard events on Manage", async () => {
+  it("offers a manager the standard events, in place, from an empty catalogue", async () => {
     signIn({ subject: "admin-1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
     vi.mocked(listEventDefinitions).mockResolvedValue([]);
     vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
     renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
 
     await screen.findByText("The event catalogue is empty.");
-    const start = await screen.findByRole("link", { name: "Start from the standard events" });
-    expect(start.getAttribute("href")).toBe("#/carnivals/c-1/manage");
-    expect(start.className).toBe("button primary-link");
+    const start = await screen.findByRole("button", { name: "Add the standard swimming events" });
+    expect(start.className).toBe("primary");
+    expect(screen.queryByRole("link", { name: /standard events/ })).toBeNull();
   });
 
-  it("offers no start link to someone who could not apply the standard events", async () => {
+  it("offers no standard events to someone who could not apply them", async () => {
     vi.mocked(listEventDefinitions).mockResolvedValue([]);
     vi.mocked(listCarnivalEvents).mockResolvedValue([]);
     renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
 
     await screen.findByText("The event catalogue is empty.");
-    expect(screen.queryByRole("link", { name: "Start from the standard events" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
+    expect(listEventTemplates).not.toHaveBeenCalled();
   });
 });
 
@@ -300,7 +324,7 @@ describe("EventSetupScreen — the profile review prompt (ADR-0022 §8)", () => 
     renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
 
     const prompt = await screen.findByRole("status");
-    expect(prompt.textContent).toContain("A profile edit creates no divisions");
+    expect(prompt.textContent).toContain("Changing the ages adds no divisions");
     const link = screen.getByText(/Freestyle 50m — no divisions for 14/);
     expect(link.getAttribute("href")).toBe("#/carnivals/c-1/setup/events/def-free");
     // Butterfly is in no division of this carnival, so it is not behind on one.
@@ -331,9 +355,7 @@ describe("EventSetupScreen — adding an event", () => {
 
     const add = await screen.findByText("New event…");
     expect(add.getAttribute("href")).toBe("#/carnivals/c-1/setup/events/new");
-    expect(screen.getByText("Divisions profile").getAttribute("href")).toBe(
-      "#/carnivals/c-1/setup/divisions",
-    );
+    expect(screen.queryByText("Divisions profile")).toBeNull();
   });
 
   it("withholds it from someone who could not use it, and from a closed carnival", async () => {
@@ -495,20 +517,61 @@ describe("EventSetupScreen — Available to add (ADR-0059)", () => {
     expect(refusal.closest("li")!.textContent).toContain("Butterfly 50m");
   });
 
-  it("disables Add with neither a profile nor a roster default, and says what to do", async () => {
-    admin();
+  it("disables Add with neither a profile nor a roster, and points at the import", async () => {
+    signIn({ subject: "sys-1", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
     vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
     renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
 
     const add = await screen.findByRole("button", { name: "Add Butterfly 50m" });
     expect((add as HTMLButtonElement).disabled).toBe(true);
-    const notice = within(list("Available to add")).getByRole("status");
-    expect(notice.textContent).toContain("Import a roster or add ages first.");
-    expect(within(notice).getByRole("link", { name: "Divisions setup" }).getAttribute("href")).toBe(
-      "#/carnivals/c-1/setup/divisions",
+    const notice = await screen.findByText(
+      "Import the student list first: this carnival's ages come from it.",
     );
+    const link = within(notice.closest(".alert")! as HTMLElement).getByRole("link", {
+      name: "Import the students",
+    });
+    expect(link.getAttribute("href")).toBe("#/import?carnival=c-1");
+    expect(screen.queryByText("Import a roster or add ages first.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /standard events/ })).toBeNull();
     fireEvent.click(add);
     expect(generateDivisions).not.toHaveBeenCalled();
+  });
+
+  it("names who imports when this manager cannot", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const notice = (
+      await screen.findByText("Import the student list first: this carnival's ages come from it.")
+    ).closest(".alert")! as HTMLElement;
+    expect(notice.textContent).toContain("A system administrator imports it.");
+    expect(within(notice).queryByRole("link")).toBeNull();
+  });
+
+  // As the checklist's Events step: a carnival with events was set up some other way.
+  it("raises no import notice on a carnival that already has events", async () => {
+    signIn({ subject: "sys-1", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    await screen.findByRole("button", { name: "Add Butterfly 50m" });
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Import the students" })).toBeNull();
+  });
+
+  it("says the ages couldn't be read when the settings read fails", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockRejectedValue(new TypeError("Failed to fetch"));
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    expect(
+      (await screen.findByText("Can’t reach the server, so this carnival’s ages couldn’t be read."))
+        .className,
+    ).toBe("alert error");
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
   });
 
   it("disables Add with no server to add against", async () => {
@@ -529,7 +592,7 @@ describe("EventSetupScreen — Available to add (ADR-0059)", () => {
 
     await screen.findByText("Butterfly 50m");
     expect(screen.queryByRole("button", { name: /^Add / })).toBeNull();
-    expect(screen.queryByText("Import a roster or add ages first.")).toBeNull();
+    expect(screen.queryByText(/Import the student list first/)).toBeNull();
   });
 
   it("disables Add on a closed carnival", async () => {
@@ -586,6 +649,339 @@ describe("EventSetupScreen — Available to add (ADR-0059)", () => {
 
     await screen.findByText("Freestyle 50m");
     expect(screen.queryByText("Butterfly 50m")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Add / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Add (?!the rest)/ })).toBeNull();
+  });
+});
+
+/** ADR-0067 §1, §6: the carnival's ages as one line, and one press to follow a re-import. */
+describe("EventSetupScreen — the ages line", () => {
+  const STALE = "This carnival has ages no student has: 13. Their divisions can’t be entered.";
+  const LEFT_OUT_14 = "Left out of this carnival: 14. Students of those ages can’t be entered.";
+
+  function admin(): void {
+    signIn({ subject: "admin-1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+  }
+
+  it("states the saved ages and links a manager to change them", async () => {
+    admin();
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    expect(await screen.findByText("Ages 12–13 · Boys, Girls · Competitive")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Ages and categories" }).getAttribute("href"),
+    ).toBe("#/carnivals/c-1/setup/divisions");
+  });
+
+  it("names the student list while its ages are only the default", async () => {
+    const roster = ["12", "13", "14", "SNR"];
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      divisions: null,
+      divisionsDefault: { ageGroups: roster, categories: ["M", "F"], tiers: ["Competitive"] },
+      rosterAgeGroups: roster,
+    });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    expect(
+      await screen.findByText("Ages 12–14, SNR from the student list · Boys, Girls · Competitive"),
+    ).toBeTruthy();
+    // Not a manager: the line is shown, the change is not offered.
+    expect(screen.queryByRole("link", { name: "Ages and categories" })).toBeNull();
+    expect(screen.queryByText(/no student has/)).toBeNull();
+    expect(screen.queryByText(/Left out of this carnival/)).toBeNull();
+  });
+
+  it("removes only the stale ages, keeping the ones left out out", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      rosterAgeGroups: ["12", "14"],
+    });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const notice = (await screen.findByText(STALE)).closest(".alert")! as HTMLElement;
+    expect(notice.className).toBe("alert warn");
+    // 14 is left out as well, said quietly beside the line.
+    expect(screen.getByText(LEFT_OUT_14).className).toBe("row-sub");
+    const reads = vi.mocked(getCarnivalSettings).mock.calls.length;
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      divisions: { ...settings.divisions!, ageGroups: ["12"] },
+      rosterAgeGroups: ["12", "14"],
+    });
+    fireEvent.click(within(notice).getByRole("button", { name: "Remove those ages" }));
+
+    await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateCarnivalSettings).mock.calls[0]).toEqual([
+      "c-1",
+      { divisions: { ageGroups: ["12"], categories: ["M", "F"], tiers: ["Competitive"] } },
+    ]);
+    await waitFor(() =>
+      expect(vi.mocked(getCarnivalSettings).mock.calls.length).toBeGreaterThan(reads),
+    );
+    await waitFor(() => expect(screen.queryByText(STALE)).toBeNull());
+    expect(screen.getByText("Ages 12 · Boys, Girls · Competitive")).toBeTruthy();
+    expect(screen.getByText(LEFT_OUT_14)).toBeTruthy();
+    expect(getToasts().map((t) => t.message)).toContain("13 removed from this carnival’s ages.");
+  });
+
+  it("uses the student list's ages when every saved age is stale", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, rosterAgeGroups: ["14"] });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const notice = (
+      await screen.findByText(
+        "This carnival has ages no student has: 12, 13. Their divisions can’t be entered.",
+      )
+    ).closest(".alert")! as HTMLElement;
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      divisions: { ...settings.divisions!, ageGroups: ["14"] },
+      rosterAgeGroups: ["14"],
+    });
+    fireEvent.click(within(notice).getByRole("button", { name: "Remove those ages" }));
+
+    await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateCarnivalSettings).mock.calls[0]![1].divisions!.ageGroups).toEqual([
+      "14",
+    ]);
+    // After the refetch, the review names the event now behind on the new age.
+    expect(await screen.findByText(/Freestyle 50m — no divisions for 14/)).toBeTruthy();
+    expect(getToasts().map((t) => t.message)).toContain(
+      "This carnival now uses the student list’s ages.",
+    );
+  });
+
+  it("shows a failed save beside the warning, not inside it", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, rosterAgeGroups: ["12"] });
+    vi.mocked(updateCarnivalSettings).mockRejectedValue(
+      new ApiError(409, { error: "X", detail: "The carnival is finalised." }, "/x"),
+    );
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const notice = (await screen.findByText(STALE)).closest(".alert")! as HTMLElement;
+    fireEvent.click(within(notice).getByRole("button", { name: "Remove those ages" }));
+
+    const refusal = await screen.findByRole("alert");
+    expect(refusal.textContent).toBe("The carnival is finalised.");
+    expect(notice.contains(refusal)).toBe(false);
+    expect(notice.nextElementSibling).toBe(refusal);
+  });
+
+  it("refuses the change with no server to save it", async () => {
+    admin();
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, rosterAgeGroups: ["12"] });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const button = await screen.findByRole("button", { name: "Remove those ages" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(updateCarnivalSettings).not.toHaveBeenCalled();
+  });
+
+  it("only notes ages left out, with no warning, when every saved age has students", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      rosterAgeGroups: ["SNR", "13", "12", "11"],
+    });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    expect(
+      await screen.findByText(
+        "Left out of this carnival: 11, SNR. Students of those ages can’t be entered.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove those ages" })).toBeNull();
+  });
+
+  it("says nothing more when the roster's ages are the saved ones", async () => {
+    admin();
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...settings,
+      rosterAgeGroups: ["13", "12"],
+    });
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    await screen.findByText("Ages 12–13 · Boys, Girls · Competitive");
+    expect(screen.queryByRole("button", { name: "Remove those ages" })).toBeNull();
+    expect(screen.queryByText(/Left out of this carnival/)).toBeNull();
+  });
+});
+
+/** ADR-0066 §4: the standard events sit on Event setup, primary only while nothing runs here. */
+describe("EventSetupScreen — the standard events", () => {
+  const SWIMMING_APPLY = "Add the standard swimming events";
+  const result = {
+    carnivalId: "c-1",
+    template: "swimming",
+    templateName: "Swimming carnival",
+    templateVersion: "v3",
+    definitionsCreated: 12,
+    definitionsExisting: 0,
+    definitionsSkippedInactive: [],
+    divisionProfileSeeded: true,
+    eventsCreated: 96,
+    eventsAlreadyScheduled: 0,
+    eventsPlaced: 96,
+    slotsCreated: 9,
+    streamsCreated: 2,
+    ageGroups: [],
+    categories: [],
+    tiers: [],
+  };
+  const rosterRequired = new ApiError(
+    409,
+    { error: "ROSTER_REQUIRED", detail: "Import it first." },
+    "/x",
+  );
+
+  beforeEach(() => {
+    signIn({ subject: "admin-1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+  });
+
+  it("is the screen's primary on a carnival with no division yet", async () => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([
+      athletics,
+      swimming,
+      { id: "broken", name: null, version: "v1", definitions: 0, readable: false },
+    ]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const picker = (await screen.findByLabelText("Carnival template")) as HTMLSelectElement;
+    // A Swimming carnival, so swimming — not the first readable row.
+    await waitFor(() => expect(picker.value).toBe("swimming"));
+    expect([...picker.options].map((o) => o.value)).toEqual(["athletics", "swimming"]);
+    const section = picker.closest("section")!;
+    expect(section.querySelector("h2")!.textContent).toBe("Start from the standard events");
+    expect(section.textContent).toContain("created in the shared catalogue or reused");
+    expect(section.textContent).toContain("this carnival’s ages, categories and tiers");
+    expect(document.querySelectorAll("button.primary")).toHaveLength(1);
+    // Before the lists: it is what an empty carnival is here for.
+    const lists = screen.getByRole("heading", { name: "In this carnival" });
+    expect(section.compareDocumentPosition(lists) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("arms nothing when no template matches the carnival's type", async () => {
+    vi.mocked(getCarnival).mockResolvedValue({ ...carnival, type: "Other" });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([athletics, swimming]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const picker = (await screen.findByLabelText("Carnival template")) as HTMLSelectElement;
+    expect(picker.value).toBe("");
+    expect(picker.options[0]!.text).toBe("Choose a template…");
+    const apply = screen.getByRole("button", { name: "Add the standard events" });
+    expect((apply as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(picker, { target: { value: "athletics" } });
+    await waitFor(() => expect((apply as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("applies the template, reports what it did, and becomes the disclosure", async () => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
+    vi.mocked(applyCarnivalTemplate).mockResolvedValue(result);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const reads = vi.mocked(listCarnivalEvents).mock.calls.length;
+    vi.mocked(listCarnivalEvents).mockResolvedValue(events);
+    fireEvent.click(await screen.findByRole("button", { name: SWIMMING_APPLY }));
+
+    await waitFor(() => expect(applyCarnivalTemplate).toHaveBeenCalledWith("c-1", "swimming"));
+    expect(getToasts().map((t) => t.message)).toContain(
+      "Swimming carnival applied — 96 divisions scheduled, 9 program slots built.",
+    );
+    // The events are read again; the carnival now has some, so the heading gives way to the toggle
+    // and the report stays until it is dismissed.
+    await waitFor(() =>
+      expect(vi.mocked(listCarnivalEvents).mock.calls.length).toBeGreaterThan(reads),
+    );
+    const hide = await screen.findByRole("button", { name: "Hide the standard events" });
+    expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
+    expect(screen.getByText(/ages were saved from the student list/)).toBeTruthy();
+    expect(document.querySelectorAll("button.primary")).toHaveLength(0);
+
+    fireEvent.click(hide);
+    const toggle = screen.getByRole("button", { name: "Add the rest of the standard events" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(/ages were saved from the student list/)).toBeNull();
+  });
+
+  it("is a secondary disclosure once the carnival has events", async () => {
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const toggle = await screen.findByRole("button", {
+      name: "Add the rest of the standard events",
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText("Carnival template")).toBeNull();
+    expect(listEventTemplates).not.toHaveBeenCalled();
+
+    fireEvent.click(toggle);
+    const apply = await screen.findByRole("button", { name: SWIMMING_APPLY });
+    expect(apply.className).toBe("");
+    expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
+  });
+
+  it("disables the apply with no server to apply against", async () => {
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const apply = await screen.findByRole("button", { name: SWIMMING_APPLY });
+    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/the standard events can’t be added now/)).toBeTruthy();
+  });
+
+  it("explains a refusal for want of a roster and routes to the import", async () => {
+    signIn({ subject: "sys-1", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
+    vi.mocked(applyCarnivalTemplate).mockRejectedValue(rosterRequired);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    const apply = await screen.findByRole("button", { name: SWIMMING_APPLY });
+    fireEvent.click(apply);
+
+    const notice = (
+      await screen.findByText("Import the student list first: this carnival's ages come from it.")
+    ).closest(".alert")! as HTMLElement;
+    expect(
+      within(notice).getByRole("link", { name: "Import the students" }).getAttribute("href"),
+    ).toBe("#/import?carnival=c-1");
+    // The import is what the screen now steers at, not the press that was refused.
+    expect(apply.className).toBe("");
+  });
+
+  it("names who imports when the refused manager cannot", async () => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    vi.mocked(listEventTemplates).mockResolvedValue([swimming]);
+    vi.mocked(applyCarnivalTemplate).mockRejectedValue(rosterRequired);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: SWIMMING_APPLY }));
+
+    const notice = (
+      await screen.findByText("Import the student list first: this carnival's ages come from it.")
+    ).closest(".alert")! as HTMLElement;
+    expect(notice.textContent).toContain("A system administrator imports it.");
+    expect(within(notice).queryByRole("link")).toBeNull();
+  });
+
+  it("is not offered on a closed carnival", async () => {
+    vi.mocked(getCarnival).mockResolvedValue({ ...carnival, status: "Closed" });
+    vi.mocked(listCarnivalEvents).mockResolvedValue([]);
+    renderWithQuery(<EventSetupScreen carnivalId="c-1" />);
+
+    await screen.findByText("Butterfly 50m");
+    expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /standard events/ })).toBeNull();
   });
 });

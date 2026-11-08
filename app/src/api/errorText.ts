@@ -10,6 +10,10 @@ export const DIRECT_WRITE_NETWORK_ERROR_TEXT =
 /** The editor and the server both say this, so the sentence lives here. */
 export const AUTO_FILL_NEEDS_LANE_COUNT_TEXT = "Set the lane count first.";
 
+/** Event setup says it before the press, the server after it (ADR-0067 §5). */
+export const ROSTER_REQUIRED_TEXT =
+  "Import the student list first: this carnival's ages come from it.";
+
 export const IMPORT_BATCH_EXPIRED_TEXT =
   "This batch expired: a batch that is not promoted within 7 days of upload has its staged rows discarded. Upload the file again.";
 
@@ -40,6 +44,7 @@ const CODE_TEXT: Readonly<Record<string, string>> = {
     "The carnival was finalised before this change reached the server, so the recorded result still stands. What you typed is held on this device — show it to the carnival organiser, who can decide whether the published result needs amending.",
   AUTO_FILL_LANES_REQUIRES_LANE_COUNT: AUTO_FILL_NEEDS_LANE_COUNT_TEXT,
   IMPORT_BATCH_EXPIRED: IMPORT_BATCH_EXPIRED_TEXT,
+  ROSTER_REQUIRED: ROSTER_REQUIRED_TEXT,
   // One sentence for every refusal: which part was wrong must not be readable from it.
   SIGN_IN_FAILED: SIGN_IN_FAILED_TEXT,
   CODE_INVALID:

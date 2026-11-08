@@ -29,7 +29,7 @@ Eligibility is exact match on the roster's derived age ([ADR-0058](0058-one-age-
    - Add, New event and the standard events point at the student import.
    - The API refuses the template apply with `409 ROSTER_REQUIRED`.
    - The carnival's details, scoring, lanes and program can still be set up.
-6. **A re-import never rewrites saved ages** ([ADR-0057](0057-age-bands-from-the-roster.md) §4). When the roster's ages differ from the saved ones, Event setup's line says so and offers "Use the student list's ages", one press that saves them. Divisions follow through each event's grid, as before ([ADR-0022](0022-event-and-division-management.md) §8).
+6. **A re-import never rewrites saved ages** ([ADR-0057](0057-age-bands-from-the-roster.md) §4). When the saved ages include an age no current student has, Event setup warns and offers one press that removes those ages, keeping any deliberate narrowing. When the roster has ages the saved ones leave out, a deliberate narrowing, Event setup only notes them quietly, and Change widens the list. Divisions follow through each event's grid, as before ([ADR-0022](0022-event-and-division-management.md) §8).
 7. **Existing carnivals keep their saved profiles.** Nothing is migrated.
 
 How divisions are modelled: [data model § division profile](../architecture/data-model.md#division-profile).
@@ -40,7 +40,7 @@ How divisions are modelled: [data model § division profile](../architecture/dat
 - A school that wants an event for fewer ages still unticks them in that event's grid.
 - An age the roster lacks cannot be planned ahead in the app; the API still accepts any code ([ADR-0057](0057-age-bands-from-the-roster.md) §3), so a script can.
 - A template's program places only the ages its slot filters name, so a school with other ages extends the program by hand.
-- Carnivals saved under the old rules (for example 5–21, or a template's 12–18) show the mismatch on Event setup, and are fixed with one press.
+- Carnivals saved under the old rules (for example 5–21, or a template's 12–18) are warned on Event setup when they hold ages no student has, and are fixed with one press.
 
 ## Rejected alternatives
 

@@ -3,7 +3,7 @@
   "template": "athletics",
   "name": "Athletics carnival",
   "divisions": {
-    "$comment": "One division per age group, 12 to 18: each age is its own event with its own placings and house points. Combined running of several ages is a schedule slot holding several instances, which the field-station slots express through their division filters. Categories M/F; tiers Competitive (C) and Social (S).",
+    "$comment": "One division per age: each age is its own event with its own placings and house points. The ages a carnival gets are its own (its saved ages, else the student list's); these 12 to 18 name the school-record categories and the ages the field-station filters use, so an age outside them is scheduled but in no station slot. Combined running of several ages is a schedule slot holding several instances, which the field-station slots express through their division filters. Categories M/F and tiers Competitive (C) and Social (S) apply when the carnival has none saved.",
     "ageGroups": ["12", "13", "14", "15", "16", "17", "18"],
     "categories": ["M", "F"],
     "tiers": ["Competitive", "Social"]

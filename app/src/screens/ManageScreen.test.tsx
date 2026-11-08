@@ -16,7 +16,6 @@ import { renderWithQuery } from "../test/queryWrapper";
  */
 
 vi.mock("../api/resources", () => ({
-  applyCarnivalTemplate: vi.fn(),
   changeCarnivalStatus: vi.fn(),
   getCarnival: vi.fn(),
   getCarnivalSchedule: vi.fn(),
@@ -26,12 +25,10 @@ vi.mock("../api/resources", () => ({
   listCarnivalDevices: vi.fn(),
   listCarnivalEvents: vi.fn(),
   listEventDefinitions: vi.fn(),
-  listEventTemplates: vi.fn(),
   openScheduledEvents: vi.fn(),
 }));
 
 import {
-  applyCarnivalTemplate,
   changeCarnivalStatus,
   getCarnival,
   getCarnivalSchedule,
@@ -41,7 +38,6 @@ import {
   listCarnivalDevices,
   listCarnivalEvents,
   listEventDefinitions,
-  listEventTemplates,
   openScheduledEvents,
 } from "../api/resources";
 import type {
@@ -162,8 +158,6 @@ beforeEach(() => {
       definition("def-1", "Freestyle 50m"),
       definition("def-2", "Butterfly 50m"),
     ]);
-  vi.mocked(listEventTemplates).mockReset().mockResolvedValue([]);
-  vi.mocked(applyCarnivalTemplate).mockReset();
   vi.mocked(openScheduledEvents).mockReset().mockResolvedValue({ opened: 0, eventIds: [] });
   signIn({ subject: "s1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
 });
@@ -176,15 +170,26 @@ describe("ManageScreen", () => {
   it("gathers the setup surfaces the deck no longer carries", async () => {
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    expect((await screen.findByRole("link", { name: /Divisions/ })).getAttribute("href")).toBe(
-      "#/carnivals/c-1/setup/divisions",
-    );
-    expect(screen.getByRole("link", { name: /Events/ }).getAttribute("href")).toBe(
+    expect((await screen.findByRole("link", { name: /Events/ })).getAttribute("href")).toBe(
       "#/carnivals/c-1/setup/events",
     );
     expect(screen.getByRole("link", { name: /Program/ }).getAttribute("href")).toBe(
       "#/carnivals/c-1/schedule",
     );
+    // ADR-0067 §1: the ages are no step of their own.
+    expect(screen.queryByText(/Divisions/)).toBeNull();
+    expect(document.querySelector('a[href$="/setup/divisions"]')).toBeNull();
+  });
+
+  // ADR-0066 §4: the standard events moved to Event setup.
+  it("carries no template section", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByRole("heading", { name: "Carnival status" });
+    expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
+    expect(screen.queryByLabelText("Carnival template")).toBeNull();
+    expect(screen.queryByRole("button", { name: /standard events/ })).toBeNull();
   });
 
   // ---- The setup checklist (ADR-0054 §1) ----
@@ -199,11 +204,11 @@ describe("ManageScreen", () => {
     expect(row.textContent).toContain("412 students");
     expect(row.className).not.toContain("awaiting");
 
-    // Nothing is configured past the students, so Divisions is what to do next —
+    // Nothing is configured past the students, so Events is what to do next —
     // and it is the ONLY step marked so.
-    const divisions = screen.getByText(/^2\. Divisions/).closest("li")!;
-    expect(divisions.textContent).toContain("Do this next");
-    expect(divisions.className).toContain("awaiting");
+    const events = screen.getByText(/^2\. Events/).closest("li")!;
+    expect(events.textContent).toContain("Do this next");
+    expect(events.className).toContain("awaiting");
     expect(screen.getAllByText("Do this next")).toHaveLength(1);
   });
 
@@ -221,17 +226,14 @@ describe("ManageScreen", () => {
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
     await screen.findByText(/^1\. Students/);
-    expect(screen.getByText(/^2\. Divisions/).closest("li")!.textContent).toContain(
-      "1 age · 1 category · 1 tier",
-    );
-    expect(screen.getByText(/^3\. Events/).closest("li")!.textContent).toContain(
+    expect(screen.getByText(/^2\. Events/).closest("li")!.textContent).toContain(
       "1 in this carnival · 1 available to add",
     );
-    expect(screen.getByText(/^4\. Program/).closest("li")!.textContent).toContain(
+    expect(screen.getByText(/^3\. Program/).closest("li")!.textContent).toContain(
       "1 slot across 1 stream",
     );
     // Open: the carnival is Open, and one division is still Scheduled.
-    expect(screen.getByText(/^5\. Open/).closest("li")!.textContent).toContain(
+    expect(screen.getByText(/^4\. Open/).closest("li")!.textContent).toContain(
       "1 division still Scheduled",
     );
     expect(screen.queryByText("Do this next")).toBeNull();
@@ -246,7 +248,7 @@ describe("ManageScreen", () => {
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    const program = (await screen.findByText(/^4\. Program/)).closest("li")!;
+    const program = (await screen.findByText(/^3\. Program/)).closest("li")!;
     expect(program.textContent).toContain("Optional");
     expect(program.textContent).not.toContain("Do this next");
   });
@@ -289,7 +291,7 @@ describe("ManageScreen", () => {
     expect(students.textContent).toContain("The student count couldn’t be read here");
     expect(students.textContent).not.toContain("Done");
     // Unknown is not undone: the pointer moves on to the step that IS.
-    expect(screen.getByText(/^2\. Divisions/).closest("li")!.textContent).toContain(
+    expect(screen.getByText(/^2\. Events/).closest("li")!.textContent).toContain(
       "Do this next",
     );
   });
@@ -323,7 +325,7 @@ describe("ManageScreen", () => {
     // The STEP still shows, off the progress aggregate every viewer may read.
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    await screen.findByRole("link", { name: /Divisions/ });
+    await screen.findByRole("link", { name: /Events/ });
     expect(screen.getByText(/^1\. Students/).closest("li")!.textContent).toContain(
       "a system administrator imports the student list",
     );
@@ -398,82 +400,6 @@ describe("ManageScreen", () => {
 
     await screen.findByRole("button", { name: "Close carnival" });
     expect(screen.queryByRole("button", { name: /Finalise/ })).toBeNull();
-  });
-
-  // ---- Start from the standard events (ADR-0054 §2) ----
-
-  it("pre-selects the template matching the carnival's type and states what it will do", async () => {
-    vi.mocked(listEventTemplates).mockResolvedValue([
-      { id: "athletics", name: "Athletics carnival", version: "v3", definitions: 14, readable: true },
-      { id: "swimming", name: "Swimming carnival", version: "v3", definitions: 12, readable: true },
-      { id: "broken", name: null, version: "v1", definitions: 0, readable: false },
-    ]);
-    renderWithQuery(<ManageScreen carnivalId="c-1" />);
-
-    const picker = (await screen.findByLabelText("Carnival template")) as HTMLSelectElement;
-    // A Swimming carnival, so swimming — not the first readable row.
-    await waitFor(() => expect(picker.value).toBe("swimming"));
-    expect([...picker.options].map((o) => o.value)).toEqual(["athletics", "swimming"]);
-    const section = picker.closest("section")!;
-    expect(section.querySelector("h2")!.textContent).toBe("Start from the standard events");
-    expect(section.textContent).toContain("created in the shared catalogue or reused");
-    expect(section.textContent).not.toContain("divisions profile");
-    expect(section.textContent).toContain("age × category × tier");
-  });
-
-  it("arms nothing when no template matches the carnival's type", async () => {
-    vi.mocked(getCarnival).mockResolvedValue({ ...carnival(), type: "Other" });
-    vi.mocked(listEventTemplates).mockResolvedValue([
-      { id: "athletics", name: "Athletics carnival", version: "v3", definitions: 14, readable: true },
-      { id: "swimming", name: "Swimming carnival", version: "v3", definitions: 12, readable: true },
-    ]);
-    renderWithQuery(<ManageScreen carnivalId="c-1" />);
-
-    const picker = (await screen.findByLabelText("Carnival template")) as HTMLSelectElement;
-    expect(picker.value).toBe("");
-    expect(picker.options[0]!.text).toBe("Choose a template…");
-    const apply = screen.getByRole("button", {
-      name: "Add the standard events",
-    }) as HTMLButtonElement;
-    expect(apply.disabled).toBe(true);
-
-    // And it arms once the organiser says which one.
-    fireEvent.change(picker, { target: { value: "athletics" } });
-    await waitFor(() => expect(apply.disabled).toBe(false));
-  });
-
-  it("applies the chosen template to the carnival and reports what it did", async () => {
-    vi.mocked(listEventTemplates).mockResolvedValue([
-      { id: "swimming", name: "Swimming carnival", version: "v3", definitions: 12, readable: true },
-    ]);
-    vi.mocked(applyCarnivalTemplate).mockResolvedValue({
-      carnivalId: "c-1",
-      template: "swimming",
-      templateName: "Swimming carnival",
-      templateVersion: "v3",
-      definitionsCreated: 12,
-      definitionsExisting: 0,
-      definitionsSkippedInactive: [],
-      divisionProfileSeeded: true,
-      eventsCreated: 96,
-      eventsAlreadyScheduled: 0,
-      eventsPlaced: 96,
-      slotsCreated: 9,
-      streamsCreated: 2,
-      ageGroups: [],
-      categories: [],
-      tiers: [],
-    });
-    renderWithQuery(<ManageScreen carnivalId="c-1" />);
-
-    await screen.findByLabelText("Carnival template");
-    fireEvent.click(screen.getByRole("button", { name: "Add the standard events" }));
-
-    await waitFor(() => expect(applyCarnivalTemplate).toHaveBeenCalledWith("c-1", "swimming"));
-    expect(await screen.findByText(/96 divisions/)).toBeTruthy();
-    expect(getToasts().map((t) => t.message)).toContain(
-      "Swimming carnival applied — 96 divisions scheduled, 9 program slots built.",
-    );
   });
 
   // ---- Open all divisions (ADR-0054 §4) ----

@@ -187,27 +187,34 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task Applying_a_template_seeds_the_profile_and_a_reapply_leaves_an_edited_one_alone()
     {
         var admin = Admin;
+        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Seeded profile");
         var applied = await admin.PostAsJsonAsync($"/api/v1/carnivals/{carnivalId}/apply-template",
             new { template = "swimming" });
         Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
         Assert.True((await DivisionFixture.Json(applied)).GetProperty("divisionProfileSeeded").GetBoolean());
 
+        // The roster's ages, with the template's categories and tiers (ADR-0067 §4).
         var seeded = (await DivisionFixture.Json(
                 await admin.GetAsync($"/api/v1/carnivals/{carnivalId}/settings")))
             .GetProperty("divisions");
-        Assert.Equal(7, seeded.GetProperty("ageGroups").GetArrayLength());
+        Assert.Equal(TemplateRoster.SwimmingAges,
+            seeded.GetProperty("ageGroups").EnumerateArray().Select(a => a.GetString()!));
         Assert.Equal(["Competitive", "Social"],
             seeded.GetProperty("tiers").EnumerateArray().Select(t => t.GetString()!));
 
         // The profile is the carnival's own statement of what it contests, so a
-        // re-apply must not overwrite one an administrator has narrowed.
+        // re-apply must not overwrite one an administrator has narrowed, and
+        // generates over its ages rather than the roster's.
         Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync(
             $"/api/v1/carnivals/{carnivalId}/settings", new { divisions = Profile })).StatusCode);
         var reapplied = await admin.PostAsJsonAsync($"/api/v1/carnivals/{carnivalId}/apply-template",
             new { template = "swimming" });
         Assert.Equal(HttpStatusCode.OK, reapplied.StatusCode);
-        Assert.False((await DivisionFixture.Json(reapplied)).GetProperty("divisionProfileSeeded").GetBoolean());
+        var reappliedBody = await DivisionFixture.Json(reapplied);
+        Assert.False(reappliedBody.GetProperty("divisionProfileSeeded").GetBoolean());
+        Assert.Equal(["12", "16"], reappliedBody.GetProperty("ageGroups")
+            .EnumerateArray().Select(a => a.GetString()!));
         Assert.Equal(2, (await DivisionFixture.Json(
                 await admin.GetAsync($"/api/v1/carnivals/{carnivalId}/settings")))
             .GetProperty("divisions").GetProperty("ageGroups").GetArrayLength());
@@ -390,6 +397,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task A_profile_that_could_not_have_fitted_the_settings_column_seeds_in_full()
     {
         var admin = Admin;
+        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Crowded settings");
         // Fills the blob to just under its 4000-character limit, so the swimming
         // profile could not have been added to it.
@@ -422,6 +430,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task The_profile_rows_the_apply_and_the_generate_endpoint_agree_on_the_matrix()
     {
         var admin = Admin;
+        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "One loop");
         Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync(
             $"/api/v1/carnivals/{carnivalId}/apply-template", new { template = "swimming" })).StatusCode);
@@ -466,6 +475,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task Applying_a_template_repairs_rows_that_do_not_read_as_a_profile()
     {
         var admin = Admin;
+        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Junk rows");
         // A 20-character age code: storable on SQLite, but longer than AgeScope
         // allows, so the profile these rows describe fails Validate.
@@ -508,6 +518,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task An_apply_that_loses_the_profile_seed_race_still_succeeds()
     {
         var admin = Admin;
+        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Seed race");
         factory.Race.ArmOnce("INSERT INTO \"CarnivalDivisions\"", transaction =>
         {

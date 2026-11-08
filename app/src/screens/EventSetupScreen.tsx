@@ -7,15 +7,19 @@ import {
   getCarnivalSettings,
   listCarnivalEvents,
   listEventDefinitions,
+  updateCarnivalSettings,
 } from "../api/resources";
-import type { DivisionProfile, GenerateDivisionRequest } from "../api/types";
+import type { CarnivalSettings, DivisionProfile, GenerateDivisionRequest } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
+import { ApplyTemplateSection } from "../features/carnivals/ApplyTemplateSection";
+import { RosterRequiredNotice } from "../features/carnivals/RosterRequiredNotice";
 import {
   ensureProfile,
   fullMatrixSpecs,
   rosterDefaultToSave,
 } from "../features/events/addDivisions";
+import { agesLine, leftOutText, staleText } from "../features/events/agesLine";
 import { counted } from "../features/events/counted";
 import { carnivalSport } from "../features/events/eventLabels";
 import { buildProfileReview, outstandingSummary } from "../features/events/profileReview";
@@ -47,6 +51,7 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const inCarnivalHeading = useRef<HTMLHeadingElement>(null);
   const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
+  const canImport = hasRole(session, "SystemAdministrator");
   const connectivity = useConnectivity();
   const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
   const definitions = useApiQuery(keys.eventDefinitions(true), () => listEventDefinitions(true));
@@ -67,9 +72,20 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
   const sport = divisionsKnown ? carnivalSport(carnival.data?.type) : "";
   const { inCarnival, available, otherSports } = splitSetupRows(rows, sport);
 
-  const profileKnown = settings.data !== undefined;
   const specs = fullMatrixSpecs(settings.data?.divisions ?? settings.data?.divisionsDefault);
-  const needsProfile = canManage && profileKnown && specs.length === 0;
+  const line = agesLine(
+    settings.data?.divisions,
+    settings.data?.divisionsDefault,
+    settings.data?.rosterAgeGroups,
+  );
+  // ADR-0067 §5: nothing saved and no roster to default from, so no event can be added yet.
+  // As the checklist's Events step: a carnival with events was set up some other way.
+  const noRoster =
+    settings.data !== undefined &&
+    settings.data.divisions == null &&
+    settings.data.divisionsDefault == null &&
+    events.data?.length === 0;
+  const setupOpen = canManage && !locked;
   // Someone who cannot manage this carnival gets no Add, as New event… is withheld.
   const add: AddPress | undefined = canManage
     ? {
@@ -111,6 +127,38 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
         What this carnival runs, and what the catalogue has left to add — editing an event
         changes it for every carnival that runs it.
       </p>
+      {line && (
+        <div className="button-row">
+          <span className="row-sub">{line.text}</span>
+          {canManage && (
+            <a className="button" href={href(`/carnivals/${carnivalId}/setup/divisions`)}>
+              Ages and categories
+            </a>
+          )}
+        </div>
+      )}
+      {line && line.leftOut.length > 0 && (
+        <p className="row-sub">{leftOutText(line.leftOut)}</p>
+      )}
+      {settings.error && (
+        <div className="alert error" role="alert">
+          {errorText(
+            settings.error,
+            "Can’t reach the server, so this carnival’s ages couldn’t be read.",
+          )}
+        </div>
+      )}
+      {setupOpen && line && line.stale.length > 0 && settings.data && (
+        <StaleAgesNotice
+          carnivalId={carnivalId}
+          settings={settings.data}
+          stale={line.stale}
+          online={connectivity === "connected"}
+        />
+      )}
+      {setupOpen && noRoster && (
+        <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+      )}
       {loadError && (
         <div className="alert error" role="alert">
           {loadError.message}
@@ -119,8 +167,8 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
       {outstanding.length > 0 && (
         <div className="alert notice" role="status">
           <p className="flush-top">
-            The divisions profile names ages some events don't contest. A profile edit creates
-            no divisions — tick the new boxes on each event that should run them.
+            This carnival's ages include some these events don't run. Changing the ages adds no
+            divisions — tick the new boxes on each event that should run them.
           </p>
           <ul className="row-list">
             {outstanding.map((item) => (
@@ -138,17 +186,14 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
       {!definitions.loading && !divisionsKnown && !events.error && (
         <p>Counting this carnival's divisions…</p>
       )}
-      {definitions.data && rows.length === 0 && (
-        <>
-          <p>The event catalogue is empty.</p>
-          {canManage && !locked && (
-            <div className="button-row">
-              <a className="button primary-link" href={href(`/carnivals/${carnivalId}/manage`)}>
-                Start from the standard events
-              </a>
-            </div>
-          )}
-        </>
+      {definitions.data && rows.length === 0 && <p>The event catalogue is empty.</p>}
+      {setupOpen && !noRoster && events.data && carnival.data && (
+        <ApplyTemplateSection
+          carnivalId={carnivalId}
+          carnivalType={carnival.data.type}
+          empty={events.data.length === 0}
+          canImport={canImport}
+        />
       )}
       {!divisionsKnown && rows.length > 0 && (
         <ul className="row-list card">
@@ -176,19 +221,6 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
           </section>
           <section className="subsection">
             <h2>Available to add</h2>
-            {needsProfile && !locked && (available.length > 0 || otherSports.length > 0) && (
-              <div className="alert notice" role="status">
-                <p className="flush-top">Import a roster or add ages first.</p>
-                <div className="button-row">
-                  <a
-                    className="button primary-link"
-                    href={href(`/carnivals/${carnivalId}/setup/divisions`)}
-                  >
-                    Divisions setup
-                  </a>
-                </div>
-              </div>
-            )}
             {available.length > 0 ? (
               <ul className="row-list card">
                 {available.map((row) => (
@@ -220,7 +252,6 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
                 Can’t reach the server, so an event can’t be added right now.
               </span>
             ))}
-          <a href={href(`/carnivals/${carnivalId}/setup/divisions`)}>Divisions profile</a>
         </div>
       )}
 
@@ -241,6 +272,68 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
             <SetupRow key={row.definition.id} carnivalId={carnivalId} row={row} known add={add} />
           ))}
         </ul>
+      )}
+    </>
+  );
+}
+
+// ADR-0067 §6: a re-import never rewrites saved ages. Removing the stale ones keeps any
+// deliberate narrowing; with nothing left, the student list's ages are what remains to use.
+function StaleAgesNotice({
+  carnivalId,
+  settings,
+  stale,
+  online,
+}: {
+  carnivalId: string;
+  settings: CarnivalSettings;
+  stale: readonly string[];
+  online: boolean;
+}) {
+  const invalidate = useInvalidate();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function adopt(): Promise<void> {
+    setSaving(true);
+    setError(null);
+    const kept = (settings.divisions?.ageGroups ?? []).filter((code) => !stale.includes(code));
+    try {
+      await updateCarnivalSettings(carnivalId, {
+        divisions: {
+          ageGroups: kept.length > 0 ? kept : [...settings.rosterAgeGroups],
+          categories: settings.divisions?.categories ?? null,
+          tiers: settings.divisions?.tiers ?? null,
+        },
+      });
+      invalidate(keys.carnivalSettings(carnivalId));
+      showToast(
+        kept.length > 0
+          ? `${stale.join(", ")} removed from this carnival’s ages.`
+          : "This carnival now uses the student list’s ages.",
+      );
+    } catch (err) {
+      setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="alert warn" role="status">
+        <p className="flush-top">{staleText(stale)}</p>
+        <div className="button-row">
+          <button type="button" disabled={saving || !online} onClick={() => void adopt()}>
+            {saving ? "Saving…" : "Remove those ages"}
+          </button>
+          {!online && <span>Can’t reach the server, so the ages can’t be changed right now.</span>}
+        </div>
+      </div>
+      {error !== null && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
       )}
     </>
   );

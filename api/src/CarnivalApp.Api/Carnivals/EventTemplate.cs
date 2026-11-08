@@ -28,9 +28,6 @@ public sealed class EventTemplate
     // Empty without a schedule section; the events are then simply unscheduled.
     public IReadOnlyList<EventTemplateStream> Streams { get; init; } = [];
 
-    public IReadOnlyList<EventTier> TiersFor(EventTemplateDefinition definition) =>
-        definition.Tiers ?? Tiers;
-
     public static EventTemplate LoadFromFile(string path)
     {
         using var stream = File.OpenRead(path);
@@ -142,7 +139,7 @@ public sealed class EventTemplate
                 ScoringWeight = d.ScoringWeight <= 0 ? 1 : d.ScoringWeight,
                 OpenDivision = d.OpenDivision,
                 Tags = tags is { Count: > 0 } ? tags : null,
-                // Need not be a subset of the template's tiers: it states where this event runs.
+                // Narrows the carnival's tiers for this event; it never adds one (ADR-0067 §4).
                 Tiers = d.Tiers is null
                     ? null
                     : ReadTiers(d.Tiers, sourceName, $"definition '{d.Code}' tiers"),
@@ -554,6 +551,6 @@ public sealed class EventTemplateDefinition
     public bool OpenDivision { get; init; }
     public IReadOnlyList<string>? Tags { get; init; }
 
-    // Null inherits the template's tiers (EventTemplate.TiersFor).
+    // Null inherits the carnival's tiers.
     public IReadOnlyList<EventTier>? Tiers { get; init; }
 }

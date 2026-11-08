@@ -291,7 +291,10 @@ public static class CarnivalEndpoints
 
     public sealed record ApplyTemplateRequest(string? Template);
 
-    /// <summary>Idempotent: re-applying skips whatever already exists.</summary>
+    /// <summary>
+    /// Idempotent: re-applying skips whatever already exists. 409 <c>ROSTER_REQUIRED</c> when the
+    /// carnival has no saved ages and no student list to take them from.
+    /// </summary>
     private static async Task<IResult> ApplyTemplateAsync(
         Guid id, ApplyTemplateRequest request, HttpContext ctx,
         [FromServices] CarnivalAppDbContext db, [FromServices] EventTemplateService templates,
@@ -311,7 +314,9 @@ public static class CarnivalEndpoints
                     : ErrorCodes.TemplateUnavailable,
                 resolution.Error!);
 
-        var result = await templates.ApplyAsync(carnival, resolution.Template, SessionActor.From(ctx), ct);
-        return Results.Ok(result);
+        var outcome = await templates.ApplyAsync(carnival, resolution.Template, SessionActor.From(ctx), ct);
+        return outcome.Applied is { } applied
+            ? Results.Ok(applied)
+            : ApiError.Conflict(ErrorCodes.RosterRequired, outcome.RosterRequiredDetail!);
     }
 }

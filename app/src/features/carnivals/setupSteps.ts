@@ -1,4 +1,4 @@
-// Pure, so the deck builds the same list to point its empty state at the first step to do.
+// Pure: each done state is derived from a read that may still be missing.
 
 import type {
   CarnivalEvent,
@@ -8,20 +8,18 @@ import type {
   HouseParticipation,
   Schedule,
 } from "../../api/types";
-import { codesSummary } from "../events/ageCodes";
 import { counted } from "../events/counted";
-import { categoryLabel } from "../events/eventLabels";
 import { buildEventSetupRows, splitSetupRows } from "../events/setupRows";
 import { rosterYearMismatch } from "./readiness";
 
-export type SetupStepId = "roster" | "divisions" | "events" | "program" | "open";
+export type SetupStepId = "roster" | "events" | "program" | "open";
 
 export interface SetupStep {
   id: string;
   title: string;
   /** The meta line: what the step is for, or what it now holds. */
   detail: string;
-  /** What the link promises — also the deck's empty-state button. */
+  /** What the link promises. */
   action: string;
   /** Null where the read that decides it is not this actor's to make. */
   done: boolean | null;
@@ -58,7 +56,6 @@ export function setupSteps(facts: SetupFacts): SetupStep[] {
   const base = `/carnivals/${facts.carnivalId}`;
   return [
     studentsStep(facts),
-    divisionsStep(facts, `${base}/setup/divisions`),
     eventsStep(facts, `${base}/setup/events`),
     programStep(facts, `${base}/schedule`),
     openStep(facts, `${base}/manage`),
@@ -109,32 +106,6 @@ function rosterYearWarning(facts: SetupFacts): string | undefined {
   );
 }
 
-function divisionsStep(facts: SetupFacts, path: string): SetupStep {
-  const fromRoster = facts.profile == null && facts.profileDefault != null;
-  const profile = facts.profile ?? facts.profileDefault;
-  const ages = profile?.ageGroups ?? [];
-  const categories = profile?.categories ?? [];
-  const tiers = profile?.tiers ?? [];
-  const done = ages.length > 0 && categories.length > 0 && tiers.length > 0;
-  const unread = facts.profile === undefined && facts.profileDefault === undefined;
-  return {
-    id: "divisions",
-    title: "Divisions",
-    action: fromRoster ? "Change" : "Add divisions",
-    done: unread ? null : done,
-    optional: false,
-    path,
-    detail: fromRoster
-      ? `Ages from the roster: ${codesSummary(ages)} · ` +
-        `${categories.map(categoryLabel).join(", ")} · ${tiers.join(", ")}`
-      : done
-        ? `${counted(ages.length, "age")} · ` +
-          `${counted(categories.length, "category", "categories")} · ` +
-          `${counted(tiers.length, "tier")}`
-        : "The ages, categories and tiers this carnival contests",
-  };
-}
-
 function eventsStep(facts: SetupFacts, path: string): SetupStep {
   const events = facts.events;
   const definitions = new Set((events ?? []).map((event) => event.eventDefinitionId)).size;
@@ -142,6 +113,8 @@ function eventsStep(facts: SetupFacts, path: string): SetupStep {
     facts.definitions === undefined || events === undefined
       ? null
       : splitSetupRows(buildEventSetupRows(facts.definitions, events), facts.sport ?? "");
+  // ADR-0067 §5: with no ages saved and none to default from, nothing can be added yet.
+  const noAges = facts.profile === null && facts.profileDefault === null && events?.length === 0;
   return {
     id: "events",
     title: "Events",
@@ -149,8 +122,9 @@ function eventsStep(facts: SetupFacts, path: string): SetupStep {
     done: events === undefined ? null : events.length > 0,
     optional: false,
     path,
-    detail:
-      lists !== null
+    detail: noAges
+      ? "Import the students first"
+      : lists !== null
         ? `${lists.inCarnival.length} in this carnival · ` +
           `${lists.available.length} available to add`
         : events !== undefined && events.length > 0

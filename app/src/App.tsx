@@ -149,7 +149,7 @@ export default function App() {
   } else if ((params = matchPath("/carnivals/:carnivalId/setup/divisions", path))) {
     carnivalId = params.carnivalId!;
     screen = <DivisionsProfileScreen carnivalId={carnivalId} />;
-    screenName = "Divisions profile";
+    screenName = "Ages and categories";
   } else if ((params = matchPath("/carnivals/:carnivalId/events/:eventId", path))) {
     carnivalId = params.carnivalId!;
     screen = <EventResultsScreen carnivalId={carnivalId} eventId={params.eventId!} />;

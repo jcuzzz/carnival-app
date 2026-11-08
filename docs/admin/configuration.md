@@ -295,9 +295,9 @@ A template is a JSON file in `config/event-templates/`, named `<key>.json`. The 
 |---|---|---|
 | `template` | Yes | The template's key (recorded in the audit trail). |
 | `name` | No | Display name; defaults to the key. |
-| `divisions.ageGroups` | Yes | Age codes contested, e.g. `["12", "13", …]`. Letters and digits only, at most 16 characters, no duplicates, not `OPEN`. **They must equal the codes the roster import derives**, or no student is eligible. |
-| `divisions.categories` | Yes | Any of `M`, `F`, `S` (the competition category derived from the import). |
-| `divisions.tiers` | No | `Competitive` and/or `Social`. Default `["Competitive"]`. |
+| `divisions.ageGroups` | Yes | Age codes, e.g. `["12", "13", …]`. Letters and digits only, at most 16 characters, no duplicates, not `OPEN`. They name the record categories and the ages slot filters may use; they do not decide which divisions a carnival gets, which come from the carnival's ages (see [applying](#applying-a-template-to-a-carnival)). **They must equal the codes the roster import derives**, or no record or filtered slot matches a student's division. |
+| `divisions.categories` | Yes | Any of `M`, `F`, `S` (the competition category derived from the import). Used when the carnival has no saved profile. |
+| `divisions.tiers` | No | `Competitive` and/or `Social`. Default `["Competitive"]`. Used when the carnival has no saved profile. |
 | `definitions` | Yes | The events (below). At least one; codes unique ignoring case. |
 | `schedule.streams` | No | The default program (below). Without it, events start unscheduled. |
 
@@ -310,7 +310,7 @@ Each **definition**:
 | `measureType` | Yes | `Time` (lower wins), `Distance`, `Height`, `Count` (higher wins). |
 | `active` | No | Default `true`. An inactive definition is catalogued but never scheduled. |
 | `schoolRecords` | No | Default `false`. `true` makes the event a school-record event (see below). |
-| `tiers` | No | Overrides the template's tiers for this event. |
+| `tiers` | No | Narrows the carnival's tiers for this event; a tier the carnival does not contest is dropped, and with none left the event is catalogued but not scheduled. |
 | `openDivision` | No | Also creates one all-ages (`OPEN`) division. |
 | `format` | No | `Individual` (default) or `Team`. |
 | `teamSize`, `legs` | Team only | Team size and exactly that many leg labels. |
@@ -361,14 +361,18 @@ A minimal template:
 
 ### Applying a template to a carnival
 
-A Carnival administrator applies a template from **Manage carnival → Start from the standard events** (the **Add the standard events** button) while the carnival is neither Closed nor Finalised. One apply, in one transaction with its audit record:
+A Carnival administrator applies a template from **Event setup** (the **Add the standard … events** button) while the carnival is neither Closed nor Finalised. One apply, in one transaction with its audit record:
 
 1. **Catalogue:** creates each definition whose code the school's catalogue does not have. Existing definitions are never changed, even if the template now says something different.
-2. **Events:** for each active definition, creates one event per age × category × tier (plus `OPEN` where `openDivision` is set), skipping any that already exist.
-3. **Program:** creates missing streams (matched by name) and slots (matched by label), and places only events that are not yet in a slot. Existing streams and slots are left alone, so a re-apply cannot undo an organiser's edits; a slot renamed or deleted in the app comes back on a re-apply.
-4. **Divisions profile:** seeds the carnival's divisions profile from the template if the carnival has no usable one.
+2. **Events:** for each active definition, creates one event per age × category × tier (plus `OPEN` where `openDivision` is set), skipping any that already exist. The ages are the carnival's: its saved ages, else the current roster's age groups. The categories and tiers are the carnival's saved ones, else the template's; a definition's own `tiers` narrow them.
+3. **Program:** creates missing streams (matched by name) and slots (matched by label), and places only events that are not yet in a slot. Existing streams and slots are left alone, so a re-apply cannot undo an organiser's edits; a slot renamed or deleted in the app comes back on a re-apply. Slot filters name the template's ages, so a division whose age they do not name (an `11`, or `SNR`) is created but left out of the slots that filter on age; an unfiltered slot takes every age.
+4. **Ages and categories:** if the carnival has none saved (no usable division profile), saves the roster's age groups with the template's categories and tiers.
 
-Applying again is safe: it only adds what is missing.
+**No student list yet:** a carnival with no saved profile and no promoted roster cannot take a template. The apply is refused with `409 ROSTER_REQUIRED` ("Import the student list first: this carnival's ages come from it.") and writes nothing, the catalogue included. A student list with more than 32 ages, more than a profile can hold, is refused with the same code and a sentence asking to check its birth dates. A Closed or Finalised carnival (`409 CARNIVAL_NOT_EDITABLE`) and an unknown template (`400 TEMPLATE_INVALID`) are refused first.
+
+Applying again is safe: it only adds what is missing. It uses the saved ages, so a carnival saved under the old rules (a template's 12–18, or 5–21) keeps generating those until its ages are saved again. Event setup warns when saved ages include one no current student has, and its **Remove those ages** press saves the rest.
+
+The response names the axes used (`ageGroups`, `categories`, and the `tiers` actually reached), the counts created and skipped, and `divisionProfileSeeded`.
 
 ### Reconciling a changed template
 
@@ -396,7 +400,7 @@ Changes to a definition apply to every carnival that uses it, which is why recon
 
 ## Carnival settings
 
-Each carnival has its own settings, edited by a Carnival administrator on **Manage carnival** (scoring rules, adjustment categories, venue lanes) and the carnival's **Divisions profile** screen, and audited. A new carnival starts with the defaults below:
+Each carnival has its own settings, edited by a Carnival administrator on **Manage carnival** (scoring rules, adjustment categories, venue lanes) and **Ages and categories** (reached from Event setup), and audited. A new carnival starts with the defaults below:
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -407,7 +411,7 @@ Each carnival has its own settings, edited by a Carnival administrator on **Mana
 | Adjustment categories | Novelty 1–3, Best Dressed House, Loudest House | The house-points adjustments the carnival offers. |
 | Lane count | none | 1–64. Cannot drop below a lane already assigned. |
 | Auto-fill lanes | off | Needs a lane count. The New carnival form pre-fills 8 lanes with auto-fill ticked; "none" and "off" apply only when a create sends no value. |
-| Divisions profile | from the template | The ages, categories and tiers the carnival contests. |
+| Ages and categories (the division profile) | none | The ages, categories and tiers the carnival contests. Saved the first time divisions are generated (the standard events, Add or New event), with the student list's ages. |
 
 The settings read also returns three values that are derived, never stored: `rosterAgeGroups` (the distinct age groups on the current roster), `rosterYear` (the competition year most of the roster carries; null with no promoted roster) and `divisionsDefault` (a profile built from those ages, `M` and `F`, Competitive, offered only while the carnival has no profile). Adding events against `divisionsDefault` first saves it as the carnival's profile, then generates the divisions; if a profile was saved elsewhere meanwhile, nothing is written.
 
@@ -431,7 +435,7 @@ The screens write them through `PUT /api/v1/carnivals/{id}/settings`. Every fiel
 ```
 
 - All points must be zero or more; a negative value is refused. Saving scoring rules stamps a new rule version (`custom-<UTC timestamp>`), recorded with the audit trail. A stored value that fails these rules (for example, one edited by hand in the database) is ignored and the defaults apply.
-- The stored settings (excluding the divisions profile, which has its own table) are limited to 4,000 characters; a very long adjustment category list is refused.
+- The stored settings (excluding the division profile, which has its own table) are limited to 4,000 characters; a very long adjustment category list is refused.
 - Scoring settings stay editable after the carnival is Closed and lock when it is Finalised.
 - An event's scoring weight belongs to its catalogue definition (`scoringWeight` above), not to the carnival.
 
@@ -439,10 +443,10 @@ How these rules turn results into standings, with a worked example: [scoring and
 
 ### Divisions
 
-A division is one age × category × tier instance of a catalogue definition. The **divisions profile** names the ages, categories and tiers the carnival contests; its ages are a From–To range of the roster's ages (5–21 before a roster is promoted) plus any non-numeric codes. Saving the profile creates and removes no divisions.
+A division is one age × category × tier instance of a catalogue definition. The carnival's **ages and categories** (its division profile) name what the carnival contests; its ages are the student list's, which can be narrowed but never extended. With no student list and no saved ages, no events can be added. Saving the profile creates and removes no divisions.
 
 - **Event setup** lists the catalogue as *In this carnival* and *Available to add*. **Add** generates every division the profile contests for that definition, first saving `divisionsDefault` as the profile if none is stored.
-- Each event's **division grid** has one tick box per age row × category/tier column: ticking generates that division, unticking removes it. A division with entries or results cannot be removed (`409 EVENT_HAS_ENTRIES`); close it instead. Divisions outside the profile still show, marked *off profile*.
+- Each event's **division grid** has one tick box per age row × category/tier column: ticking generates that division, unticking removes it. A division with entries or results cannot be removed (`409 EVENT_HAS_ENTRIES`); close it instead. Divisions outside the profile still show, marked *no longer listed*.
 - **Profile review prompt:** when the profile names an age that an active, scheduled event does not contest, Event setup lists each such event with its missing ages. Events with an `OPEN` division are not listed.
 - `POST /api/v1/carnivals/{id}/events/generate` takes one definition and at most 200 divisions per call. It is idempotent (existing divisions are skipped and counted), writes all or nothing, and is refused once the carnival is Closed or Finalised.
 

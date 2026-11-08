@@ -223,26 +223,26 @@ describe("DivisionGrid — live", () => {
     expect(refusal.textContent).toMatch(/nothing was saved/);
   });
 
-  it("shows a division the profile no longer names, marked off profile", () => {
+  it("shows a division the profile no longer names, marked no longer listed", () => {
     live([{ ...thirteenF, id: "ev-11M", ageGroup: "11", category: "M" }]);
 
     expect(
       (screen.getByRole("checkbox", { name: "11 · Boys" }) as HTMLInputElement).checked,
     ).toBe(true);
     expect(screen.getByText(/One division is/).textContent).toMatch(
-      /after it was created\. It is still run, and is shown below\./,
+      /after this division was created\. It is still run, and is shown below\./,
     );
-    expect(screen.getAllByText(/off profile/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/no longer listed/).length).toBeGreaterThan(0);
   });
 
-  it("writes the off-profile sentence as a plural only when there is more than one", () => {
+  it("writes the no-longer-listed sentence as a plural only when there is more than one", () => {
     live([
       { ...thirteenF, id: "ev-11M", ageGroup: "11", category: "M" },
       { ...thirteenF, id: "ev-11F", ageGroup: "11", category: "F" },
     ]);
 
     expect(screen.getByText(/2 divisions are/).textContent).toMatch(
-      /after they were created\. They are still run, and are shown below\./,
+      /after these divisions were created\. They are still run, and are shown below\./,
     );
   });
 
@@ -253,7 +253,7 @@ describe("DivisionGrid — live", () => {
       expect(box.hasAttribute("disabled")).toBe(true);
   });
 
-  it("points at the divisions profile when the carnival has none", () => {
+  it("points at Ages and categories when the carnival has no ages", () => {
     render(
       <DivisionGrid
         profile={null}
@@ -269,8 +269,8 @@ describe("DivisionGrid — live", () => {
       />,
     );
 
-    expect(screen.getByText(/no division profile yet/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "the divisions profile" }).getAttribute("href")).toBe(
+    expect(screen.getByText(/ages, categories and tiers aren’t set yet/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ages and categories" }).getAttribute("href")).toBe(
       "#/carnivals/c-1/setup/divisions",
     );
     expect(screen.queryByRole("checkbox")).toBeNull();

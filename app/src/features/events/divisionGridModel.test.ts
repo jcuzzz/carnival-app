@@ -83,7 +83,7 @@ describe("buildDivisionGrid", () => {
     expect(model.outsideProfile).toBe(1);
   });
 
-  it("gives a division with no category a column, and never calls it off profile", () => {
+  it("gives a division with no category a column, and never calls it no longer listed", () => {
     const model = buildDivisionGrid(profile, [division("12", null)]);
 
     const column = model.columns.find((c) => c.label === "All categories · Comp")!;
@@ -94,7 +94,7 @@ describe("buildDivisionGrid", () => {
     expect(model.outsideProfile).toBe(0);
   });
 
-  it("still reads a no-category division off profile on the tier the profile does name", () => {
+  it("still reads a no-category division as no longer listed on the tier the profile does name", () => {
     const model = buildDivisionGrid({ ...profile, tiers: ["Competitive"] }, [
       division("12", null, "Social"),
     ]);

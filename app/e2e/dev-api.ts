@@ -369,6 +369,18 @@ export async function seedAthleticsCarnival(
     date: new Date().toISOString().slice(0, 10),
     venue: "E2E Athletics Track",
   });
+  // ADR-0067 §4–5: the apply generates the roster's ages, and is refused with no roster at all.
+  const { rosterAgeGroups } = await call<{ rosterAgeGroups: string[] }>(
+    api,
+    "get",
+    `/carnivals/${carnival.id}/settings`,
+  );
+  if (!rosterAgeGroups.includes(division!.ageGroup))
+    throw new Error(
+      `The dev roster's ages (${rosterAgeGroups.join(", ") || "none"}) lack ` +
+        `${division!.ageGroup}: the roster changed since the dev seed, and the template apply ` +
+        "schedules only the roster's ages. scripts/dev-reset.ps1 reseeds it.",
+    );
   await call(api, "post", `/carnivals/${carnival.id}/apply-template`, { template: "athletics" });
 
   const events = await call<CarnivalEvent[]>(api, "get", `/carnivals/${carnival.id}/events`);
@@ -382,8 +394,8 @@ export async function seedAthleticsCarnival(
   if (!event)
     throw new Error(
       `The athletics template scheduled no Competitive ${division!.ageGroup}/` +
-        `${division!.category} Long Jump; config/event-templates/athletics.json decides the ` +
-        "divisions, and the two templates' ages have to line up.",
+        `${division!.category} Long Jump; check the AT-LONG-JUMP definition's tiers and the ` +
+        "template's categories in config/event-templates/athletics.json.",
     );
 
   await call(api, "post", `/carnivals/${carnival.id}/status`, { status: "Open" });

@@ -61,9 +61,10 @@ public sealed class DivisionProfile
         Tiers = (requested.Tiers ?? []).Distinct().ToList(),
     };
 
-    public static DivisionProfile FromTemplate(EventTemplate template) => new()
+    // The carnival's ages with the template's categories and tiers (ADR-0067 §4).
+    public static DivisionProfile ForTemplateApply(IReadOnlyList<string> ages, EventTemplate template) => new()
     {
-        AgeGroups = [.. template.AgeGroups],
+        AgeGroups = [.. ages],
         Categories = [.. template.Categories],
         Tiers = [.. template.Tiers],
     };

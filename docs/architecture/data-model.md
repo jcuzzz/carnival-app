@@ -92,7 +92,8 @@ Once results exist, the measure type, units and attempt count are frozen (`MEASU
 
 - Unique per (carnival, age, category, tier); the age is never `OPEN`; at most 32 ages.
 - No rows means "not configured". The settings read then offers a default computed from the current roster's age groups (M and F, Competitive), which is not stored until saved.
-- A settings save replaces the rows wholesale; applying a template seeds them only when none exist.
+- A settings save replaces the rows wholesale. Applying a template seeds them only when no usable profile exists, from the current roster's age groups with the template's categories and tiers ([ADR-0067](../adr/0067-divisions-come-from-the-student-list.md)).
+- Ages come from the saved profile, else the roster. With neither, a template apply is refused with `409 ROSTER_REQUIRED` before it writes anything. A re-import never rewrites saved ages, and nothing migrates a profile saved under the old rules (a template's 12–18, or 5–21). Event setup shows the profile as one line, warns when a saved age is one no current student has (one press removes those ages), and notes student-list ages left out; Ages and categories edits it.
 
 ## Students and the roster
 

@@ -18,7 +18,6 @@ import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { adjustmentItemsForCarnival } from "../adjustments/submitAdjustment";
 import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
-import { ApplyTemplateSection } from "../features/carnivals/ApplyTemplateSection";
 import { readiness } from "../features/carnivals/readiness";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
 import { setupSteps } from "../features/carnivals/setupSteps";
@@ -241,14 +240,6 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
         <h2>Set the carnival up</h2>
         <SetupChecklist steps={steps} currentPath={`/carnivals/${carnivalId}/manage`} />
       </section>
-
-      {!isFinal && (
-        <ApplyTemplateSection
-          carnivalId={carnivalId}
-          carnivalType={c.type}
-          locked={c.status === "Closed"}
-        />
-      )}
 
       <section className="subsection">
         <h2>Reports</h2>

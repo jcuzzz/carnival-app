@@ -42,45 +42,38 @@ describe("setupSteps — the Open row", () => {
   });
 });
 
-/** ADR-0057 §2: a roster the organiser has not acted on still ticks the step. */
-describe("setupSteps — the roster default", () => {
-  const onDefault: SetupFacts = {
-    ...known,
-    profile: null,
-    profileDefault: {
-      ageGroups: ["12", "13", "14"],
-      categories: ["M", "F"],
-      tiers: ["Competitive"],
-    },
-  };
-
-  it("reads done, names the roster's own ages, and offers a change", () => {
-    const divisions = step(onDefault, "divisions");
-    expect(divisions.done).toBe(true);
-    expect(divisions.detail).toBe("Ages from the roster: 12–14 · Boys, Girls · Competitive");
-    expect(divisions.action).toBe("Change");
-    expect(firstUndoneStep(setupSteps(onDefault))).toBeUndefined();
+/** ADR-0067 §1, §5: the ages are no step of their own; without them no event can be added. */
+describe("setupSteps — no Divisions step", () => {
+  it("orders the steps Students, Events, Program, Open", () => {
+    expect(setupSteps(known).map((s) => s.id)).toEqual(["roster", "events", "program", "open"]);
   });
 
-  it("leaves a saved profile reading as the profile, not as the roster", () => {
-    const divisions = step({ ...onDefault, profile: known.profile }, "divisions");
-    expect(divisions.detail).toBe("1 age · 1 category · 1 tier");
-    expect(divisions.action).toBe("Add divisions");
-  });
-
-  it("stays required with neither a profile nor a roster", () => {
+  it("sends the Events step back to the import with neither saved ages nor a roster", () => {
     const facts: SetupFacts = { ...known, profile: null, profileDefault: null, events: [] };
-    expect(step(facts, "divisions").done).toBe(false);
-    expect(step(facts, "divisions").action).toBe("Add divisions");
-    expect(firstUndoneStep(setupSteps(facts))?.id).toBe("divisions");
+    expect(step(facts, "events").detail).toBe("Import the students first");
+    expect(step(facts, "events").done).toBe(false);
+  });
+
+  it("describes the Events step as usual once there are ages to add events over", () => {
+    const onDefault: SetupFacts = {
+      ...known,
+      profile: null,
+      profileDefault: { ageGroups: ["12"], categories: ["M"], tiers: ["Competitive"] },
+      events: [],
+    };
+    expect(step(onDefault, "events").detail).toBe(
+      "The event catalogue and which divisions of it run here",
+    );
+    expect(step({ ...onDefault, profileDefault: undefined }, "events").detail).not.toBe(
+      "Import the students first",
+    );
   });
 });
 
 describe("setupSteps — unknown is not undone", () => {
   it("leaves a step whose read failed out of the pointer", () => {
-    const facts: SetupFacts = { ...known, participation: null, profile: undefined, events: [] };
+    const facts: SetupFacts = { ...known, participation: null, events: [] };
     expect(step(facts, "roster").done).toBeNull();
-    expect(step(facts, "divisions").done).toBeNull();
     expect(firstUndoneStep(setupSteps(facts))?.id).toBe("events");
   });
 

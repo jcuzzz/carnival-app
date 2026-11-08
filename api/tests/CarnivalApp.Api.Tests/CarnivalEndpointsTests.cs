@@ -510,6 +510,7 @@ public sealed class EventDefinitionRoundTripTests : IDisposable
     [Fact]
     public async Task Get_then_put_of_a_template_definition_preserves_every_field()
     {
+        await TemplateRoster.SeedAsync(_factory, TemplateRoster.SwimmingAges);
         var created = await _admin.PostAsJsonAsync("/api/v1/carnivals",
             new { name = "Round Trip", type = "Swimming", date = "2027-02-25" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);

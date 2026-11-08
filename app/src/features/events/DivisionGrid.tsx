@@ -93,9 +93,9 @@ export function DivisionGrid({
     <>
       {!model.configured && (
         <p className="row-sub">
-          This carnival has no division profile yet, so there are no boxes to tick. Set the
-          ages, categories and tiers it contests on{" "}
-          <a href={href(profilePath)}>the divisions profile</a>, and they appear here for every
+          This carnival’s ages, categories and tiers aren’t set yet, so there are no boxes to
+          tick. Set them on{" "}
+          <a href={href(profilePath)}>Ages and categories</a>, and they appear here for every
           event.
         </p>
       )}
@@ -112,7 +112,9 @@ export function DivisionGrid({
                   {model.columns.map((column) => (
                     <th key={column.key} scope="col">
                       {column.label}
-                      {column.outsideProfile && <span className="badge warn"> off profile</span>}
+                      {column.outsideProfile && (
+                        <span className="badge warn"> no longer listed</span>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -123,7 +125,9 @@ export function DivisionGrid({
                     <tr>
                       <th scope="row">
                         {row.label}
-                        {row.outsideProfile && <span className="badge warn"> off profile</span>}
+                        {row.outsideProfile && (
+                          <span className="badge warn"> no longer listed</span>
+                        )}
                       </th>
                       {row.cells.map((cell) => (
                         <td key={cell.key}>
@@ -190,10 +194,10 @@ export function DivisionGrid({
 
 function outsideProfileText(count: number): string {
   return count === 1
-    ? "One division is contested outside this carnival's profile — the profile changed " +
-        "after it was created. It is still run, and is shown below."
-    : `${count} divisions are contested outside this carnival's profile — the profile changed ` +
-        "after they were created. They are still run, and are shown below.";
+    ? "One division is run outside this carnival’s ages and categories, which changed after " +
+        "this division was created. It is still run, and is shown below."
+    : `${count} divisions are run outside this carnival’s ages and categories, which changed ` +
+        "after these divisions were created. They are still run, and are shown below.";
 }
 
 function without(set: ReadonlySet<string>, key: string): Set<string> {

@@ -1,8 +1,5 @@
 const EN_DASH = "–";
 
-/** The pickers' fallback when no roster is promoted. */
-export const FALLBACK_AGE_CODES: string[] = Array.from({ length: 17 }, (_, i) => `${i + 5}`);
-
 function numeric(code: string): number | null {
   return /^\d+$/.test(code) ? Number(code) : null;
 }

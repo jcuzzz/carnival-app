@@ -11,7 +11,7 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P1] Self-host template.** A school deployment template (configuration only: `.env`, mapping, event templates, branding) to sit beside [self-hosting](admin/self-host.md).
 - **[P2] A stale dev-loop e2e spec** (found 2026-11-06, failing on every device): the template test in `school-settings.spec` expects `swimming.json` on Update the event catalogue, which selects athletics first. Decide what the screen should show, then fix the spec or the screen.
 - **[P2] Docs link check in CI.** Catch broken relative links across `docs/` and the root documents.
-- **[P2] Staff guide pages.** The *(planned)* pages in [`docs/README.md`](README.md): setting up a carnival, importing the roster, carnival day, house points/records/reports, roles and shared devices.
+- **[P2] Staff guide pages.** The *(planned)* pages in [`docs/README.md`](README.md): importing the roster, carnival day, house points/records/reports, roles and shared devices.
 
 ### Later (each needs an ADR)
 
@@ -76,12 +76,12 @@ Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [au
 - **[P3]** "Latest race" for auto-fill follows organiser-editable `SortOrder`, so a renumbering can redirect auto-fill into an older unswum race; a failed context create falls back to Heat 1 without telling the official.
 - **[P3]** `EventResultsScreen` rebuilds its grid rows on every render, so rows cannot be memoised.
 - **[P3]** The settings PUT returns only the first validation failure; read-only house-code inputs look editable.
-- **[P3]** Manage shows up to five `button.primary` at once (Start from the standard events, Open/Close carnival, Lanes Save, Scoring Save, Adjustments), against the design system's one per screen; the setup flow's Phase 2 moves the template section to Event setup.
+- **[P3]** Manage shows up to four `button.primary` at once (Open/Close carnival, Lanes Save, Scoring Save, Adjustments), against the design system's one per screen.
 - **[P3]** The program builder's "Add an event" label (`SlotPanel.tsx`, `app/src/App.tsx` ~118) names a different act from Event setup's add.
 - **[P3]** Design tokens: `--opacity-quiet` and `--brand-ink-soft` do one job two ways; a spacing token is used as a width addend in `app/src/styles.css` (~849); the legacy off-scale spacing and type tokens are closed to new uses and await retirement.
 - **[P3]** Phone deck header: at 390px the pickers wrap to two lines and "Next event" to a third (~190px before the first swimmer).
 - **[P3]** Dashboard copy: "0 of 0 entered" for a house with no roster rows; stream labels show in their stored upper case.
-- **[P3]** The division-profile editor cannot express a profile of only non-numeric ages, and a roster re-import that changes the derived ages does not flag carnivals whose profile names ages no longer derived.
+- **[P3]** The Ages and categories editor cannot express a profile of only non-numeric ages.
 
 ### Tests, tooling and deployment
 

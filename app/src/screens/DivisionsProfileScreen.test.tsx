@@ -8,11 +8,10 @@ import { signIn, signOut } from "../auth/session";
 import { QueryWrapper, renderWithQuery } from "../test/queryWrapper";
 
 /**
- * The divisions profile (ADR-0022 §2/§8, reduced to one age per division by
- * ADR-0058 §4). Three things it must never do: claim that editing the axes
- * changed the divisions, send a whole settings object that would take the
- * scoring rules and the lane count down with it, and drop a saved age the
- * roster no longer derives without saying so.
+ * The ages editor (ADR-0022 §2/§8, ADR-0058 §4, ADR-0067 §2). Things it must
+ * never do: offer an age the roster does not derive, send a whole settings
+ * object that would take the scoring rules and the lane count down with it,
+ * and drop a saved age the roster no longer derives without saying so.
  */
 
 vi.mock("../api/resources", () => ({
@@ -34,7 +33,7 @@ const carnival = {
 
 const settings: CarnivalSettings = {
   divisionsDefault: null,
-  rosterAgeGroups: [],
+  rosterAgeGroups: ["12", "13", "14", "15"],
   rosterYear: null,
   scoring: { placePoints: [8, 6, 4] } as CarnivalSettings["scoring"],
   adjustmentCategories: ["Team spirit"],
@@ -70,18 +69,18 @@ afterEach(() => {
 });
 
 describe("DivisionsProfileScreen", () => {
-  it("says plainly that editing the axes creates and removes no divisions", async () => {
+  it("says the ages come from the student list", async () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
-    const notice = await screen.findByText(/creates and removes no/);
-    expect(notice.textContent).toContain("plain age as at 31 December");
+    expect(await screen.findByRole("heading", { name: "Ages and categories" })).toBeTruthy();
+    expect(screen.getByText(/^Ages come from the student list; narrow them here/)).toBeTruthy();
   });
 
   it("sends only the divisions slice, never the scoring rules or the lane count", async () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     fireEvent.change(await screen.findByLabelText("To"), { target: { value: "15" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     expect(vi.mocked(updateCarnivalSettings).mock.calls[0]).toEqual([
@@ -100,7 +99,7 @@ describe("DivisionsProfileScreen", () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     fireEvent.click(await screen.findByLabelText("Social"));
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     expect(sentProfile().tiers).toEqual(["Competitive", "Social"]);
@@ -119,12 +118,12 @@ describe("DivisionsProfileScreen", () => {
     );
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save profile" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Age group 'Year 8'");
     // Nothing on this screen is typed, so the only fix is an age to untick.
-    expect(alert.textContent).toContain("Untick any age the roster no longer derives");
+    expect(alert.textContent).toContain("Leave out any age no current student has");
     expect(alert.textContent).not.toContain("AGE_SCOPE_INVALID");
   });
 
@@ -142,19 +141,67 @@ describe("DivisionsProfileScreen", () => {
     );
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save profile" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("shorten the division profile");
     expect(alert.textContent).not.toContain("VALIDATION_FAILED");
   });
+});
 
-  it("treats a carnival with no profile as unconfigured, not broken", async () => {
-    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
+/** ADR-0067 §2, §5: no fallback range — without a roster there is nothing to pick from. */
+describe("DivisionsProfileScreen — no student list", () => {
+  const empty: CarnivalSettings = { ...settings, rosterAgeGroups: [], divisions: null };
+
+  it("offers no form with neither a roster nor saved ages, and names who imports", async () => {
+    vi.mocked(getCarnivalSettings).mockResolvedValue(empty);
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
-    expect(await screen.findByText(/no divisions profile yet/)).toBeTruthy();
+    expect(
+      await screen.findByText("Import the student list first: this carnival's ages come from it."),
+    ).toBeTruthy();
+    expect(screen.getByText("A system administrator imports it.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Import the students" })).toBeNull();
+    expect(screen.queryByLabelText("From")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("links a system administrator to the import, launched from this carnival", async () => {
+    signIn({ subject: "sys-1", displayName: "Sam Sys", roles: ["SystemAdministrator"] });
+    vi.mocked(getCarnivalSettings).mockResolvedValue(empty);
+    renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
+
+    const link = await screen.findByRole("link", { name: "Import the students" });
+    expect(link.getAttribute("href")).toBe("#/import?carnival=c-1");
+    expect(link.className).toBe("button primary-link");
+    expect(screen.queryByText("A system administrator imports it.")).toBeNull();
+  });
+
+  it("keeps saved ages read-only, and still saves a change of tier", async () => {
+    vi.mocked(getCarnivalSettings).mockResolvedValue({
+      ...empty,
+      divisions: {
+        ageGroups: ["12", "13", "14", "SNR"],
+        categories: ["M"],
+        tiers: ["Competitive"],
+      },
+    });
+    renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
+
+    expect(await screen.findByText("12–14, SNR")).toBeTruthy();
+    expect(screen.getByText(/saved ages stay as they are/)).toBeTruthy();
+    expect(screen.queryByLabelText("From")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "SNR" })).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Social"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
+    expect(sentProfile()).toEqual({
+      ageGroups: ["12", "13", "14", "SNR"],
+      categories: ["M"],
+      tiers: ["Competitive", "Social"],
+    });
   });
 });
 
@@ -178,9 +225,9 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
 
     expect(((await screen.findByLabelText("From")) as HTMLSelectElement).value).toBe("12");
     expect(select("To").value).toBe("15");
-    expect(screen.getByText(/these ages are the roster/)).toBeTruthy();
+    expect(screen.getByText(/these are the student list’s ages/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     expect(sentProfile()).toEqual({
       ageGroups: roster,
@@ -223,7 +270,7 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
     expect(snr.checked).toBe(true);
 
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "13" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     // Numbers ascending, then the code no range holds — `orderCodes`, which is
     // the server's own key order.
@@ -240,7 +287,7 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "SNR" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     expect(sentProfile().ageGroups).toEqual(roster);
   });
@@ -255,37 +302,43 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     await screen.findByLabelText("From");
-    expect(screen.queryByText(/Roster ages not contested/)).toBeNull();
+    expect(screen.queryByText(/Ages on the student list left out/)).toBeNull();
 
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "12" } });
-    expect(screen.getByText(/Roster ages not contested: 11/).textContent).toContain(
+    expect(screen.getByText(/Ages on the student list left out: 11/).textContent).toContain(
       "cannot be entered",
     );
 
     fireEvent.click(screen.getByRole("checkbox", { name: "SNR" }));
-    expect(screen.getByText(/Roster ages not contested: 11, SNR/)).toBeTruthy();
+    expect(screen.getByText(/Ages on the student list left out: 11, SNR/)).toBeTruthy();
   });
 
   // The failure ADR-0022 could only warn about in prose: a saved profile naming
   // a code the roster does not derive refuses every entry on deck day.
-  it("names a saved age the roster no longer derives", async () => {
+  it("names a saved age the roster no longer derives, and offers it only to leave out", async () => {
     vi.mocked(getCarnivalSettings).mockResolvedValue({
       ...rostered,
-      rosterAgeGroups: ["12", "13"],
+      rosterAgeGroups: ["12", "13", "SNR"],
       divisionsDefault: null,
-      divisions: { ageGroups: ["12", "13", "14"], categories: ["M"], tiers: ["Competitive"] },
+      divisions: {
+        ageGroups: ["12", "13", "14", "JNR", "SNR"],
+        categories: ["M"],
+        tiers: ["Competitive"],
+      },
     });
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     expect(
-      (await screen.findByText(/Saved ages the roster no longer derives: 14/)).textContent,
+      (await screen.findByText(/Saved ages no current student has: 14, JNR/)).textContent,
     ).toContain("still run");
+    expect([...select("To").options].map((option) => option.value)).toEqual(["12", "13", "14"]);
+    expect([select("From").value, select("To").value]).toEqual(["12", "14"]);
 
-    // The selects cannot offer it, so Save replaces it with what the roster has.
-    expect([select("From").value, select("To").value]).toEqual(["12", "13"]);
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.change(select("To"), { target: { value: "13" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "JNR" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
-    expect(sentProfile().ageGroups).toEqual(["12", "13"]);
+    expect(sentProfile().ageGroups).toEqual(["12", "13", "SNR"]);
   });
 
   it("says nothing about saved ages when the roster still derives them all", async () => {
@@ -297,7 +350,7 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     await screen.findByLabelText("From");
-    expect(screen.queryByText(/Saved ages the roster no longer derives/)).toBeNull();
+    expect(screen.queryByText(/Saved ages no current student has/)).toBeNull();
     expect(screen.queryByText(/saving replaces them/)).toBeNull();
   });
 
@@ -315,21 +368,9 @@ describe("DivisionsProfileScreen — the ages come from the roster", () => {
       await screen.findByText("Saved ages: 12, 13, 15 — saving replaces them with the range below."),
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateCarnivalSettings).toHaveBeenCalledTimes(1));
     expect(sentProfile().ageGroups).toEqual(["12", "13", "14", "15"]);
-  });
-
-  it("falls back to ages 5 to 21 when no roster is promoted", async () => {
-    vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
-    renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
-
-    expect(await screen.findByText(/No roster is promoted yet/)).toBeTruthy();
-    expect([select("From").value, select("To").value]).toEqual(["5", "21"]);
-    // No roster means no code to tick, and nothing for one to be absent from.
-    expect(screen.queryByRole("heading", { name: "Other ages" })).toBeNull();
-    expect(screen.queryByText(/Roster ages not contested/)).toBeNull();
-    expect(screen.queryByText(/Saved ages the roster no longer derives/)).toBeNull();
   });
 });
 
@@ -342,7 +383,7 @@ describe("DivisionsProfileScreen — the read has to land first", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("couldn’t be read");
-    expect(screen.queryByRole("button", { name: "Save profile" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByLabelText("From")).toBeNull();
   });
 
@@ -373,7 +414,7 @@ describe("DivisionsProfileScreen — read-only", () => {
     renderWithQuery(<DivisionsProfileScreen carnivalId="c-1" />);
 
     await screen.findByText(/no longer be changed/);
-    const save = screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement;
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     expect(select("From").disabled).toBe(true);
   });

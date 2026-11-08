@@ -52,8 +52,6 @@ public static class AdjustmentEndpoints
         DivisionProfileDto? DivisionsDefault,
         int? RosterYear);
 
-    private sealed record RosterFacts(IReadOnlyList<string> AgeGroups, int? Year);
-
     // Leaves out the roster facts: an auditor would read their defaults beside a settings change as
     // "the roster was empty".
     private sealed record AuditedSettingsDto(
@@ -95,34 +93,6 @@ public static class AdjustmentEndpoints
             roster.Year);
     }
 
-    // Drops codes no division may carry (a birthdate past the cut-off derives "-12"), so the editor
-    // cannot offer an age the PUT would refuse.
-    private static async Task<RosterFacts> ReadRosterAsync(CarnivalAppDbContext db, CancellationToken ct)
-    {
-        var groups = await db.RosterSnapshots.AsNoTracking()
-            .Where(s => s.IsCurrent && s.Student.IsActive)
-            .GroupBy(s => new { s.CompetitionAgeGroup, s.SchoolYear })
-            .Select(g => new { g.Key.CompetitionAgeGroup, g.Key.SchoolYear, Count = g.Count() })
-            .ToListAsync(ct);
-        // A student missing from the latest file keeps an older snapshot, so the roster's year is
-        // the one most of it carries.
-        var year = groups
-            .GroupBy(g => g.SchoolYear)
-            .OrderByDescending(y => y.Sum(g => g.Count))
-            .ThenByDescending(y => y.Key)
-            .Select(y => (int?)y.Key)
-            .FirstOrDefault();
-        return new RosterFacts(
-        [
-            .. groups
-                .Select(g => g.CompetitionAgeGroup)
-                .Distinct()
-                .Where(c => !string.IsNullOrWhiteSpace(c) && AgeScope.Validate(c) is null)
-                .OrderBy(AgeScope.Order)
-                .ThenBy(c => c, StringComparer.Ordinal),
-        ], year);
-    }
-
     private static async Task<DivisionProfile?> ReadProfileAsync(
         CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct) =>
         DivisionProfile.FromRows(await db.CarnivalDivisions.AsNoTracking()
@@ -136,7 +106,7 @@ public static class AdjustmentEndpoints
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
         return Results.Ok(ProjectSettings(
             CarnivalSettings.Parse(carnival.SettingsJson), await ReadProfileAsync(db, id, ct),
-            await ReadRosterAsync(db, ct)));
+            await RosterAges.ReadAsync(db, ct)));
     }
 
     public sealed record ScoringSettingsRequest(
@@ -245,7 +215,7 @@ public static class AdjustmentEndpoints
         if (await CarnivalGuards.SaveGuardingConcurrencyAsync(db, "carnival", ct) is { } conflict)
             return conflict;
         return Results.Ok(ProjectSettings(
-            updated, updatedProfile, await ReadRosterAsync(db, ct)));
+            updated, updatedProfile, await RosterAges.ReadAsync(db, ct)));
     }
 
     private static List<string>? NormaliseCategories(List<string>? categories)

@@ -585,14 +585,14 @@ describe("EventEditorScreen", () => {
     );
   });
 
-  it("points an unconfigured carnival at the divisions profile", async () => {
+  it("points an unconfigured carnival at its ages and categories", async () => {
     vi.mocked(getCarnivalSettings).mockResolvedValue({ ...settings, divisions: null });
     vi.mocked(listCarnivalEvents).mockResolvedValue([]);
     renderWithQuery(<EventEditorScreen carnivalId="c-1" definitionId="def-free" />);
 
-    await screen.findByText(/no division profile yet/);
+    await screen.findByText(/ages, categories and tiers aren’t set yet/);
     expect(
-      screen.getByRole("link", { name: "the divisions profile" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Ages and categories" }).getAttribute("href"),
     ).toBe("#/carnivals/c-1/setup/divisions");
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
