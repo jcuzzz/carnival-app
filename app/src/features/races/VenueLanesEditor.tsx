@@ -100,7 +100,7 @@ export function VenueLanesEditor({
         <p className="row-sub">
           New entries in timed events are given the next free lane; a full race starts the next one.
         </p>
-        <button className="primary" type="submit" disabled={saving}>
+        <button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save lane settings"}
         </button>
       </form>

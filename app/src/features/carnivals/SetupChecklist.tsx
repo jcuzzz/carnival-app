@@ -1,16 +1,22 @@
 import { Check } from "lucide-react";
+import type { ReactNode } from "react";
 import { href } from "../../router";
 import { firstUndoneStep, type SetupStep } from "./setupSteps";
 
 const ICON = 20;
 
-/** A step whose screen is rendering the list keeps its place but drops the link. */
+/**
+ * A step whose screen is rendering the list keeps its place but drops the link. `actions` puts a
+ * step's controls in place beneath it, by step id.
+ */
 export function SetupChecklist({
   steps,
   currentPath,
+  actions,
 }: {
   steps: readonly SetupStep[];
   currentPath?: string;
+  actions?: Readonly<Record<string, ReactNode>>;
 }) {
   const next = firstUndoneStep(steps);
   return (
@@ -48,6 +54,7 @@ export function SetupChecklist({
                 {step.warning}
               </div>
             )}
+            {actions?.[step.id]}
           </li>
         );
       })}

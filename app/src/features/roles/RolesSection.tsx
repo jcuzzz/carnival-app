@@ -5,6 +5,7 @@ import { grantRole, listRoleAssignments, revokeRole } from "../../api/resources"
 import type { PlatformRole, RoleAssignment } from "../../api/types";
 import { useApiQuery, useInvalidate } from "../../api/useApiQuery";
 import { showToast } from "../../shell/toast";
+import { ROLES, roleLabel } from "./roles";
 
 /**
  * Assignment takes a UPN because a department-tenant administrator cannot look up an object id,
@@ -12,26 +13,7 @@ import { showToast } from "../../shell/toast";
  * role is not a row here.
  */
 
-export const ROLES: readonly { value: PlatformRole; label: string; note: string }[] = [
-  {
-    value: "SystemAdministrator",
-    label: "System administrator",
-    note: "School settings, roster imports and roles, plus everything a carnival administrator can do.",
-  },
-  {
-    value: "CarnivalAdministrator",
-    label: "Carnival administrator",
-    note: "Runs a carnival: events, entries, officials, races, results and finalisation.",
-  },
-  { value: "Recorder", label: "Recorder", note: "Marshals and records on the deck." },
-  { value: "Viewer", label: "Viewer", note: "Read-only." },
-];
-
 const UNBOUND_NOTE = "has not signed in yet";
-
-function roleLabel(role: PlatformRole): string {
-  return ROLES.find((r) => r.value === role)?.label ?? role;
-}
 
 function personLabel(row: RoleAssignment): string {
   return row.displayName?.trim() || row.upn;

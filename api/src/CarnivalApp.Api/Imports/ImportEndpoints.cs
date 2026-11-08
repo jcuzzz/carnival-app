@@ -132,7 +132,7 @@ public static class ImportEndpoints
     public sealed record ImportBatchSummary(
         Guid Id, string SourceFileName, ImportBatchStatus Status,
         int NewCount, int ChangedCount, int InactiveCount, int UnmatchedCount, int RejectedCount,
-        DateTimeOffset ImportedAtUtc, string ImportedBySubject);
+        DateTimeOffset ImportedAtUtc, string ImportedBySubject, string? ImportedByDisplayName);
 
     /// <summary>
     /// <see cref="Validation"/> is null when no document was stored or its blob is unreadable.
@@ -247,13 +247,14 @@ public static class ImportEndpoints
         var houses = (await school.GetAsync(ct)).Houses.Select(house => house.Code).ToArray();
         // Otherwise every active row fails as an unknown house.
         if (houses.Length == 0)
-            return ApiError.Conflict(ErrorCodes.HousesRequired,
+            return ApiError.Conflict(ErrorCodes.SchoolHousesRequired,
                 "The school has no houses yet, so no student's house can be checked. Add the houses "
                 + "in School settings, then upload the export again.");
 
         await using var stream = file.OpenReadStream();
         var outcome = await service.StageAsync(
-            stream, sourceFileName, mapping, competitionYear, houses, SessionActor.From(ctx), ct);
+            stream, sourceFileName, mapping, competitionYear, houses, SessionActor.From(ctx),
+            ctx.User.GetDisplayName(), ct);
         var summary = RosterImportService.Summarise(outcome.Document);
         return Results.Created($"/api/v1/imports/{outcome.Batch.Id}", new StageResponse(
             outcome.Batch.Id, outcome.Batch.Status, competitionYear, outcome.StructuralErrors,
@@ -264,13 +265,43 @@ public static class ImportEndpoints
     {
         // Ordered in memory: SQLite cannot ORDER BY a DateTimeOffset.
         var batches = await db.ImportBatches.AsNoTracking().ToListAsync(ct);
+        var names = await EarlierImporterNamesAsync(db, batches, ct);
         return Results.Ok(batches
             .OrderByDescending(b => b.ImportedAtUtc)
             .Select(b => new ImportBatchSummary(
                 b.Id, b.SourceFileName, b.Status,
                 b.NewCount, b.ChangedCount, b.InactiveCount, b.UnmatchedCount, b.RejectedCount,
-                b.ImportedAtUtc, b.ImportedBySubject))
+                b.ImportedAtUtc, b.ImportedBySubject,
+                b.ImportedByDisplayName ?? names.GetValueOrDefault(b.ImportedBySubject)))
             .ToList());
+    }
+
+    /// <summary>
+    /// Batches staged before the name was recorded: today's name of the local account or role
+    /// holder behind the subject, where one is known.
+    /// </summary>
+    private static async Task<Dictionary<string, string>> EarlierImporterNamesAsync(
+        CarnivalAppDbContext db, IEnumerable<ImportBatch> batches, CancellationToken ct)
+    {
+        var subjects = batches.Where(b => b.ImportedByDisplayName is null)
+            .Select(b => b.ImportedBySubject).Distinct().ToList();
+        if (subjects.Count == 0) return [];
+        var names = new Dictionary<string, string>();
+        var accountIds = subjects
+            .Select(s => LocalAccount.TryParseSubject(s, out var id) ? id : (Guid?)null)
+            .OfType<Guid>().ToList();
+        foreach (var account in await db.LocalAccounts.AsNoTracking()
+                     .Where(a => accountIds.Contains(a.Id))
+                     .Select(a => new { a.Id, a.DisplayName }).ToListAsync(ct))
+            names[LocalAccount.SubjectFor(account.Id)] = account.DisplayName;
+        var rows = await db.RoleAssignments.AsNoTracking()
+            .Where(r => r.SubjectId != null && subjects.Contains(r.SubjectId)
+                && r.SubjectDisplayName != null)
+            .Select(r => new { r.SubjectId, r.SubjectDisplayName, r.CreatedAtUtc }).ToListAsync(ct);
+        // Newest grant first, in memory: SQLite cannot ORDER BY a DateTimeOffset.
+        foreach (var row in rows.OrderByDescending(r => r.CreatedAtUtc))
+            names.TryAdd(row.SubjectId!, row.SubjectDisplayName!);
+        return names;
     }
 
     private static async Task<IResult> GetValidationAsync(Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
@@ -309,11 +340,11 @@ public static class ImportEndpoints
             return batch.Status switch
             {
                 ImportBatchStatus.Promoted => ApiError.Conflict(ErrorCodes.ImportRowsPurged,
-                    "The staged roster was discarded when this batch was promoted (ADR-0032). "
-                    + "The batch counts and the promotion audit record are the retained evidence."),
+                    "The staged rows were deleted when this batch updated the student list. "
+                    + "The batch counts and the audit record remain."),
                 ImportBatchStatus.Rejected => ApiError.Conflict(ErrorCodes.ImportRowsPurged,
-                    "The staged roster was discarded when this batch was rejected. "
-                    + "The batch counts and the review audit record are the retained evidence."),
+                    "The staged rows were deleted when this batch was rejected. "
+                    + "The batch counts and the audit record remain."),
                 _ => ApiError.Conflict(ErrorCodes.ImportBatchExpired, RosterImportService.ExpiredDetail),
             };
         var document = RosterImportService.GetDocument(batch);

@@ -392,13 +392,13 @@ export function EntryRow({
               {/* Own element: the e2e entryRow anchor matches this name exactly. */}
               <span>{entry.displayName}</span>
               {entry.overrideApplied && (
-                <span className="badge info" title="Category override applied (ADR-0003)">
+                <span className="badge info" title="Category override applied">
                   {" "}
                   override
                 </span>
               )}
               {addPending && (
-                <span className="badge muted" title="Queued to add — drains when online (ADR-0010)">
+                <span className="badge muted" title="Queued to add — sends when online">
                   {" "}
                   adding…
                 </span>

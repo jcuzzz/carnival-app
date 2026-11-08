@@ -17,15 +17,15 @@ Manage has a list headed **Set the carnival up**. It shows the four steps, ticks
 The carnival's ages come from the student list, so it goes in first.
 
 1. On Manage, press **Import the students**. The year is filled in from the carnival's date.
-2. Choose the CSV export from your student system. The app checks it and shows what will change.
-3. Read the table, then press **Approve and update the student list**.
+2. Choose the CSV export from your student system. The app checks it and shows what will change. If some rows can't be imported, a line above the table says how many and why, for example "2 have no house". The rest can still go in; fix those students in your student system and import again later.
+3. Read the table, then press **Approve and update the student list**. The app says what changed, for example "Student list updated: 96 students added".
 4. Press **Back to** *your carnival* to return to Manage.
 
 There is one student list for the whole school. If another carnival this year already imported it, this step is already done.
 
 If you are not a system administrator, the step says so: ask one to import the list.
 
-The import checks each student's house against the school's houses, so the school needs them first. If none are set up yet, the upload is refused: open **School**, follow **Set up your school** to School settings, add the houses and press **Save**.
+The import checks each student's house against the school's houses, so the school needs them first. If none are set up yet, the upload is refused and the screen offers **Add the houses in School settings**: add them there, press **Save**, and upload the file again.
 
 ## 2. Events
 
@@ -66,13 +66,13 @@ Press **Build the program** on Manage. If you added the standard events, a progr
 
 ## 4. Open
 
-Before you open, Manage lists anything worth checking under **Before you open**, such as:
+You open the carnival from the last step of the checklist on Manage. Under **4. Open**, Manage counts the events and divisions and lists anything worth checking under **Before you open**, such as:
 
 - a student list from a different year;
 - divisions for an age no student has;
-- divisions that aren't in the program, such as ages the program doesn't cover.
+- divisions that aren't in the program, such as ages the program doesn't cover, with an **Add them to the program** link.
 
-These are warnings only. You can still open.
+These are warnings only. You can still open. The buttons are in the same step:
 
 - **Open carnival** opens the carnival and every event in it, ready for results. Most schools want this.
 - **Open the carnival only** leaves each event waiting until you open it on the Deck, for schools that open events as they are called.

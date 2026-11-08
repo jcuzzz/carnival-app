@@ -391,6 +391,12 @@ public static class ErrorCodes
     /// <summary>The batch was never promoted and its staged rows aged out; upload the file again.</summary>
     public const string ImportBatchExpired = "IMPORT_BATCH_EXPIRED";
 
+    /// <summary>
+    /// 409: the school has no houses, so no row's house can be checked. Adding them in School
+    /// settings resolves it.
+    /// </summary>
+    public const string SchoolHousesRequired = "SCHOOL_HOUSES_REQUIRED";
+
     // ---- School settings --------------------------------------------------
     // A person is in front of the settings screen, so these refuse the save where startup defaults.
 

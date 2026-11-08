@@ -14,6 +14,10 @@ export const AUTO_FILL_NEEDS_LANE_COUNT_TEXT = "Set the lane count first.";
 export const ROSTER_REQUIRED_TEXT =
   "Import the student list first: this carnival's ages come from it.";
 
+/** A roster upload before the school has houses: every student's house is checked against them. */
+export const HOUSES_REQUIRED_TEXT =
+  "Add the school's houses first: each student's house in the export is checked against them. Then upload the file again.";
+
 export const IMPORT_BATCH_EXPIRED_TEXT =
   "This batch expired: a batch that is not promoted within 7 days of upload has its staged rows discarded. Upload the file again.";
 
@@ -45,6 +49,8 @@ const CODE_TEXT: Readonly<Record<string, string>> = {
   AUTO_FILL_LANES_REQUIRES_LANE_COUNT: AUTO_FILL_NEEDS_LANE_COUNT_TEXT,
   IMPORT_BATCH_EXPIRED: IMPORT_BATCH_EXPIRED_TEXT,
   ROSTER_REQUIRED: ROSTER_REQUIRED_TEXT,
+  // Not HOUSES_REQUIRED: that is School settings' field refusal, whose detail names the field.
+  SCHOOL_HOUSES_REQUIRED: HOUSES_REQUIRED_TEXT,
   // One sentence for every refusal: which part was wrong must not be readable from it.
   SIGN_IN_FAILED: SIGN_IN_FAILED_TEXT,
   CODE_INVALID:

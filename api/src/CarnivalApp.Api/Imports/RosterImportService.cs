@@ -45,6 +45,7 @@ public class RosterImportService(CarnivalAppDbContext db, AuditService audit)
         int competitionYear,
         IReadOnlyCollection<string> configuredHouses,
         AuditActor actor,
+        string? actorDisplayName = null,
         CancellationToken ct = default)
     {
         using var buffer = new MemoryStream();
@@ -84,6 +85,9 @@ public class RosterImportService(CarnivalAppDbContext db, AuditService audit)
             SourceFileHash = hash,
             MappingVersion = mapping.Version,
             ImportedBySubject = actor.Subject,
+            ImportedByDisplayName = actorDisplayName is { Length: > ImportBatch.MaxDisplayNameLength }
+                ? actorDisplayName[..ImportBatch.MaxDisplayNameLength]
+                : actorDisplayName,
             ImportedAtUtc = DateTimeOffset.UtcNow,
             Status = structuralErrors.Count > 0 ? ImportBatchStatus.ValidationFailed : ImportBatchStatus.Validated,
             NewCount = summary.New,

@@ -6,6 +6,7 @@ import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
 import { EventList } from "../features/events/EventList";
+import { carnivalTypeLabel } from "../features/events/eventLabels";
 import { EventTiles } from "../features/events/EventTiles";
 import { queuedProgressByEvent, UNDELIVERED_STATUSES } from "../features/events/progress";
 import { href } from "../router";
@@ -65,7 +66,7 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
         {c.name} <span className={`badge ${c.status === "Open" ? "ok" : "muted"}`}>{c.status}</span>
       </h1>
       <p className="row-sub">
-        {c.type} · {c.date}
+        {carnivalTypeLabel(c.type)} · {c.date}
         {c.venue ? ` · ${c.venue}` : ""} · rules {c.ruleVersion}
         <Freshness
           updatedAt={oldestUpdatedAt(carnival.updatedAt, events.updatedAt)}
@@ -106,6 +107,18 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
       )}
       {events.data && events.data.length > 0 && (
         <>
+          {c.status === "Draft" && (
+            <div className="alert notice" role="status">
+              This carnival isn't open yet.
+              {canManage && (
+                <>
+                  {" "}
+                  Results can be entered once it's opened on{" "}
+                  <a href={href(`/carnivals/${carnivalId}/manage`)}>Manage</a>.
+                </>
+              )}
+            </div>
+          )}
           <EventTiles events={events.data} subject={session?.subject ?? null} queued={queued} />
 
           <details className="subsection">

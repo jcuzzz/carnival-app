@@ -1,6 +1,9 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, type ReactNode } from "react";
 import AppShell from "./shell/AppShell";
 import { isDemoBuild } from "./api/client";
+import { keys } from "./api/queryKeys";
+import { getSchoolSettings } from "./api/resources";
+import { useApiQuery } from "./api/useApiQuery";
 import {
   previousSessionHasEnded,
   serverSessionEnabled,
@@ -215,16 +218,29 @@ export default function App() {
 
 function Home() {
   const selected = useSelectedCarnival();
+  const session = useSession();
   // A real build resolves /me after first paint; deciding now would decide against `roles: []`
   // and never re-decide.
   const settled = useEntraSessionSettled();
-  const canManage = hasRole(useSession(), "CarnivalAdministrator", "SystemAdministrator");
-  const target = selected && settled ? landingPath(selected.id, selected.status, canManage) : null;
+  const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
+  // ADR-0066 §1: the school comes first. Only a SystemAdministrator may read the settings; a failed
+  // read falls through to the carnivals rather than holding the landing. A demo visitor is never
+  // sent to School: the demo's school is already set up for them.
+  const systemAdmin = settled && !isDemoBuild() && hasRole(session, "SystemAdministrator");
+  const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: systemAdmin });
+  const deciding = !settled || (systemAdmin && settings.loading);
+  const target = deciding
+    ? null
+    : systemAdmin && settings.data?.setupConfirmed === false
+      ? "/school"
+      : selected
+        ? landingPath(selected.id, selected.status, canManage)
+        : null;
   useEffect(() => {
     // Replace, not push: a Back onto "/" would bounce straight here again.
     if (target) navigate(target, { replace: true });
   }, [target]);
-  if (!settled) return <p>Loading…</p>;
+  if (deciding) return <p>Loading…</p>;
   return target ? <p>Loading…</p> : <CarnivalsScreen autoSelect />;
 }
 

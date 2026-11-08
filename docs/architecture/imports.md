@@ -30,11 +30,14 @@ stateDiagram-v2
 
 Every transition writes an audit event: `import.stage` (file name, SHA-256, mapping version, status, competition year, counts), `import.approve` / `import.reject` (with the note as reason), `import.promote` (counts and year).
 
+`GET /api/v1/imports` lists the batches, newest first, with their counts, `importedBySubject` and `importedByDisplayName`. Staging records the importer's display name from the session. For a batch staged before the name was recorded, the list gives the current display name of the local account behind the subject, or the name on that subject's newest role assignment, and otherwise `null`.
+
 ## The upload
 
 - `multipart/form-data` with a `file` part and an optional `competitionYear` field.
 - The file must end in `.csv`; a content type, if present, must be `text/csv`, `text/plain`, `application/csv` or `application/vnd.ms-excel`. At most 2 MB (`413` beyond that; the limit is applied before the body is read).
 - Only the file's base name is kept (cut at `/` or `\`, at most 260 characters), with the SHA-256 of the bytes.
+- A school with no houses has nothing to check a student's house against, so the upload is refused with `409 SCHOOL_HOUSES_REQUIRED` and nothing is staged. Adding the houses in School settings lets the same file through. (`HOUSES_REQUIRED` is the different code School settings' save answers, `422` with `field: "houses"`, when it is sent no houses.)
 - Upload and the two review reads share the per-user `bulk-data` rate limit with the CSV exports (`RateLimiting:BulkDataPerMinute`, default 10).
 
 ### CSV parsing
@@ -167,7 +170,7 @@ Intake always stores the rows, so a batch without them was promoted, rejected or
 | Promoted or rejected | `409 IMPORT_ROWS_PURGED` | `409 IMPORT_BATCH_WRONG_STATE` |
 | Not promoted within 7 days of upload (any other status) | `409 IMPORT_BATCH_EXPIRED` | Approve or promote: `409 IMPORT_BATCH_EXPIRED`. Reject: accepted on a `Validated` batch, which becomes `Rejected` |
 
-`…/validation` returns the batch metadata with `validation: null` in every case. The review screen says the report was discarded on rejection, or that the batch expired and the file must be uploaded again, and disables the update and Promote buttons on an expired batch. Reject stays available, as the API accepts it.
+`…/validation` returns the batch metadata with `validation: null` in every case. For a promoted or rejected batch the review screen says that its row-by-row details, which named students, were deleted so that no second copy of the list is kept, and that the counts and the record of who acted remain; it shows nothing for the reconciliation's `409 IMPORT_ROWS_PURGED`. For an expired batch it says the batch expired and the file must be uploaded again, and disables both update buttons. Reject stays available, as the API accepts it.
 
 The 7-day expiry is applied by the retention sweep, a background job that runs at startup and daily on school deployments (PostgreSQL only; not in demo mode or local SQLite development). It clears the two columns and keeps the batch row and its counts. See [ADR-0032](../adr/0032-staged-rosters-are-not-kept.md) and [ADR-0062](../adr/0062-retention-windows-for-operational-data.md).
 
@@ -186,8 +189,13 @@ The batch becomes `Promoted`, the staged payloads are dropped, and the audit eve
 `/import` uploads a file, lists the batches, and reviews the selected one. A batch is named by its file and upload time; its id is never shown.
 
 - **Launched from a carnival.** The carnival checklist's Students step opens `/import?carnival=<id>` ([ADR-0066](../adr/0066-the-setup-flow.md) §4). The year picker pre-fills the carnival date's year when it lies within the range `…/defaults` allows; otherwise it keeps the server's default and says "This carnival is in 2030; a roster can be imported for 2025–2027 only". The back link leads to the carnival's Manage page instead of School. The roster is still school-wide: the carnival supplies only the default year.
-- **One press.** "Approve and update the student list" approves the batch and then promotes it, as two calls, so the batch passes through `Approved` and both `import.approve` and `import.promote` are written ([ADR-0066](../adr/0066-the-setup-flow.md) §8). If the promote fails, the batch stays `Approved`: the screen says so and offers Promote in place of the one press. Reject is its own button.
+- **Statuses in words.** The screen never shows the wire status: `Validated` reads "Ready to review", `ValidationFailed` "Can't be imported", `Approved` "Approved, list not yet updated", `Rejected` "Rejected", `Promoted` "Student list updated" (and `Staged` "Uploaded"). The "By" column shows `importedByDisplayName`, or the subject when there is none. The rejected-rows count is headed "Left out".
+- **A file with layout problems.** A `ValidationFailed` upload stays on screen as "This file can't update the student list: 2 problems with its layout.", and the validation section lists them under "This file can't update the student list. Problems with its layout:".
+- **Refused rows.** Above the issue table, one line counts every row an Error or Exception refuses and names each reason in words, most common first: "4 rows can't be imported: 2 repeat a student ID, 1 has no house, 1 has no birth date." Each code has its phrase (`MISSING_HOUSE` "has no house", `DUPLICATE_STKEY` "repeats a student ID", and so on); a code without one reads "has another problem". A row with a Warning only is not counted. The table below keeps the codes.
+- **One press.** "Approve and update the student list" approves the batch and then promotes it, as two calls, so the batch passes through `Approved` and both `import.approve` and `import.promote` are written ([ADR-0066](../adr/0066-the-setup-flow.md) §8). If the promote fails, the batch stays `Approved`: the screen says so and offers "Update the student list" in place of the one press. Reject is its own button.
+- **The result.** A promoted batch states what it did from its counts, leaving out the zeros: "Student list updated: 96 students added, 21 students marked as no longer enrolled, 4 rows left out." After the press it is a success notice; for an earlier batch, a plain line.
 - **The way back.** After a successful promote from a carnival, the screen offers "Back to *carnival name*", which leads to that carnival's Manage page.
+- **No houses yet.** A `SCHOOL_HOUSES_REQUIRED` refusal shows a notice with a link, "Add the houses in School settings", to `/school/settings`.
 - The file field reads "Student list: a CSV export from your student system". Development and demo builds add "Synthetic or de-identified data only in this build".
 
 ## Who can do what

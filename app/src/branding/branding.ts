@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { getBranding } from "../api/resources";
 import { db } from "../db/db";
+import { UNCONFIGURED_SCHOOL_NAME } from "../features/school/schoolSteps";
 import type { Branding } from "../api/types";
 import { color } from "../tokens.json";
 
@@ -83,8 +84,14 @@ export function monogramOf(schoolName: string | null): string | null {
   return initials.length > 0 ? initials.join("").toUpperCase() : null;
 }
 
+/** A school not yet named, or still carrying the install's placeholder, has no name to show. */
+export function schoolNameOf(name: string | null | undefined): string | null {
+  const text = name?.trim();
+  return text && text !== UNCONFIGURED_SCHOOL_NAME ? text : null;
+}
+
 export function applyBranding(branding: Branding): BrandingState {
-  const schoolName = branding.schoolName.trim() || null;
+  const schoolName = schoolNameOf(branding.schoolName);
   const brandColour = normaliseBrandColour(branding.brandColour);
   const next: BrandingState = { schoolName, brandColour, monogram: monogramOf(schoolName) };
 

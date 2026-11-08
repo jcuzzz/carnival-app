@@ -579,8 +579,8 @@ test("the setup checklist warning a roster imported for another year", async ({ 
     const checklist = page.locator("section").filter({
       has: page.getByRole("heading", { name: "Set the carnival up" }),
     });
-    // Scoped: Ready to open repeats the sentence under Carnival status.
-    await settled(checklist.getByText(`ages are for ${rosterYear}`, { exact: false }));
+    // First: Ready to open repeats the sentence under the Open step.
+    await settled(checklist.getByText(`ages are for ${rosterYear}`, { exact: false }).first());
     await captureRegion(page, checklist, "manage-checklist-roster-year", width);
   }
 });
@@ -844,16 +844,24 @@ test("Manage's Ready to open, warning before the open", async ({ page }) => {
       json: { ...(await response.json()), rosterAgeGroups: ["12", "13"], rosterYear },
     });
   });
-  const status = page.locator("section").filter({
-    has: page.getByRole("heading", { name: "Carnival status" }),
+  // While Draft, the checklist's Open step holds the check and both opens.
+  const openStep = page.locator("li").filter({
+    has: page.getByRole("button", { name: "Open carnival" }),
   });
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${adding.carnivalId}/manage`);
-    await settled(status.getByText("an age no current student has", { exact: false }));
-    await expect(status.getByText(`ages are for ${rosterYear}`, { exact: false })).toBeVisible();
-    await expect(status.getByRole("button", { name: "Open carnival" })).toBeVisible();
-    await expect(status.getByRole("button", { name: "Open the carnival only" })).toBeVisible();
-    await captureRegion(page, status, "manage-ready-to-open", width);
+    await settled(openStep.getByText("an age no current student has", { exact: false }));
+    await expect(openStep.getByText(`ages are for ${rosterYear}`, { exact: false })).toBeVisible();
+    await expect(openStep.getByRole("button", { name: "Open the carnival only" })).toBeVisible();
+    await captureRegion(page, openStep, "manage-ready-to-open", width);
+  }
+
+  // The same Draft carnival on the Deck: it has events, so a manager is told where it opens.
+  for (const width of WIDTHS) {
+    await page.goto(`/#/carnivals/${adding.carnivalId}`);
+    await settled(page.getByText("This carnival isn't open yet.", { exact: false }));
+    await expect(page.locator(".alert.notice").getByRole("link", { name: "Manage" })).toBeVisible();
+    await capture(page, "deck-draft-notice", width);
   }
 });
 
@@ -1426,17 +1434,58 @@ test("a fresh school: the School checklist and the empty carnival list", async (
   await page.route("**/api/v1/carnivals", (route) =>
     route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
   );
-  // Only the settings read is stubbed, so the shell header still shows the seeded branding name.
+  // A fresh install has no school name, so the header is the product's: "Carnival App" + trophy.
+  await page.route("**/api/v1/branding", (route) =>
+    route.fulfill({ json: { schoolName: "(unconfigured)", brandColour: null } }),
+  );
   await signIn(page);
 
   await page.goto("/#/school");
   await settled(page.getByRole("heading", { name: "Set up your school" }));
   await expect(page.getByText("Do this next")).toHaveCount(1);
+  await expect(page.locator(".shell-title")).toHaveText("Carnival App");
   for (const width of WIDTHS) await capture(page, "school-hub-setup", width);
 
   await page.goto("/#/carnivals");
   await settled(page.getByRole("link", { name: "Set up the school first" }));
   for (const width of WIDTHS) await capture(page, "carnivals-empty", width);
+});
+
+/** The dev server's sign-in picker: each persona with its roles in words. */
+test("the dev sign-in picker", async ({ page }) => {
+  await page.goto("/#/login");
+  await settled(page.getByRole("button", { name: "Alex Admin" }));
+  await expect(page.getByText("(ADR-", { exact: false })).toHaveCount(0);
+  for (const width of WIDTHS) await capture(page, "dev-login", width);
+});
+
+/**
+ * The shell header (ADR-0040 §3): before the school is named it reads "Carnival App" beside a
+ * trophy; named, it carries the monogram. Shot on the default navy and on a light yellow brand,
+ * whose ink flips to dark.
+ */
+test("the shell header: unnamed and named, on a dark and a light brand", async ({ page }) => {
+  const shots = [
+    { screen: "header-pre-name", schoolName: "(unconfigured)", brandColour: null },
+    { screen: "header-pre-name-yellow", schoolName: "(unconfigured)", brandColour: "#fbc02d" },
+    { screen: "header-named-yellow", schoolName: "Example Synthetic College", brandColour: "#fbc02d" },
+  ];
+  let branding = shots[0]!;
+  await page.route("**/api/v1/branding", (route) =>
+    route.fulfill({ json: { schoolName: branding.schoolName, brandColour: branding.brandColour } }),
+  );
+  await signIn(page);
+  const header = page.locator(".shell-header");
+  for (const shot of shots) {
+    branding = shot;
+    await page.goto("/#/carnivals");
+    await page.reload();
+    await settled(page.getByRole("heading", { name: "Carnivals", level: 1 }));
+    await expect(page.locator(".shell-title")).toHaveText(
+      shot.schoolName === "(unconfigured)" ? "Carnival App" : shot.schoolName,
+    );
+    for (const width of WIDTHS) await captureRegion(page, header, shot.screen, width);
+  }
 });
 
 test("the new carnival form, and a roster import with validation issues", async ({ page }) => {
@@ -1500,6 +1549,38 @@ test("the new carnival form, and a roster import with validation issues", async 
   await settled(page.getByRole("link", { name: /^Back to / }));
   await expect(page.locator(".toast")).toHaveCount(0);
   for (const width of WIDTHS) await capture(page, "import-promoted-back", width);
+  // The result line: what the update did, from the batch's own counts.
+  const result = page.locator(".card").filter({
+    has: page.getByRole("status").filter({ hasText: /^Student list updated: / }),
+  });
+  await settled(result);
+  for (const width of WIDTHS) await captureRegion(page, result, "import-result", width);
+});
+
+/**
+ * A school with no houses (ADR-0066 §2): the upload is refused and the screen points at School
+ * settings. The dev school has houses, so the refusal is answered here.
+ */
+test("a roster upload refused because the school has no houses", async ({ page }) => {
+  await signIn(page);
+  await page.route("**/api/v1/imports", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 409,
+          contentType: "application/problem+json",
+          json: {
+            status: 409,
+            error: "SCHOOL_HOUSES_REQUIRED",
+            detail: "The school has no houses, so no row's house can be checked.",
+          },
+        })
+      : route.fallback(),
+  );
+  await page.goto("/#/import");
+  await settled(page.getByLabel("Competition year"));
+  await page.locator("input[type=file]").setInputFiles("../data/synthetic/ST_SYNTH.csv");
+  await settled(page.getByRole("link", { name: "Add the houses in School settings" }));
+  for (const width of WIDTHS) await capture(page, "import-houses-required", width);
 });
 
 /**

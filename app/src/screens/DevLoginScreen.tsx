@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { PlatformRole } from "../api/types";
 import { signIn, signOut, useSession, type Session } from "../auth/session";
+import { roleLabel, roleListLabel } from "../features/roles/roles";
 import { resumeAfterSignIn } from "../api/syncSetup";
 import { navigate } from "../router";
 
@@ -66,13 +67,13 @@ export default function DevLoginScreen() {
       <h1>Sign in (development)</h1>
       <p className="row-sub">
         Dev-auth only: the picked official is sent as X-Dev-Subject / X-Dev-Roles and honoured by
-        the API only when its dev authentication is enabled. Real sign-in is Entra ID (ADR-0001).
+        the API only when its dev authentication is enabled. Real sign-in is Entra ID.
       </p>
 
       {session && (
         <div className="card">
           Signed in as <strong>{session.displayName}</strong> ({session.subject}) —{" "}
-          {session.roles.join(", ") || "no roles"}
+          {roleListLabel(session.roles)}
           <div className="button-row">
             <button onClick={() => signOut()}>Sign out</button>
           </div>
@@ -86,7 +87,7 @@ export default function DevLoginScreen() {
             <button className="row-link" onClick={() => complete(preset)}>
               <span className="row-main">
                 <span className="row-title">{preset.displayName}</span>
-                <span className="row-sub">{preset.roles.join(", ")}</span>
+                <span className="row-sub">{roleListLabel(preset.roles)}</span>
               </span>
             </button>
           </li>
@@ -120,7 +121,7 @@ export default function DevLoginScreen() {
                   checked={roles.includes(role)}
                   onChange={() => toggleRole(role)}
                 />
-                {role}
+                {roleLabel(role)}
               </label>
             ))}
           </div>

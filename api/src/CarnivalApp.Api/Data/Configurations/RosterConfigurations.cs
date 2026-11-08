@@ -64,6 +64,7 @@ public class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBatch>
         b.Property(x => x.SourceFileHash).HasMaxLength(64);
         b.Property(x => x.MappingVersion).HasMaxLength(64);
         b.Property(x => x.ImportedBySubject).HasMaxLength(128);
+        b.Property(x => x.ImportedByDisplayName).HasMaxLength(ImportBatch.MaxDisplayNameLength);
         b.Property(x => x.ReviewedBySubject).HasMaxLength(128);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
         b.HasIndex(x => x.ImportedAtUtc);

@@ -14,8 +14,17 @@ export interface ReadinessFacts {
   schedule: Schedule | null | undefined;
 }
 
+export type ReadinessWarningId = "rosterYear" | "unmatchedAges" | "outsideProgram" | "noEvents";
+
+export interface ReadinessWarning {
+  id: ReadinessWarningId;
+  text: string;
+  /** The label of a link to where it is fixed; the screen supplies the path. */
+  action?: string;
+}
+
 export interface Readiness {
-  warnings: string[];
+  warnings: ReadinessWarning[];
   /** "12 events · 96 divisions"; null while unread or empty. */
   summary: string | null;
 }
@@ -37,11 +46,11 @@ export function rosterYearMismatch(
 }
 
 export function readiness(facts: ReadinessFacts): Readiness {
-  const warnings: string[] = [];
+  const warnings: ReadinessWarning[] = [];
   const events = facts.events;
 
   const years = rosterYearMismatch(facts.rosterYear, facts.carnival.date);
-  if (years) warnings.push(years.text);
+  if (years) warnings.push({ id: "rosterYear", text: years.text });
 
   // With no roster at all, the Students step already says so.
   if (events !== undefined && facts.rosterAgeGroups !== undefined && facts.rosterYear !== null) {
@@ -49,11 +58,13 @@ export function readiness(facts: ReadinessFacts): Readiness {
     const unmatched = events.filter((e) => e.ageGroup !== ALL_AGES && !roster.has(e.ageGroup));
     if (unmatched.length > 0) {
       const ages = orderCodes(unmatched.map((e) => e.ageGroup));
-      warnings.push(
-        `${counted(unmatched.length, "division")} ${unmatched.length === 1 ? "has" : "have"} ` +
+      warnings.push({
+        id: "unmatchedAges",
+        text:
+          `${counted(unmatched.length, "division")} ${unmatched.length === 1 ? "has" : "have"} ` +
           `an age no current student has (${ages.length === 1 ? "age" : "ages"} ` +
           `${codesSummary(ages)}).`,
-      );
+      });
     }
   }
 
@@ -64,13 +75,21 @@ export function readiness(facts: ReadinessFacts): Readiness {
   if (events !== undefined && slots > 0) {
     const outside = events.filter((e) => e.scheduleSlotId == null).length;
     if (outside > 0) {
-      warnings.push(
-        `${counted(outside, "division")} ${outside === 1 ? "is" : "are"} not in the program.`,
-      );
+      const one = outside === 1;
+      warnings.push({
+        id: "outsideProgram",
+        text:
+          `${counted(outside, "division")} ${one ? "isn’t" : "aren’t"} in the program, so ` +
+          `${one ? "it won’t" : "they won’t"} appear on the printed running order. ` +
+          `Leave ${one ? "it if it runs" : "them if they run"} separately.`,
+        action: one ? "Add it to the program" : "Add them to the program",
+      });
     }
   }
 
-  if (events !== undefined && events.length === 0) warnings.push("No events yet.");
+  if (events !== undefined && events.length === 0) {
+    warnings.push({ id: "noEvents", text: "No events yet." });
+  }
 
   const definitions = new Set((events ?? []).map((e) => e.eventDefinitionId)).size;
   return {

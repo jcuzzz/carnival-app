@@ -186,7 +186,7 @@ describe("ManageScreen", () => {
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    await screen.findByRole("heading", { name: "Carnival status" });
+    await screen.findByRole("button", { name: "Open carnival" });
     expect(screen.queryByRole("heading", { name: "Start from the standard events" })).toBeNull();
     expect(screen.queryByLabelText("Carnival template")).toBeNull();
     expect(screen.queryByRole("button", { name: /standard events/ })).toBeNull();
@@ -485,7 +485,9 @@ describe("ManageScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
 
     await waitFor(() => expect(changeCarnivalStatus).toHaveBeenCalledWith("c-1", "Open"));
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    // Beside the buttons in step 4, not at the top of Manage.
+    expect(screen.getByText(/^4\. Open/).closest("li")!.contains(alert)).toBe(true);
     expect(openScheduledEvents).not.toHaveBeenCalled();
   });
 
@@ -527,20 +529,41 @@ describe("ManageScreen", () => {
     } as never);
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 
-    const status = (await screen.findByRole("heading", { name: "Carnival status" })).closest(
-      "section",
-    )!;
+    const step = (await screen.findByText(/^4\. Open/)).closest("li")!;
     await waitFor(() =>
-      expect([...status.querySelectorAll(".alert.warn li")].map((li) => li.textContent)).toEqual([
+      expect([...step.querySelectorAll(".alert.warn li")].map((li) => li.textContent)).toEqual([
         "The student list’s ages are for 2026, but this carnival is in 2027.",
         "1 division has an age no current student has (age 19).",
-        "1 division is not in the program.",
+        "1 division isn’t in the program, so it won’t appear on the printed running order. " +
+          "Leave it if it runs separately. Add it to the program",
       ]),
     );
-    expect(status.textContent).toContain("1 event · 2 divisions");
+    expect(
+      (screen.getByRole("link", { name: "Add it to the program" }) as HTMLAnchorElement).getAttribute(
+        "href",
+      ),
+    ).toBe("#/carnivals/c-1/schedule");
+    expect(step.textContent).toContain("1 event · 2 divisions");
     expect(
       (screen.getByRole("button", { name: "Open carnival" }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  it("links divisions outside the program to the program builder", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([
+      { ...division("e-1"), scheduleSlotId: "sl-1" },
+      { ...division("e-2"), scheduleSlotId: null },
+      { ...division("e-3"), scheduleSlotId: null },
+    ]);
+    vi.mocked(getCarnivalSchedule).mockResolvedValue({
+      carnivalId: "c-1",
+      streams: [{ id: "s-1", name: "Pool", sortOrder: 0, slots: [{ id: "sl-1" }] }],
+    } as never);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const link = await screen.findByRole("link", { name: "Add them to the program" });
+    expect(link.getAttribute("href")).toBe("#/carnivals/c-1/schedule");
   });
 
   it("shows no readiness check once the carnival is open", async () => {
@@ -601,6 +624,61 @@ describe("ManageScreen", () => {
 
     await screen.findByText(/Finalised carnivals cannot be reopened/);
     expect(screen.queryByRole("button", { name: /Open all divisions/ })).toBeNull();
+  });
+
+  it("opens from the checklist's last step while Draft, with no status section", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const secondary = await screen.findByRole("button", { name: "Open the carnival only" });
+    const step = screen.getByText(/^4\. Open/).closest("li")!;
+    expect(step.contains(screen.getByRole("button", { name: "Open carnival" }))).toBe(true);
+    expect(step.contains(secondary)).toBe(true);
+    expect(step.textContent).toContain(
+      "With “Open the carnival only”, every division stays unopened, so you can open them one " +
+        "at a time on the day.",
+    );
+    expect(screen.queryByRole("heading", { name: "Carnival status" })).toBeNull();
+  });
+
+  it("keeps the Carnival status section, not the checklist, for an open carnival", async () => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    const close = await screen.findByRole("button", { name: "Close carnival" });
+    const status = screen.getByRole("heading", { name: "Carnival status" }).closest("section")!;
+    expect(status.contains(close)).toBe(true);
+    expect(status.contains(screen.getByRole("button", { name: "Open all divisions (1)" }))).toBe(
+      true,
+    );
+    const step = screen.getByText(/^4\. Open/).closest("li")!;
+    expect(step.querySelector("button")).toBeNull();
+  });
+
+  // Design system: one button.primary per screen.
+  it.each([
+    ["Draft", ["Open carnival"]],
+    ["Open", ["Close carnival"]],
+    ["Closed", []],
+    ["Finalised", []],
+  ] as const)("keeps to at most one primary while %s", async (status, primaries) => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival(status));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByText(/^4\. Open/);
+    if (status !== "Finalised") {
+      await screen.findByRole("heading", { name: "Lanes" });
+      fireEvent.click(screen.getByRole("button", { name: "Scoring rules…" }));
+      expect(screen.getByRole("button", { name: "Save scoring rules" }).className).toBe("");
+      expect(screen.getByRole("button", { name: "Save lane settings" }).className).toBe("");
+      expect(screen.getByRole("button", { name: "Award points" }).className).toBe("");
+    } else {
+      await screen.findByText(/Finalised carnivals cannot be reopened/);
+    }
+    const found = [...document.querySelectorAll("button.primary")].map((b) => b.textContent);
+    expect(found).toEqual(primaries);
   });
 
   // ---- The device fleet (ADR-0034) ----

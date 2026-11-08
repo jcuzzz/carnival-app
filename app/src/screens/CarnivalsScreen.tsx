@@ -8,6 +8,7 @@ import { landingPath } from "../carnivals/landing";
 import { getSelectedCarnival, selectCarnival } from "../carnivals/selectedCarnival";
 import { SWITCHER_ROW_LIMIT, switcherList } from "../carnivals/switcherModel";
 import { NewCarnivalForm } from "../features/carnivals/NewCarnivalForm";
+import { carnivalTypeLabel } from "../features/events/eventLabels";
 import { schoolSetUp } from "../features/school/schoolSteps";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
@@ -108,7 +109,7 @@ export default function CarnivalsScreen({ autoSelect = false }: { autoSelect?: b
                 <span className="row-main">
                   <span className="row-title">{carnival.name}</span>
                   <span className="row-sub">
-                    {carnival.type} · {carnival.date}
+                    {carnivalTypeLabel(carnival.type)} · {carnival.date}
                     {carnival.venue ? ` · ${carnival.venue}` : ""}
                   </span>
                 </span>

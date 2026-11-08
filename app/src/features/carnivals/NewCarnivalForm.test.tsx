@@ -41,6 +41,23 @@ describe("NewCarnivalForm", () => {
     expect((screen.getByLabelText("Lanes per venue") as HTMLInputElement).value).toBe("8");
   });
 
+  it("spells cross country as words while sending the wire value", async () => {
+    renderWithQuery(<NewCarnivalForm onCancel={vi.fn()} />);
+    const type = screen.getByLabelText("Type") as HTMLSelectElement;
+    expect([...type.options].map((o) => [o.value, o.textContent])).toEqual([
+      ["Swimming", "Swimming"],
+      ["Athletics", "Athletics"],
+      ["CrossCountry", "Cross country"],
+      ["Other", "Other"],
+    ]);
+    fillRequired();
+    fireEvent.change(type, { target: { value: "CrossCountry" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await waitFor(() => expect(createCarnival).toHaveBeenCalledTimes(1));
+    expect(body()).toMatchObject({ type: "CrossCountry" });
+  });
+
   it("warns rather than creates when the ticked box is left with no lane count", () => {
     renderWithQuery(<NewCarnivalForm onCancel={vi.fn()} />);
     fillRequired();

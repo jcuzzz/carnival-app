@@ -30,6 +30,17 @@ public static class DevelopmentSeeder
     public static async Task SeedAsync(IServiceProvider services, CancellationToken ct = default)
     {
         var db = services.GetRequiredService<CarnivalAppDbContext>();
+        // A seeded school is a set-up one, so School shows no setup list for it. Set before the
+        // early return: a database seeded before the marker existed must get it too.
+        var school = await db.SchoolConfigurations.TheSchool().FirstAsync(ct);
+        var confirmed = SchoolSettings.SerialiseSetupConfirmed(DateTimeOffset.UtcNow, school.SettingsJson);
+        if (confirmed != school.SettingsJson)
+        {
+            school.SettingsJson = confirmed;
+            await db.SaveChangesAsync(ct);
+            services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
+        }
+
         // The school row is the bootstrap's; a roster or carnival means seeded, or a real dataset.
         if (await db.Students.AnyAsync(ct) || await db.Carnivals.AnyAsync(ct))
             return;
@@ -51,7 +62,7 @@ public static class DevelopmentSeeder
 
         using var csvStream = new MemoryStream(Encoding.UTF8.GetBytes(subsetCsv));
         var outcome = await importService.StageAsync(csvStream, "ST_SYNTH.dev-seed.csv", mapping,
-            SyntheticCompetitionYear, houses, actor, ct);
+            SyntheticCompetitionYear, houses, actor, ct: ct);
         if (outcome.StructuralErrors.Count > 0)
             throw new InvalidOperationException(
                 $"Dev seed roster failed validation: {string.Join("; ", outcome.StructuralErrors)}");
@@ -184,11 +195,7 @@ public static class DevelopmentSeeder
                 eventDefinition = definition.Code,
                 program = new { stream = stream.Name, slots = 3 },
             });
-        // A seeded school is a set-up one: School shows no setup list for it.
-        var school = await db.SchoolConfigurations.TheSchool().FirstAsync(ct);
-        school.SettingsJson = SchoolSettings.SerialiseSetupConfirmed(now, school.SettingsJson);
         await db.SaveChangesAsync(ct);
-        services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
 
         logger.LogInformation(
             "Seeded development database: {Students} synthetic students, carnival '{Carnival}' with {Events} events ({Social} Social-tier).",

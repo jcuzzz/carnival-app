@@ -22,7 +22,7 @@ import { readiness } from "../features/carnivals/readiness";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
 import { setupSteps } from "../features/carnivals/setupSteps";
 import { counted } from "../features/events/counted";
-import { carnivalSport } from "../features/events/eventLabels";
+import { carnivalSport, carnivalTypeLabel } from "../features/events/eventLabels";
 import { DEVICE_TICK_MS, DevicesPanel, useNow } from "../features/devices/DevicesPanel";
 import { AdjustmentsPanel } from "../features/standings/AdjustmentsPanel";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
@@ -115,7 +115,9 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
   }, [pendingCount]);
 
   async function change(to: CarnivalStatus, reason?: string): Promise<boolean> {
-    setError(null);
+    // While Draft the open is pressed inside checklist step 4, so its refusal shows there.
+    const report = c?.status === "Draft" ? setOpenError : setError;
+    report(null);
     setBusy(true);
     try {
       await (reason === undefined
@@ -127,7 +129,7 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
       return true;
     } catch (err) {
       // A direct write: the "saved on this device" default would be false.
-      setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      report(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
       return false;
     } finally {
       setBusy(false);
@@ -208,22 +210,73 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
     schedule: schedule.data,
   });
   const scheduled = (events.data ?? []).filter((e) => e.status === "Scheduled").length;
-  const ready =
-    c.status === "Draft"
-      ? readiness({
-          carnival: c,
-          events: events.data,
-          rosterAgeGroups: settings.data?.rosterAgeGroups,
-          rosterYear: settings.data?.rosterYear,
-          schedule: schedule.data,
-        })
-      : null;
+  const draft = c.status === "Draft";
+  const openErrorAlert = openError !== null && (
+    <div className="alert error" role="alert">
+      {openError}
+    </div>
+  );
+  // While Draft, opening is the checklist's last step, so it happens there (ADR-0066 §5–6).
+  const ready = draft
+    ? readiness({
+        carnival: c,
+        events: events.data,
+        rosterAgeGroups: settings.data?.rosterAgeGroups,
+        rosterYear: settings.data?.rosterYear,
+        schedule: schedule.data,
+      })
+    : null;
+  const openStep = ready && (
+    <>
+      {ready.summary && <p className="row-sub mono">{ready.summary}</p>}
+      {ready.warnings.length > 0 && (
+        <div className="alert warn" role="status">
+          <strong>Before you open</strong>
+          <ul>
+            {ready.warnings.map((warning) => (
+              <li key={warning.id}>
+                {warning.text}
+                {warning.id === "outsideProgram" && warning.action && (
+                  <>
+                    {" "}
+                    <a href={href(`/carnivals/${carnivalId}/schedule`)}>{warning.action}</a>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="button-row">
+        {/* Every division is born Scheduled, so the primary open opens them too. */}
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => void openCarnivalAndDivisions()}
+        >
+          {busy ? "Saving…" : "Open carnival"}
+        </button>
+        {scheduled > 0 && (
+          <button disabled={busy} onClick={() => void change("Open")}>
+            {busy ? "Saving…" : "Open the carnival only"}
+          </button>
+        )}
+      </div>
+      {scheduled > 0 && (
+        <p className="row-sub">
+          With “Open the carnival only”, every division stays unopened, so you can open them one
+          at a time on the day.
+        </p>
+      )}
+      {openErrorAlert}
+    </>
+  );
 
   return (
     <>
       <h1>Manage carnival</h1>
       <p className="row-sub">
-        {c.name} · {c.type} · {c.date} · {c.status}
+        {c.name} · {carnivalTypeLabel(c.type)} · {c.date} · {c.status}
       </p>
       {carnival.error && (
         <div className="alert error" role="alert">
@@ -238,7 +291,11 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
 
       <section className="subsection">
         <h2>Set the carnival up</h2>
-        <SetupChecklist steps={steps} currentPath={`/carnivals/${carnivalId}/manage`} />
+        <SetupChecklist
+          steps={steps}
+          currentPath={`/carnivals/${carnivalId}/manage`}
+          actions={openStep ? { open: openStep } : undefined}
+        />
       </section>
 
       <section className="subsection">
@@ -298,76 +355,41 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
         />
       )}
 
-      <section className="subsection">
-        <h2>Carnival status</h2>
-        <p className="row-sub">
-          Currently <strong>{c.status}</strong>. Closing is recoverable; finalising is not.
-        </p>
-        {isFinal && <p className="row-sub">Finalised carnivals cannot be reopened.</p>}
-        {ready && (
-          <>
-            {ready.summary && <p className="row-sub mono">{ready.summary}</p>}
-            {ready.warnings.length > 0 && (
-              <div className="alert warn" role="status">
-                <strong>Before you open</strong>
-                <ul>
-                  {ready.warnings.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-        <div className="button-row">
-          {/* Every division is born Scheduled, so the primary open opens them too. */}
-          {c.status === "Draft" ? (
-            <>
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => void openCarnivalAndDivisions()}
-              >
-                {busy ? "Saving…" : "Open carnival"}
-              </button>
-              {scheduled > 0 && (
-                <button disabled={busy} onClick={() => void change("Open")}>
-                  {busy ? "Saving…" : "Open the carnival only"}
-                </button>
-              )}
-            </>
-          ) : (
-            next === "Closed" && (
+      {!draft && (
+        <section className="subsection">
+          <h2>Carnival status</h2>
+          <p className="row-sub">
+            Currently <strong>{c.status}</strong>. Closing is recoverable; finalising is not.
+          </p>
+          {isFinal && <p className="row-sub">Finalised carnivals cannot be reopened.</p>}
+          <div className="button-row">
+            {next === "Closed" && (
               <button className="primary" disabled={busy} onClick={() => void change(next)}>
                 {busy ? "Saving…" : "Close carnival"}
               </button>
-            )
-          )}
-          {c.status !== "Draft" && !isFinal && scheduled > 0 && (
-            <button disabled={busy} onClick={() => void openAll()}>
-              {busy ? "Saving…" : `Open all divisions (${scheduled})`}
-            </button>
-          )}
-          {/* The escape hatch for a carnival closed one result early: the server
-              admits Closed → Open, and without this the only way there is curl. */}
-          {c.status === "Closed" && (
-            <button disabled={busy} onClick={() => void change("Open")}>
-              {busy ? "Saving…" : "Reopen carnival"}
-            </button>
-          )}
-        </div>
-        {openError !== null && (
-          <div className="alert error" role="alert">
-            {openError}
+            )}
+            {!isFinal && scheduled > 0 && (
+              <button disabled={busy} onClick={() => void openAll()}>
+                {busy ? "Saving…" : `Open all divisions (${scheduled})`}
+              </button>
+            )}
+            {/* The escape hatch for a carnival closed one result early: the server
+                admits Closed → Open, and without this the only way there is curl. */}
+            {c.status === "Closed" && (
+              <button disabled={busy} onClick={() => void change("Open")}>
+                {busy ? "Saving…" : "Reopen carnival"}
+              </button>
+            )}
           </div>
-        )}
-        {c.status === "Closed" && scheduled > 0 && (
-          <p className="row-sub">
-            Opening divisions on a Closed carnival readies them; results are still only accepted
-            once the carnival is reopened.
-          </p>
-        )}
-      </section>
+          {openErrorAlert}
+          {c.status === "Closed" && scheduled > 0 && (
+            <p className="row-sub">
+              Opening divisions on a Closed carnival readies them; results are still only accepted
+              once the carnival is reopened.
+            </p>
+          )}
+        </section>
+      )}
 
       {next === "Finalised" && (
         <section className="subsection danger-zone">

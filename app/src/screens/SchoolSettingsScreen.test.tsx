@@ -126,6 +126,8 @@ describe("SchoolSettingsScreen", () => {
     renderWithQuery(<SchoolSettingsScreen />);
 
     expect(((await screen.findByLabelText("School name")) as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Name the school and add its houses, then press Save.")).toBeTruthy();
+    expect(screen.queryByText(/Check the name and the houses/)).toBeNull();
   });
 
   it("is name, brand and houses only — roles and templates moved (ADR-0055 §1)", async () => {

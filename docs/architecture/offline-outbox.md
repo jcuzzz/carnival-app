@@ -223,7 +223,7 @@ Being offline alone never raises the banner. The banner re-evaluates on a 15-sec
 
 While the device is offline or the server is unreachable, the shell's connectivity strip (`shell/AppShell.tsx`) names the backlog instead: "Offline" or "Can't reach the server", how many captures are waiting, and that they are saved on the device. It reads the same queue counts as the banner, so the two never disagree.
 
-The header's outbox chip (`shell/OutboxIndicator.tsx`) shows the counts at all times: pending, needing attention, paused, or all synced.
+The header's outbox chip (`shell/OutboxIndicator.tsx`) shows the counts at all times: pending, needing attention, paused, or all synced. It is a dark pill whatever the school's colour, so its state dot reads on a light brand as well as a dark one.
 
 ## The outbox screen
 

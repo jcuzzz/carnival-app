@@ -6,7 +6,10 @@ import type { CarnivalType } from "../../api/types";
 import { useInvalidate } from "../../api/useApiQuery";
 import { landingPath } from "../../carnivals/landing";
 import { navigate } from "../../router";
+import { carnivalTypeLabel } from "../events/eventLabels";
 import { LANE_COUNT_INVALID_TEXT, parseLaneCount } from "../races/laneCountField";
+
+const CARNIVAL_TYPES: readonly CarnivalType[] = ["Swimming", "Athletics", "CrossCountry", "Other"];
 
 export const CREATED_WITHOUT_ID_TEXT =
   "The server accepted the carnival but did not say which one it made — find it in the list before creating it again.";
@@ -82,10 +85,11 @@ export function NewCarnivalForm({ onCancel }: { onCancel: () => void }) {
         <label className="field">
           <span>Type</span>
           <select value={type} onChange={(e) => setType(e.target.value as CarnivalType)}>
-            <option>Swimming</option>
-            <option>Athletics</option>
-            <option>CrossCountry</option>
-            <option>Other</option>
+            {CARNIVAL_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {carnivalTypeLabel(t)}
+              </option>
+            ))}
           </select>
         </label>
         <label className="field">

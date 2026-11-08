@@ -161,7 +161,7 @@ export function AddEntry({
   async function add(student: EligibleStudent) {
     if (blocked) return;
     if (!actorSubject) {
-      setError("Sign in to add entries — the actor is captured on every add (ADR-0006).");
+      setError("Sign in to add entries: every entry records who added it.");
       return;
     }
     if (justAdded.has(student.studentId) || enteredStudentIds.has(student.studentId)) return;

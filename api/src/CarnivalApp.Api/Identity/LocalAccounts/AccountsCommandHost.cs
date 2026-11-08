@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using CarnivalApp.Api.Data;
 
 namespace CarnivalApp.Api.Identity.LocalAccounts;
@@ -18,8 +20,11 @@ public static class AccountsCommandHost
         {
             await using var scope = services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
-            // The Development SQLite loop is created, not migrated.
-            if (db.Database.IsNpgsql() && (await db.Database.GetPendingMigrationsAsync()).Any())
+            // The Development SQLite loop is created, not migrated. An empty database is refused before
+            // EF reads its missing history table and logs that failed read as an error.
+            if (db.Database.IsNpgsql()
+                && (!await db.GetService<IRelationalDatabaseCreator>().HasTablesAsync()
+                    || (await db.Database.GetPendingMigrationsAsync()).Any()))
             {
                 await error.WriteLineAsync(NotMigrated);
                 return AccountsCommand.Failure;

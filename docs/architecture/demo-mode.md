@@ -69,7 +69,7 @@ Creating and dropping databases runs on a separate connection, `ConnectionString
 
 ## The template
 
-The template database (`Demo:TemplateDatabase`, default `carnival_demo_template`) holds the demonstration school: houses and branding, a promoted synthetic roster, a record book and a swimming carnival part-way through the day. A demo host never migrates or bootstraps databases at startup: the template is migrated and seeded when it is built, and a schema change reaches visitors only by rebuilding the template and redeploying. The scripts that build the template and deploy a demo host are not yet in this repository.
+The template database (`Demo:TemplateDatabase`, default `carnival_demo_template`) holds the demonstration school: houses and branding, a promoted synthetic roster, a record book and a swimming carnival part-way through the day. Its school row must carry `setupConfirmedAtUtc` in `SettingsJson` ([data model](data-model.md#school-configuration)); without it every visitor's School page opens on "Set up your school" ([ADR-0066](../adr/0066-the-setup-flow.md) §2). A demo host never migrates or bootstraps databases at startup: the template is migrated and seeded when it is built, and a schema change reaches visitors only by rebuilding the template and redeploying. The scripts that build the template and deploy a demo host are not yet in this repository.
 
 Before a visitor has a session, `GET /api/v1/branding` answers from `Demo:SchoolName` (default "Example Synthetic College") without opening any database, so the landing page can paint and the template is never connected to.
 

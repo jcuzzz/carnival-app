@@ -26,11 +26,9 @@ export function ReconciliationSection({
   }, [report, filter]);
 
   if (state.loading) return <p>Loading reconciliation…</p>;
-  // Promotion purges the staged rows: that 409 is a finished state, not a failure — the counts
-  // and the audit row are the durable record.
-  if (state.error instanceof ApiError && state.error.code === "IMPORT_ROWS_PURGED") {
-    return <div className="alert notice">Reconciliation preview: {state.error.message}</div>;
-  }
+  // Promotion and rejection delete the staged rows: a finished state, not a failure, and the
+  // validation section above already says so.
+  if (state.error instanceof ApiError && state.error.code === "IMPORT_ROWS_PURGED") return null;
   if (state.error instanceof ApiError && state.error.code === "IMPORT_BATCH_EXPIRED") {
     return <div className="alert notice">{IMPORT_BATCH_EXPIRED_TEXT}</div>;
   }

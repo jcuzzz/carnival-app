@@ -94,3 +94,50 @@ describe("CarnivalDetailScreen — the empty deck", () => {
     },
   );
 });
+
+describe("CarnivalDetailScreen — a Draft carnival with events", () => {
+  const events = [
+    { id: "e-1", carnivalId: "c-1", eventDefinitionId: "def-1", status: "Scheduled" } as CarnivalEvent,
+  ];
+
+  beforeEach(() => {
+    vi.mocked(listCarnivalEvents).mockResolvedValue(events);
+  });
+
+  it("tells a manager results wait on opening it on Manage, with the link", async () => {
+    renderWithQuery(<CarnivalDetailScreen carnivalId="c-1" />);
+
+    const notice = await screen.findByText(/^This carnival isn't open yet\./);
+    expect(notice.textContent).toBe(
+      "This carnival isn't open yet. Results can be entered once it's opened on Manage.",
+    );
+    expect(screen.getByRole("link", { name: "Manage" }).getAttribute("href")).toBe(
+      "#/carnivals/c-1/manage",
+    );
+  });
+
+  it("tells anyone else only that it isn't open", async () => {
+    signIn({ subject: "s2", displayName: "Rae Recorder", roles: ["Recorder"] });
+    renderWithQuery(<CarnivalDetailScreen carnivalId="c-1" />);
+
+    expect((await screen.findByText(/^This carnival isn't open yet\./)).textContent).toBe(
+      "This carnival isn't open yet.",
+    );
+    expect(screen.queryByRole("link", { name: "Manage" })).toBeNull();
+  });
+
+  it("says nothing once the carnival is open", async () => {
+    vi.mocked(getCarnival).mockResolvedValue({ ...carnival, status: "Open" });
+    renderWithQuery(<CarnivalDetailScreen carnivalId="c-1" />);
+
+    await screen.findByText(/Find an event/);
+    expect(screen.queryByText(/isn't open yet/)).toBeNull();
+  });
+
+  it("names a cross-country carnival in words", async () => {
+    vi.mocked(getCarnival).mockResolvedValue({ ...carnival, type: "CrossCountry" });
+    renderWithQuery(<CarnivalDetailScreen carnivalId="c-1" />);
+
+    expect(await screen.findByText(/^Cross country · 2027-03-06/)).toBeTruthy();
+  });
+});

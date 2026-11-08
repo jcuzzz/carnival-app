@@ -6,6 +6,7 @@ import { useApiQuery, useInvalidate, type ApiState } from "../../api/useApiQuery
 import type { AdjustmentCreatePayload } from "../../api/outboxTransport";
 import type { CarnivalSettings, HousePointsAdjustment } from "../../api/types";
 import { submitAdjustmentViaOutbox } from "../../adjustments/submitAdjustment";
+import { houseNameOf, useHouseMarks } from "../../branding/houseMarks";
 import { showToast } from "../../shell/toast";
 import type { OutboxItem } from "../../db/db";
 
@@ -27,6 +28,9 @@ export function AdjustmentsPanel({
   actorDisplayName?: string;
 }) {
   const houses = useApiQuery(keys.houses(), () => listHouses());
+  // The code stays the value sent; the school's name for it is what is read.
+  const marks = useHouseMarks();
+  const houseName = (code: string) => houseNameOf(marks, code);
   const invalidate = useInvalidate();
   const [house, setHouse] = useState("");
   const [category, setCategory] = useState("");
@@ -44,7 +48,7 @@ export function AdjustmentsPanel({
     e.preventDefault();
     setError(null);
     if (!actorSubject) {
-      setError("Sign in to award bonus points — the actor is captured on every award (ADR-0005).");
+      setError("Sign in to award bonus points: every award records who made it.");
       return;
     }
     const pts = Number(points);
@@ -68,7 +72,7 @@ export function AdjustmentsPanel({
         actorSubject,
         ...(actorDisplayName !== undefined ? { actorDisplayName } : {}),
       });
-      showToast(`Queued ${pts > 0 ? "+" : ""}${pts} for ${house} — syncing.`);
+      showToast(`Queued ${pts > 0 ? "+" : ""}${pts} for ${houseName(house)} — syncing.`);
       setPoints("");
       setReason("");
     } catch (err) {
@@ -102,7 +106,7 @@ export function AdjustmentsPanel({
     <section className="subsection">
       <h2>Novelty &amp; bonus points</h2>
       <p className="row-sub">
-        Discretionary house awards — novelty events, best dressed, spirit (ADR-0005). Separate from
+        Discretionary house awards — novelty events, best dressed, spirit. Separate from
         competition results; never a student record.
       </p>
 
@@ -119,7 +123,9 @@ export function AdjustmentsPanel({
               <select value={house} onChange={(e) => setHouse(e.target.value)}>
                 <option value="">— pick —</option>
                 {(houses.data ?? []).map((h) => (
-                  <option key={h} value={h}>{h}</option>
+                  <option key={h} value={h}>
+                    {houseName(h)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -147,7 +153,7 @@ export function AdjustmentsPanel({
               <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Best dressed — Wattle" />
             </label>
           </div>
-          <button className="primary" type="submit" disabled={awarding}>
+          <button type="submit" disabled={awarding}>
             {awarding ? "Queueing…" : "Award points"}
           </button>
         </form>
@@ -162,7 +168,8 @@ export function AdjustmentsPanel({
                 <div className="entry-row">
                   <span className="row-main">
                     <span className="row-title">
-                      {p.houseCode} {p.points > 0 ? "+" : ""}{p.points} · {p.category}
+                      {houseName(p.houseCode)} {p.points > 0 ? "+" : ""}
+                      {p.points} · {p.category}
                     </span>
                     <span className="row-sub">{p.reason}</span>
                   </span>
@@ -185,7 +192,8 @@ export function AdjustmentsPanel({
               <div className="entry-row">
                 <span className="row-main">
                   <span className={`row-title${a.voided ? " voided" : ""}`}>
-                    {a.houseCode} {a.points > 0 ? "+" : ""}{a.points} · {a.category}
+                    {houseName(a.houseCode)} {a.points > 0 ? "+" : ""}
+                    {a.points} · {a.category}
                   </span>
                   <span className="row-sub">
                     {a.reason}

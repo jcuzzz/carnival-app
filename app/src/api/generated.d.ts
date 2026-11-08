@@ -10197,6 +10197,7 @@ export interface components {
             id: string;
             /** Format: date-time */
             importedAtUtc: string;
+            importedByDisplayName: null | string;
             importedBySubject: string;
             /** Format: int32 */
             inactiveCount: number;

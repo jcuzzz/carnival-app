@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -229,18 +230,36 @@ public sealed class CompetitionYearUploadTests
     }
 
     [Fact]
-    public async Task With_no_houses_configured_the_upload_is_refused_and_nothing_is_staged()
+    public async Task With_no_houses_configured_the_upload_is_refused_until_houses_are_added()
     {
         using var factory = new ApiTestFactory();
         await CarnivalSeed.MutateAsync(factory, db => db.SchoolConfigurations.Single().HousesJson = "[]");
         factory.Services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
-        using var form = Upload(null);
+        var admin = Admin(factory);
 
-        var response = await Admin(factory).PostAsync("/api/v1/imports", form);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await response.AssertErrorAsync(ErrorCodes.HousesRequired);
+        using (var form = Upload(null))
+        {
+            var response = await admin.PostAsync("/api/v1/imports", form);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            await response.AssertErrorAsync(ErrorCodes.SchoolHousesRequired);
+        }
         Assert.Equal(0, await CarnivalSeed.QueryAsync(factory, db => db.ImportBatches.CountAsync()));
+
+        var current = await Json(await admin.GetAsync("/api/v1/school/settings"));
+        var saved = await admin.PutAsJsonAsync("/api/v1/school/settings", new
+        {
+            name = current.GetProperty("name").GetString(),
+            brandColour = (string?)null,
+            houses = new[] { "BANKSIA", "WATTLE", "MOUNTAIN ASH", "GREVILLEA" }
+                .Select(code => new { code, name = (string?)null, colour = (string?)null }),
+            updatedAtUtc = current.GetProperty("updatedAtUtc").ValueKind == JsonValueKind.Null
+                ? (DateTimeOffset?)null
+                : current.GetProperty("updatedAtUtc").GetDateTimeOffset(),
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        using (var form = Upload(null))
+            Assert.Equal(HttpStatusCode.Created, (await admin.PostAsync("/api/v1/imports", form)).StatusCode);
+        Assert.Equal(1, await CarnivalSeed.QueryAsync(factory, db => db.ImportBatches.CountAsync()));
     }
 
     [Theory]

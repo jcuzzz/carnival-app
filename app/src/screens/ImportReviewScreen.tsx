@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { ApiError, isDemoBuild } from "../api/client";
-import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
+import {
+  DIRECT_WRITE_NETWORK_ERROR_TEXT,
+  HOUSES_REQUIRED_TEXT,
+  errorText,
+} from "../api/errorText";
 import { keys } from "../api/queryKeys";
 import {
   approveImport,
@@ -14,10 +18,11 @@ import {
 } from "../api/resources";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
-import { BatchList, batchLabel } from "../features/imports/BatchList";
+import { BatchList, StatusBadge, batchLabel, promotedResult } from "../features/imports/BatchList";
 import { agesAsAt } from "../features/imports/cutOff";
 import { ReconciliationSection } from "../features/imports/ReconciliationSection";
 import { ValidationSection } from "../features/imports/ValidationSection";
+import { roleListLabel } from "../features/roles/roles";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { showToast } from "../shell/toast";
@@ -37,8 +42,9 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
   );
   const [uploading, setUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  // Structural errors block promotion, so that one stays on screen rather than toasting.
+  // A layout problem blocks the update, so that one stays on screen rather than toasting.
   const [stageBlocked, setStageBlocked] = useState<string | null>(null);
+  const [housesRequired, setHousesRequired] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [promotedId, setPromotedId] = useState<string | null>(null);
   const [approvedId, setApprovedId] = useState<string | null>(null);
@@ -88,23 +94,26 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
     if (!file) return;
     setUploading(true);
     setActionError(null);
+    setHousesRequired(false);
     try {
       const staged = await stageImport(file, year);
       selectBatch(staged.id);
       invalidate(keys.imports());
       if (staged.structuralErrors.length > 0) {
         setStageBlocked(
-          `Staged with ${staged.structuralErrors.length} structural error(s) — this batch cannot be promoted.`,
+          `This file can't update the student list: ${problems(staged.structuralErrors.length)} ` +
+            "with its layout.",
         );
       } else {
         showToast(
-          `Staged '${file.name}' for ${staged.competitionYear} — review below, then update the ` +
+          `Uploaded '${file.name}' for ${staged.competitionYear} — review below, then update the ` +
             "student list.",
         );
       }
     } catch (err) {
+      if (err instanceof ApiError && err.code === "SCHOOL_HOUSES_REQUIRED") setHousesRequired(true);
       // A direct write: the "saved on this device" default would be false.
-      setActionError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      else setActionError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
     } finally {
       setUploading(false);
     }
@@ -125,7 +134,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
       setActionError(
         approved
           ? "The batch is approved, but the student list was not updated. " +
-              `${errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT)} Press Promote to try again.`
+              `${errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT)} Press Update the student list to try again.`
           : errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT),
       );
     } finally {
@@ -168,13 +177,16 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
   }
 
   const reportedStatus = validation.data?.status ?? reconciliation.data?.status;
-  // Until the re-read lands, a batch approved here must offer only Promote, never approve again.
-  const status =
-    reportedStatus === "Validated" && approvedId === batchId ? "Approved" : reportedStatus;
+  const justPromoted = batchId !== null && promotedId === batchId;
+  // Until the re-read lands, a batch approved here must offer only the update, never approve again.
+  const status = justPromoted
+    ? "Promoted"
+    : reportedStatus === "Validated" && approvedId === batchId
+      ? "Approved"
+      : reportedStatus;
   const expired =
     reconciliation.error instanceof ApiError && reconciliation.error.code === "IMPORT_BATCH_EXPIRED";
   const selected = batches.data?.find((b) => b.id === batchId);
-  const justPromoted = batchId !== null && promotedId === batchId;
 
   return (
     <>
@@ -189,7 +201,10 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
       {!canView && (
         <div className="alert notice">
           Import review is available to system administrators. You are signed in
-          {session ? ` as ${session.displayName} (${session.roles.join(", ") || "no roles"})` : " with no session"}.
+          {session
+            ? ` as ${session.displayName} (${roleListLabel(session.roles)})`
+            : " with no session"}
+          .
         </div>
       )}
 
@@ -249,7 +264,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
             )}
           </>
         ) : (
-          <p className="row-sub">Uploading requires the SystemAdministrator role.</p>
+          <p className="row-sub">Uploading needs the System administrator role.</p>
         )}
       </div>
 
@@ -258,6 +273,16 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
       {actionError && (
         <div className="alert error" role="alert">
           {actionError}
+        </div>
+      )}
+      {housesRequired && (
+        <div className="alert notice" role="status">
+          <p className="flush-top">{HOUSES_REQUIRED_TEXT}</p>
+          <div className="button-row">
+            <a className="button primary-link" href={href("/school/settings")}>
+              Add the houses in School settings
+            </a>
+          </div>
         </div>
       )}
       {stageBlocked && <div className="alert notice">{stageBlocked}</div>}
@@ -270,7 +295,12 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
                 ? batchLabel(selected)
                 : (validation.data?.sourceFileName ?? "Selected batch")}
             </strong>{" "}
-            {status && <span className="badge info">{status}</span>}
+            {status && <StatusBadge status={status} />}
+            {status === "Promoted" && selected && (
+              <p className={justPromoted ? "alert success" : "row-sub"} role="status">
+                {promotedResult(selected)}
+              </p>
+            )}
             {canManage && justPromoted && carnivalId && (
               <div className="button-row">
                 <a className="button primary-link" href={href(`/carnivals/${carnivalId}/manage`)}>
@@ -278,7 +308,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
                 </a>
               </div>
             )}
-            {canManage && !justPromoted && status !== "Promoted" && (
+            {canManage && status !== "Promoted" && (
               <div className="button-row">
                 {status === "Approved" ? (
                   <button
@@ -291,7 +321,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
                       })
                     }
                   >
-                    {busyAction === "promote" ? "Promoting…" : "Promote"}
+                    {busyAction === "promote" ? "Updating the student list…" : "Update the student list"}
                   </button>
                 ) : (
                   <>
@@ -333,4 +363,8 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
 
 function yearsBetween(earliest: number, latest: number): number[] {
   return Array.from({ length: Math.max(0, latest - earliest + 1) }, (_, i) => earliest + i);
+}
+
+function problems(n: number): string {
+  return n === 1 ? "1 problem" : `${n} problems`;
 }

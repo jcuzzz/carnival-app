@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ageScopeLabel,
   ageScopeOrder,
+  carnivalSport,
+  carnivalTypeLabel,
   categoryLabel,
   categoryValueLabel,
   divisionLabel,
@@ -14,6 +16,19 @@ import {
  * both honestly — an open event must not invent an age. These are the labels an
  * official reads at arm's length on the deck, so the wording is the contract.
  */
+
+describe("carnivalTypeLabel", () => {
+  it("spells the cross-country wire value as two words, and leaves the rest", () => {
+    expect(carnivalTypeLabel("CrossCountry")).toBe("Cross country");
+    expect(carnivalTypeLabel("Swimming")).toBe("Swimming");
+    expect(carnivalTypeLabel("Other")).toBe("Other");
+  });
+
+  it("matches no sport for Other", () => {
+    expect(carnivalSport("Other")).toBe("");
+    expect(carnivalSport("CrossCountry")).toBe("Cross country");
+  });
+});
 
 describe("divisionLabel", () => {
   it("renders the division's own age beside its category", () => {

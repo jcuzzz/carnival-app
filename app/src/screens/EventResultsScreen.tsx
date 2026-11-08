@@ -1049,8 +1049,7 @@ export default function EventResultsScreen({
       )}
       {!session && (
         <div className="alert notice">
-          <a href={href("/login")}>Sign in</a> to record results — the actor is captured on every
-          entry (ADR-0006).
+          <a href={href("/login")}>Sign in</a> to record results: every entry records who made it.
         </div>
       )}
 

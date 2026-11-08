@@ -14,7 +14,7 @@ import {
 import type { MeasureType, SchoolRecord } from "../api/types";
 import { useApiQuery } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
-import { carnivalSport } from "../features/events/eventLabels";
+import { carnivalSport, carnivalTypeLabel } from "../features/events/eventLabels";
 import { ResultsBookView } from "../features/reports/ResultsBookView";
 import { saveFile } from "../features/reports/download";
 import { StandingsTable } from "../features/standings/StandingsTable";
@@ -134,7 +134,7 @@ export default function ReportsScreen({ carnivalId }: { carnivalId: string }) {
       <h1>Reports</h1>
       {c && (
         <p className="row-sub">
-          {c.name} · {c.type} · {c.date} · {c.status}
+          {c.name} · {carnivalTypeLabel(c.type)} · {c.date} · {c.status}
         </p>
       )}
 

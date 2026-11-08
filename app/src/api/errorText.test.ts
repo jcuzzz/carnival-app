@@ -3,6 +3,7 @@ import { ApiError } from "./client";
 import {
   DIRECT_WRITE_NETWORK_ERROR_TEXT,
   errorText,
+  HOUSES_REQUIRED_TEXT,
   NETWORK_ERROR_TEXT,
   SIGN_IN_FAILED_TEXT,
 } from "./errorText";
@@ -47,6 +48,21 @@ describe("errorText", () => {
     expect(text).toContain("nothing was recorded");
     expect(text).toContain("still held on this device");
     expect(text).toContain("carnival organiser");
+  });
+
+  it("words the upload's houses refusal, and leaves School settings' field refusal its detail", () => {
+    expect(
+      errorText(new ApiError(409, { error: "SCHOOL_HOUSES_REQUIRED", detail: "server copy" }, "/x")),
+    ).toBe(HOUSES_REQUIRED_TEXT);
+    expect(
+      errorText(
+        new ApiError(
+          422,
+          { error: "HOUSES_REQUIRED", detail: "At least one house is required.", field: "houses" },
+          "/x",
+        ),
+      ),
+    ).toBe("At least one house is required.");
   });
 
   it("tells an official a too-large submission is not theirs to retry", () => {

@@ -322,7 +322,7 @@ function SlotForm({
         </label>
         {kind === "Item" && (
           <label className="field wide">
-            <span>Novelty points category (optional, ADR-0005)</span>
+            <span>Novelty points category (optional)</span>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">— none —</option>
               {adjustmentCategories.map((c) => (

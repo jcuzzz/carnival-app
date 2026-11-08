@@ -97,6 +97,23 @@ describe("SchoolPeopleScreen", () => {
     expect(within(rowOf("Backup Admin")).getByText(/System administrator/)).toBeTruthy();
   });
 
+  it("names each person by display name, with the username beneath", async () => {
+    vi.mocked(listLocalAccounts).mockResolvedValue([
+      ME,
+      account({ id: "a4", username: "nameless", displayName: "  " }),
+    ]);
+    renderWithQuery(<SchoolPeopleScreen />);
+
+    await screen.findByText("Backup Admin", { exact: false });
+    const mine = rowOf("Backup Admin");
+    expect(mine.querySelector(".row-title")?.textContent).toBe("Backup Admin (you)");
+    expect(within(mine).getByText("backup-admin").className).toBe("row-sub");
+    // No display name: the username stands in, once.
+    const nameless = rowOf("nameless");
+    expect(nameless.querySelector(".row-title")?.textContent).toBe("nameless");
+    expect(within(nameless).getAllByText("nameless")).toHaveLength(1);
+  });
+
   it("marks an account still awaiting setup, and one locked out", async () => {
     vi.mocked(listLocalAccounts).mockResolvedValue([
       account({ status: "AwaitingSetup", lastSignInAtUtc: null, setupLink: null }),

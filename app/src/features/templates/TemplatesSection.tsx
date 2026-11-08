@@ -256,7 +256,7 @@ export default function TemplatesSection({ offline }: { offline: boolean }) {
                 id="template-reason"
                 value={reason}
                 maxLength={MAX_REASON}
-                placeholder="e.g. category-first event names, ADR-0018"
+                placeholder="e.g. category-first event names"
                 onChange={(e) => setReason(e.target.value)}
               />
             </label>

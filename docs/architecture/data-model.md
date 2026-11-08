@@ -113,7 +113,7 @@ The school's student system is the system of record. The platform holds a minima
 
 Snapshots are never rewritten. Promotion marks the previous snapshot not current and adds a new one; one snapshot per (student, import batch). A student marked inactive gets no new snapshot.
 
-**`ImportBatch`**: one roster import, moving `Staged → Validated` (or `ValidationFailed`) `→ Approved` (or `Rejected`) `→ Promoted`. It keeps the source file name and SHA-256, the mapping version, who imported and reviewed it, and the new / changed / inactive / unmatched / rejected counts. The staged rows (`StagedRowsJson`) and per-row issues (`ValidationResultsJson`) are needed for review, so a batch keeps them only until it is settled: promotion discards both in its own transaction, rejection discards both, and the retention sweep discards them 7 days after upload from a batch never promoted ([ADR-0032](../adr/0032-staged-rosters-are-not-kept.md), [ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). The batch row and its counts stay.
+**`ImportBatch`**: one roster import, moving `Staged → Validated` (or `ValidationFailed`) `→ Approved` (or `Rejected`) `→ Promoted`. It keeps the source file name and SHA-256, the mapping version, who imported it (subject, and display name for batches staged since it was recorded) and who reviewed it, and the new / changed / inactive / unmatched / rejected counts. The staged rows (`StagedRowsJson`) and per-row issues (`ValidationResultsJson`) are needed for review, so a batch keeps them only until it is settled: promotion discards both in its own transaction, rejection discards both, and the retention sweep discards them 7 days after upload from a batch never promoted ([ADR-0032](../adr/0032-staged-rosters-are-not-kept.md), [ADR-0062](../adr/0062-retention-windows-for-operational-data.md)). The batch row and its counts stay.
 
 ## Entries
 
@@ -208,7 +208,7 @@ A `SchoolRecord` is one record for one (event definition, age group, category).
 
 ## School configuration
 
-`SchoolConfiguration` is one row per deployment (the first by id is the school): an identifier (unique), name, IANA timezone, `HousesJson` (an array of `{code, name, colour}`), `BrandingJson` (brand colour) and `SettingsJson`. `UpdatedAtUtc` is the concurrency token, so two saves from one rendering of the settings form cannot both land. Houses, events and scoring are data, never code.
+`SchoolConfiguration` is one row per deployment (the first by id is the school): an identifier (unique), name, IANA timezone, `HousesJson` (an array of `{code, name, colour}`), `BrandingJson` (brand colour) and `SettingsJson`. `SettingsJson` holds the local-account sign-in settings (`requireAuthenticator`, `localAccounts`) and `setupConfirmedAtUtc`, written by the first save of School settings and never moved, which marks the school as set up ([ADR-0066](../adr/0066-the-setup-flow.md) §2). `UpdatedAtUtc` is the concurrency token, so two saves from one rendering of the settings form cannot both land. Houses, events and scoring are data, never code.
 
 ## Role assignments
 

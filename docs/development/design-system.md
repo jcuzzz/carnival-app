@@ -35,7 +35,7 @@ Source of truth: **`app/src/tokens.json`** (DTCG) → `npm run generate:tokens` 
 | `--warn-deep` `--bad-deep` | `#7a5200` `#8a1a10` | The edge of an amber/red fill |
 | `--alert-{ok,warn,bad,info}-bg` | `#effaf1` `#fdf7e8` `#fdf1f0` `#eef4fd` | Tinted panel behind a state |
 | `--alert-{ok,warn,bad,info}-line` | `#bfe3c6` `#e6cf9a` `#f1c1bc` `#c3d7f4` | That panel's border |
-| `--dot-ok` `--dot-pending` `--dot-trouble` | `#7ee2a0` `#ffd66e` `#ff8f80` | The outbox dot, lightened to carry on the brand fill |
+| `--dot-ok` `--dot-pending` `--dot-trouble` | `#7ee2a0` `#ffd66e` `#ff8f80` | The outbox dot, lightened to carry on the outbox chip's `--ink` fill, which it keeps on any brand |
 | `--line-print` | `#999999` | Table rule in `@media print` |
 | `--scroll-shade` `-faint` `-clear`, `--paper-clear` | `rgba()` | A table's scroll-edge fade; fixed, so outdoor does not darken it |
 | `--brand-ink-edge` `-edge-strong` `-soft` | `color-mix()` of `--brand-ink` | Chip outlines and secondary text on the brand fill. Resolves at `:root` — `--brand`/`--brand-ink` are set on `<html>` only |

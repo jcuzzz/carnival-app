@@ -162,6 +162,7 @@ export default function SchoolSettingsScreen() {
     form !== null && baselineForm !== null && signatureOf(form) !== signatureOf(baselineForm);
   // Until the first save, Save confirms what was seeded even with nothing changed.
   const confirmed = baseline?.setupConfirmed !== false;
+  const blank = baselineForm !== null && baselineForm.name === "" && baselineForm.houses.length === 0;
 
   // A background refetch must never discard typed edits: a newer stamp arriving
   // mid-edit says so and leaves the form alone until Reload asks for it.
@@ -306,7 +307,9 @@ export default function SchoolSettingsScreen() {
       </p>
       {!confirmed && (
         <p className="row-sub">
-          Check the name and the houses, then press Save to finish setting up the school.
+          {blank
+            ? "Name the school and add its houses, then press Save."
+            : "Check the name and the houses, then press Save to finish setting up the school."}
         </p>
       )}
 

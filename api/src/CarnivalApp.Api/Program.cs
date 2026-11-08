@@ -158,18 +158,13 @@ if (!useSqlite && !demoMode && app.Configuration.GetValue("Database:ApplyMigrati
     {
         await using var db = new CarnivalAppDbContext(MigrationContextOptions.Build(
             migrationsConnectionString, app.Services.GetRequiredService<ILoggerFactory>()));
-        var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-        app.Logger.LogInformation(
-            "Startup migrations pending on the migrations context: {Count} [{Migrations}].",
-            pending.Length, string.Join(", ", pending));
-        await db.Database.MigrateAsync();
-        app.Logger.LogInformation("Startup migrations applied: {Count}.", pending.Length);
+        await StartupMigrations.ApplyAsync(db, app.Logger);
     }
     else
     {
         using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
-        await db.Database.MigrateAsync();
+        await StartupMigrations.ApplyAsync(
+            scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>(), app.Logger);
     }
 }
 

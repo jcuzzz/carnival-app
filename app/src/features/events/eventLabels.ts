@@ -1,8 +1,13 @@
 import type { CarnivalEvent, CarnivalType, MeasureType } from "../../api/types";
 
+/** For display only; the wire value stays `CrossCountry`. */
+export function carnivalTypeLabel(type: CarnivalType): string {
+  return type === "CrossCountry" ? "Cross country" : type;
+}
+
 export function carnivalSport(type: CarnivalType | undefined): string {
   if (type === undefined || type === "Other") return "";
-  return type === "CrossCountry" ? "Cross country" : type;
+  return carnivalTypeLabel(type);
 }
 
 /** "facet:value"; a tag with no colon falls in the generic "tag" facet. */

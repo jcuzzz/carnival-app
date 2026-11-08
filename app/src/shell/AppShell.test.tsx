@@ -5,6 +5,7 @@ import AppShell from "./AppShell";
 import { reportReachable, reportUnreachable, _resetReachabilityForTests } from "../api/reachability";
 import { PRODUCT_SHORT_NAME, _resetBrandingForTests, applyBranding } from "../branding/branding";
 import { db } from "../db/db";
+import { UNCONFIGURED_SCHOOL_NAME } from "../features/school/schoolSteps";
 import { enqueue, pauseQueue } from "../sync/outbox";
 import { STORAGE_PERSIST_KEY } from "../sync/storagePersistence";
 import { _resetUuidv7StateForTests } from "../sync/uuidv7";
@@ -33,10 +34,11 @@ afterEach(() => {
 
 describe("AppShell", () => {
   it("names the school and its monogram once branding lands (ADR-0040 §3)", () => {
-    render(<AppShell>content</AppShell>);
-    // Nothing configured yet: the product name stands alone, with no mark.
+    const { container } = render(<AppShell>content</AppShell>);
+    // Nothing configured yet: the product name stands alone, beside a neutral mark.
     expect(screen.getByText("Carnival App")).toBeTruthy();
     expect(screen.queryByText("RS")).toBeNull();
+    expect(container.querySelector(".shell-monogram svg")).not.toBeNull();
 
     act(() => {
       applyBranding({ schoolName: "Riverbend Secondary College", brandColour: "#123456" });
@@ -44,6 +46,26 @@ describe("AppShell", () => {
     expect(screen.getByText("Riverbend Secondary College")).toBeTruthy();
     expect(screen.getByText("RS")).toBeTruthy();
     expect(screen.getByText(PRODUCT_SHORT_NAME)).toBeTruthy();
+  });
+
+  it("shows the product, not the install's placeholder, until the school is named", () => {
+    applyBranding({ schoolName: UNCONFIGURED_SCHOOL_NAME, brandColour: null });
+    const { container } = render(<AppShell>content</AppShell>);
+    expect(screen.queryByText(UNCONFIGURED_SCHOOL_NAME)).toBeNull();
+    expect(container.querySelector(".shell-title")?.textContent).toBe("Carnival App");
+    expect(container.querySelector(".shell-monogram")?.textContent).toBe("");
+    expect(container.querySelector(".shell-monogram svg")).not.toBeNull();
+  });
+
+  it("names each role in words, not as its identifier", () => {
+    signIn({
+      subject: "s1",
+      displayName: "Jo Admin",
+      roles: ["CarnivalAdministrator", "SystemAdministrator"],
+    });
+    render(<AppShell>content</AppShell>);
+    expect(screen.getByText("(System administrator, Carnival administrator)")).toBeTruthy();
+    expect(screen.queryByText(/SystemAdministrator/)).toBeNull();
   });
 
   it("shows the signed-in official's name persistently (ADR-0006)", () => {

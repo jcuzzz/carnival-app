@@ -5,6 +5,7 @@ import {
   Flag,
   School,
   Settings2,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { isDemoBuild } from "../api/client";
@@ -21,6 +22,7 @@ import { hasRole, useSession } from "../auth/session";
 import { PRODUCT_NAME, PRODUCT_SHORT_NAME, useBranding } from "../branding/branding";
 import { activeTab, tabPath, type CarnivalTab } from "../carnivals/landing";
 import { useSelectedCarnival } from "../carnivals/selectedCarnival";
+import { roleListLabel } from "../features/roles/roles";
 import { href, usePath, useUrl } from "../router";
 import type { OutboxHealth } from "../sync/stuckOutbox";
 import IdleOverlay from "./IdleOverlay";
@@ -83,11 +85,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="shell-header">
           {/* Not an <h1>: the one h1 is the screen's, the focus target on navigation. */}
           <div className="shell-identity">
-            {branding.monogram && (
-              <span className="shell-monogram" aria-hidden="true">
-                {branding.monogram}
-              </span>
-            )}
+            <span className="shell-monogram" aria-hidden="true">
+              {branding.monogram ?? <Trophy size={NAV_ICON} aria-hidden="true" />}
+            </span>
             <div className="shell-names">
               <span className="shell-title">{branding.schoolName ?? PRODUCT_NAME}</span>
               {branding.schoolName && <span className="shell-product">{PRODUCT_SHORT_NAME}</span>}
@@ -111,7 +111,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <>
                 <span aria-label={`Signed in as ${session.displayName}`}>
                   <strong>{session.displayName}</strong>{" "}
-                  <span className="shell-roles">({session.roles.join(", ") || "no roles"})</span>
+                  <span className="shell-roles">({roleListLabel(session.roles)})</span>
                 </span>
                 {session.localAccount && <a href={href("/account")}>My account</a>}
                 {/* Real auth: a full-page navigation, so the server clears the cookie (and the

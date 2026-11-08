@@ -57,7 +57,8 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `dashboard-text-only-{w}.png` | The same board at a school that configured no house colours (ADR-0044 §3): every row carried by the house name alone |
 | `manage-{w}.png` | Manage — setup links, house points, lifecycle, and Finalise fenced at the foot |
 | `manage-checklist-{w}.png` | Manage on a carnival created before any student list (ADR-0066 §4): Students, Events, Program, Open, with Students marked as the step to do next and Events reading "Import the students first" |
-| `manage-ready-to-open-{w}.png` | **A region** — Carnival status on a Draft carnival (ADR-0066 §5–6): the event and division count, the "Before you open" warnings, and the two opens |
+| `manage-ready-to-open-{w}.png` | **A region** — checklist step 4, Open, on a Draft carnival (ADR-0066 §5–6): the event and division count, the "Before you open" warnings, and the two opens |
+| `deck-draft-notice-{w}.png` | The Deck of a Draft carnival that has events: "This carnival isn't open yet", with the way to Manage |
 | `deck-not-set-up-{w}.png` | The Deck of a carnival not yet set up (ADR-0066 §7): one "Set the carnival up" link to Manage |
 | `event-setup-empty-catalogue-{w}.png` | Event setup over an empty catalogue: the standard events, in place |
 | `event-setup-no-roster-{w}.png` | Event setup with no saved ages and no student list (ADR-0067 §5): the import notice in place of the standard events |
@@ -75,11 +76,17 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `outbox-discard-armed-{w}.png` | The two-step discard, armed — the confirm strip open over the row it would let go |
 | `outbox-discarded-{w}.png` | The same capture after it was let go: `⊘ discarded`, and who let it go and when |
 | `outbox-time-edit-{w}.png` | Edit-and-requeue in progress: the corrected-time field on a parked result |
-| `school-hub-setup-{w}.png` | The School hub of a fresh school (ADR-0066 §2): "Set up your school" above the section rows |
+| `school-hub-setup-{w}.png` | The School hub of a fresh school (ADR-0066 §2): "Set up your school" above the section rows, under the unnamed header |
+| `dev-login-{w}.png` | The dev server's sign-in picker: each persona with its roles in words |
+| `header-pre-name-{w}.png` | **A region** — the shell header before the school is named: "Carnival App" beside the trophy, on the default navy |
+| `header-pre-name-yellow-{w}.png` | **A region** — the same header on a light yellow brand, whose ink is dark |
+| `header-named-yellow-{w}.png` | **A region** — a named school's header on the yellow brand: monogram, name, role words and the outbox pill |
 | `school-hub-{w}.png` | The School hub (ADR-0055 §1) once the school is set up: no setup list, only one row per school-wide section |
 | `carnivals-empty-{w}.png` | The carnival list with no carnivals at a school with no name: "Set up the school first" |
 | `import-from-carnival-{w}.png` | The roster import launched from a carnival (ADR-0066 §4): the year from the carnival, the way back to Manage |
 | `import-promoted-back-{w}.png` | The same import after the one press (ADR-0066 §8): "Back to" the carnival |
+| `import-result-{w}.png` | **A region** — the result line: what the update did to the student list, from the batch's counts |
+| `import-houses-required-{w}.png` | An upload refused with `SCHOOL_HOUSES_REQUIRED`: the notice and its link to School settings |
 | `school-people-role-{w}.png` | **A region** — People's Add a person form with a role chosen |
 | `school-catalogue-{w}.png` | The event catalogue with no carnival behind it: grouped by sport, with the filters and each definition's blast radius |
 | `school-catalogue-new-{w}.png` | "New definition" at rest — the catalogue-only create ADR-0054 §3 took off the carnival |

@@ -38,8 +38,11 @@ Equivalent manual commands: `dotnet run --launch-profile http` in
 - **Seeding** — opt-in via `Database:SeedSyntheticData=true`, which only the
   `dotnet run` launch profile (`Properties/launchSettings.json`) sets, so
   tests and deployments never seed. Idempotent: a database that already holds
-  students or carnivals is never touched; the school-settings row is created
-  by the bootstrap on every first start (ADR-0045).
+  students or carnivals gets no new data; the school-settings row is created
+  by the bootstrap on every first start (ADR-0045). The one exception: every
+  seeding start marks the school set up (`setupConfirmedAtUtc`), so a
+  `dev.db` seeded before that marker existed stops showing "Set up your
+  school" without a reset.
 - **Model stays provider-clean** (ADR-0001 review note 5) so the same EF model
   works on both providers. Note SQLite cannot `ORDER BY` a `DateTimeOffset`
   column — order such lists in memory (see `ListEventsAsync`).

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { CarnivalEvent, Schedule } from "../../api/types";
 import { readiness, type ReadinessFacts } from "./readiness";
 
+const texts = (facts: ReadinessFacts) => readiness(facts).warnings.map((w) => w.text);
+
 /** ADR-0066 §5: Ready to open warns from what Manage already reads, and never blocks. */
 
 function division(
@@ -33,7 +35,10 @@ describe("readiness", () => {
 
   it("warns when the roster's year is not the carnival's", () => {
     expect(readiness({ ...ready, rosterYear: 2026 }).warnings).toEqual([
-      "The student list’s ages are for 2026, but this carnival is in 2027.",
+      {
+        id: "rosterYear",
+        text: "The student list’s ages are for 2026, but this carnival is in 2027.",
+      },
     ]);
   });
 
@@ -54,7 +59,10 @@ describe("readiness", () => {
       ],
     };
     expect(readiness(facts).warnings).toEqual([
-      "4 divisions have an age no current student has (ages 11, 19, SNR).",
+      {
+        id: "unmatchedAges",
+        text: "4 divisions have an age no current student has (ages 11, 19, SNR).",
+      },
     ]);
   });
 
@@ -65,9 +73,7 @@ describe("readiness", () => {
 
   it("names a single unmatched age in the singular", () => {
     const facts = { ...ready, events: [...ready.events!, division("e-3", "14", "sl-1")] };
-    expect(readiness(facts).warnings).toEqual([
-      "1 division has an age no current student has (age 14).",
-    ]);
+    expect(texts(facts)).toEqual(["1 division has an age no current student has (age 14)."]);
   });
 
   it("leaves the ages to the Students step when there is no roster", () => {
@@ -89,7 +95,25 @@ describe("readiness", () => {
       ...ready,
       events: [...ready.events!, division("e-3", "12"), division("e-4", "13")],
     };
-    expect(readiness(facts).warnings).toEqual(["2 divisions are not in the program."]);
+    expect(readiness(facts).warnings).toEqual([
+      {
+        id: "outsideProgram",
+        text:
+          "2 divisions aren’t in the program, so they won’t appear on the printed running " +
+          "order. Leave them if they run separately.",
+        action: "Add them to the program",
+      },
+    ]);
+  });
+
+  it("says what one division outside the program means, in the singular", () => {
+    const facts = { ...ready, events: [...ready.events!, division("e-3", "12")] };
+    const [warning] = readiness(facts).warnings;
+    expect(warning?.text).toBe(
+      "1 division isn’t in the program, so it won’t appear on the printed running order. " +
+        "Leave it if it runs separately.",
+    );
+    expect(warning?.action).toBe("Add it to the program");
   });
 
   it("does not ask for a program the carnival has not built", () => {
@@ -101,7 +125,7 @@ describe("readiness", () => {
 
   it("warns when there are no events yet, with no count line", () => {
     expect(readiness({ ...ready, events: [] })).toEqual({
-      warnings: ["No events yet."],
+      warnings: [{ id: "noEvents", text: "No events yet." }],
       summary: null,
     });
   });

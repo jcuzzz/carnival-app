@@ -64,7 +64,8 @@ function batch(): ImportBatchSummary {
     rejectedCount: 0,
     unmatchedCount: 0,
     importedAtUtc: "2026-08-28T01:00:00Z",
-    importedBySubject: "dev-admin",
+    importedBySubject: "local:0190f3a0-0000-7000-8000-0000000000a1",
+    importedByDisplayName: "Jo Admin",
   };
 }
 
@@ -173,6 +174,8 @@ describe("ImportReviewScreen", () => {
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     expect(await screen.findByText(/available to system administrators/)).toBeTruthy();
+    expect(screen.getByText(/signed in as Rae Recorder \(Recorder\)\./)).toBeTruthy();
+    expect(screen.getByText("Uploading needs the System administrator role.")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
 
@@ -257,7 +260,7 @@ describe("ImportReviewScreen", () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
-    await screen.findByText(/2 row\(s\) carry DUPLICATE_STKEY \/ MISSING_HOUSE exceptions/);
+    await screen.findByText("2 rows can't be imported: 1 has no house, 1 repeats a student ID.");
     expect(screen.getByText("DUPLICATE_STKEY")).toBeTruthy();
     expect(screen.getByText("MISSING_HOUSE")).toBeTruthy();
     expect(screen.getByText("Error").className).toContain("badge");
@@ -285,7 +288,103 @@ describe("ImportReviewScreen", () => {
       ).toBe(true),
     );
     expect((screen.getByRole("button", { name: "Reject" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.queryByRole("button", { name: "Promote" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Update the student list" })).toBeNull();
+  });
+
+  it("names the importer and gives each status its plain words", async () => {
+    vi.mocked(listImportBatches).mockResolvedValue([
+      batch(),
+      {
+        ...batch(),
+        id: "0190f3a0-0000-7000-8000-000000000002",
+        status: "Promoted",
+        importedBySubject: "entra-1234",
+        importedByDisplayName: null,
+      },
+    ]);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    expect(await screen.findByText("Jo Admin")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Left out" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Rejected" })).toBeNull();
+    // A name the server can't resolve falls back to the subject.
+    expect(screen.getByText("entra-1234").className).toBe("mono");
+    expect(screen.getByText("Ready to review")).toBeTruthy();
+    expect(screen.getByText("Student list updated").className).toBe("badge ok");
+    expect(screen.queryByText("Promoted")).toBeNull();
+    expect(screen.queryByText("Validated")).toBeNull();
+  });
+
+  it("says what an earlier promoted batch did, and why its details are gone", async () => {
+    vi.mocked(listImportBatches).mockResolvedValue([
+      { ...batch(), status: "Promoted", newCount: 96, inactiveCount: 21, rejectedCount: 4 },
+    ]);
+    vi.mocked(getImportValidation).mockResolvedValue({
+      ...validation(),
+      status: "Promoted",
+      validation: null,
+    });
+    vi.mocked(getImportReconciliation).mockRejectedValue(
+      new ApiError(
+        409,
+        { error: "IMPORT_ROWS_PURGED", detail: "server copy" },
+        "/api/v1/imports/x/reconciliation",
+      ),
+    );
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    const { container } = renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    await screen.findByText(
+      "Student list updated: 96 students added, 21 students marked as no longer enrolled, " +
+        "4 rows left out.",
+    );
+    expect(screen.getByText(/so that no second copy of the list is kept/)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/ADR|purged|durable|server copy/);
+    expect(screen.queryByRole("button", { name: /update the student list/i })).toBeNull();
+  });
+
+  it("says in plain words that a file with layout problems can't update the list", async () => {
+    vi.mocked(stageImport).mockResolvedValue({
+      id: BATCH,
+      status: "ValidationFailed",
+      competitionYear: 2027,
+      structuralErrors: ["Missing column: STKEY", "Missing column: HOUSE"],
+      summary: { new: 0, changed: 0, unchanged: 0, inactive: 0, rejected: 0, unmatched: 0 },
+    });
+    vi.mocked(getImportValidation).mockResolvedValue(
+      validation({ structuralErrors: ["Missing column: STKEY", "Missing column: HOUSE"], rowIssues: [] }),
+    );
+    const { container } = renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+    await screen.findByLabelText<HTMLSelectElement>("Competition year");
+
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
+      target: { files: [new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" })] },
+    });
+
+    await screen.findByText(
+      "This file can't update the student list: 2 problems with its layout.",
+    );
+    await screen.findByText("This file can't update the student list. Problems with its layout:");
+    expect(screen.getByText("Missing column: STKEY")).toBeTruthy();
+    expect(container.textContent).not.toMatch(/structural|promote/i);
+  });
+
+  it("sends a refused upload to School settings when the school has no houses", async () => {
+    vi.mocked(stageImport).mockRejectedValue(
+      new ApiError(409, { error: "SCHOOL_HOUSES_REQUIRED", detail: "server copy" }, "/api/v1/imports"),
+    );
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+    await screen.findByLabelText<HTMLSelectElement>("Competition year");
+
+    fireEvent.change(screen.getByLabelText(/Student list: a CSV export/), {
+      target: { files: [new File(["STKEY"], "ST_SYNTH.csv", { type: "text/csv" })] },
+    });
+
+    const link = await screen.findByRole("link", { name: "Add the houses in School settings" });
+    expect(link.getAttribute("href")).toBe("#/school/settings");
+    expect(screen.getByText(/Add the school's houses first/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("server copy")).toBeNull();
   });
 
   it("says a rejected batch's report was discarded", async () => {
@@ -297,7 +396,7 @@ describe("ImportReviewScreen", () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
-    await screen.findByText(/discarded when this batch was rejected/);
+    await screen.findByText(/This batch was rejected\. Its row-by-row details/);
     expect(screen.queryByText(/This batch expired/)).toBeNull();
   });
 
@@ -346,6 +445,9 @@ describe("ImportReviewScreen", () => {
 
     const back = await screen.findByRole("link", { name: "Back to Swimming Carnival" });
     expect(back.getAttribute("href")).toBe(`#/carnivals/${CARNIVAL}/manage`);
+    expect(screen.getByText("Student list updated: 3 students added.").className).toBe(
+      "alert success",
+    );
     expect(back.className).toBe("button primary-link");
     expect(approveImport).toHaveBeenCalledWith(BATCH, true);
     expect(promoteImport).toHaveBeenCalledWith(BATCH);
@@ -380,9 +482,9 @@ describe("ImportReviewScreen", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe(
       "The batch is approved, but the student list was not updated. Database unavailable. " +
-        "Press Promote to try again.",
+        "Press Update the student list to try again.",
     );
-    const promote = await screen.findByRole("button", { name: "Promote" });
+    const promote = await screen.findByRole("button", { name: "Update the student list" });
     expect(screen.queryByRole("link", { name: /^Back to/ })).toBeNull();
 
     fireEvent.click(promote);
@@ -401,7 +503,7 @@ describe("ImportReviewScreen", () => {
     vi.mocked(getImportReconciliation).mockReturnValue(new Promise(() => {}));
     fireEvent.click(press);
 
-    const promote = await screen.findByRole("button", { name: "Promote" });
+    const promote = await screen.findByRole("button", { name: "Update the student list" });
     expect(screen.queryByRole("button", { name: "Approve and update the student list" })).toBeNull();
     fireEvent.click(promote);
     await waitFor(() => expect(promoteImport).toHaveBeenCalledTimes(2));

@@ -78,7 +78,7 @@ Usernames and 90 days of sign-in addresses are staff personal data. Account chan
 | Field | Purpose | Kept |
 |---|---|---|
 | Source file name, SHA-256, mapping version | Intake control | yes |
-| Importer, reviewer, review note, timestamps | Who staged and who approved | yes |
+| Importer, importer's display name (recorded at upload), reviewer, review note, timestamps | Who staged and who approved; the display name labels the batch list | yes |
 | Five reconciliation counts, status | Evidence of what the import did | yes |
 | `StagedRowsJson` | Staged rows: STKEY, names, house, home group, year level, derived age group and category | **Set to null in the promotion transaction** ([ADR-0032](../adr/0032-staged-rosters-are-not-kept.md)). An unpromoted, rejected or abandoned batch keeps them |
 | `ValidationResultsJson` | Per-row issues, each naming its STKEY | as above |

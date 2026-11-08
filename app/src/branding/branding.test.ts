@@ -15,6 +15,7 @@ import {
   refreshBranding,
 } from "./branding";
 import type { Branding } from "../api/types";
+import { UNCONFIGURED_SCHOOL_NAME } from "../features/school/schoolSteps";
 
 vi.mock("../api/resources", () => ({ getBranding: vi.fn() }));
 
@@ -63,6 +64,15 @@ describe("applyBranding (ADR-0040 §3)", () => {
       schoolName: "Riverbend Secondary College",
       brandColour: "#aabbcc",
       monogram: "RS",
+    });
+  });
+
+  it("treats the install's placeholder name as no name, keeping the colour", () => {
+    applyBranding({ schoolName: UNCONFIGURED_SCHOOL_NAME, brandColour: "#123456" });
+    expect(getBrandingState()).toEqual({
+      schoolName: null,
+      brandColour: "#123456",
+      monogram: null,
     });
   });
 });

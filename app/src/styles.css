@@ -664,8 +664,11 @@
     min-height: var(--size-outbox-chip);
     padding: var(--space-4xs) var(--space-sm-plus);
     border-radius: var(--radius-pill);
+    /* A dark pill whatever the school's colour: the dots are tuned for a dark fill and vanish on
+       a light brand. The edge keeps it distinct on a dark one. */
     border: var(--border-hairline) solid var(--brand-ink-edge-strong);
-    color: var(--brand-ink);
+    background: var(--ink);
+    color: var(--paper);
     text-decoration: none;
     font-size: var(--text-2xs);
     white-space: nowrap;

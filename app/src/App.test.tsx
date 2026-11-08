@@ -34,7 +34,12 @@ vi.mock("./api/syncSetup", () => ({
 }));
 
 import App from "./App";
+import { getSchoolSettings, listCarnivals } from "./api/resources";
+import type { Carnival, SchoolSettings } from "./api/types";
 import { dropSetupToken, getMyAccount, inspectSetupLink, setupToken } from "./auth/localAccounts";
+
+const settings = (setupConfirmed: boolean) =>
+  ({ name: "(unconfigured)", houses: [], setupConfirmed }) as unknown as SchoolSettings;
 
 beforeEach(async () => {
   cleanup();
@@ -202,6 +207,59 @@ describe("the moved addresses (ADR-0055)", () => {
   });
 });
 
+describe("the landing at / (ADR-0066 §1)", () => {
+  const openCarnival = {
+    id: "c1",
+    name: "Swimming 2026",
+    date: "2026-02-10",
+    status: "Open",
+    type: "Swimming",
+  } as Carnival;
+
+  beforeEach(() => {
+    location.hash = "#/";
+    vi.mocked(listCarnivals).mockReset().mockResolvedValue([openCarnival]);
+    vi.mocked(getSchoolSettings).mockReset();
+  });
+
+  afterEach(() => {
+    vi.mocked(listCarnivals).mockResolvedValue([]);
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings(false));
+  });
+
+  it("sends a system administrator to School while the school is not set up", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings(false));
+    signIn({ subject: "s4", displayName: "Sam Sysadmin", roles: ["SystemAdministrator"] });
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/school"));
+  });
+
+  it("keeps the carnival rules once the school is set up: one open carnival opens its Deck", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings(true));
+    signIn({ subject: "s4", displayName: "Sam Sysadmin", roles: ["SystemAdministrator"] });
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
+  });
+
+  it("never reads the school settings for a role that may not", async () => {
+    signIn({ subject: "s1", displayName: "Ada Admin", roles: ["CarnivalAdministrator"] });
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
+    expect(getSchoolSettings).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the carnivals when the settings can't be read", async () => {
+    vi.mocked(getSchoolSettings).mockRejectedValue(new Error("offline"));
+    signIn({ subject: "s4", displayName: "Sam Sysadmin", roles: ["SystemAdministrator"] });
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
+  });
+});
+
 /** ADR-0061 §5: in the public demo build, a visitor without a sandbox sees only the landing page. */
 describe("the demo build", () => {
   beforeEach(() => {
@@ -246,6 +304,19 @@ describe("the demo build", () => {
       location.hash = "#/account";
     });
     await waitFor(() => expect(screen.getByText("/account")).toBeTruthy());
+  });
+
+  it("never sends a visitor to School, even before the school is set up", async () => {
+    vi.mocked(listCarnivals).mockResolvedValueOnce([
+      { id: "c1", name: "Swimming 2026", date: "2026-02-10", status: "Open", type: "Swimming" } as Carnival,
+    ]);
+    vi.mocked(getSchoolSettings).mockClear().mockResolvedValue(settings(false));
+    signIn({ subject: "demo-1", displayName: "Demo visitor", roles: ["SystemAdministrator"] });
+    location.hash = "#/";
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
+    expect(getSchoolSettings).not.toHaveBeenCalled();
   });
 
   it("has no Switch screen to pick another identity on", async () => {

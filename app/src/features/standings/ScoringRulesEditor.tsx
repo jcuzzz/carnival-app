@@ -94,9 +94,8 @@ export function ScoringRulesEditor({
       {open && (
         <form className="card disclosure-body" onSubmit={save}>
           <p className="row-sub flush-top">
-            Per-carnival scoring (ADR-0007). Blank overrides keep the ratified default. Relays always
-            score double (event weight, ADR-0008). Social-scored events earn the flat per-entry
-            points instead of places (ADR-0014).
+            Per-carnival scoring. Blank overrides keep the ratified default. Relays always score
+            double. Social-scored events earn the flat per-entry points instead of places.
           </p>
           {error && (
             <div className="alert error" role="alert">
@@ -139,7 +138,7 @@ export function ScoringRulesEditor({
               <input value={categories} onChange={(e) => setCategories(e.target.value)} />
             </label>
           </div>
-          <button className="primary" type="submit" disabled={saving}>
+          <button type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save scoring rules"}
           </button>
         </form>

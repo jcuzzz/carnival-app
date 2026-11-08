@@ -15,7 +15,7 @@ import {
 } from "../auth/localAccounts";
 import { hasRole, useSession } from "../auth/session";
 import { QrCode } from "../features/accounts/QrCode";
-import { ROLES } from "../features/roles/RolesSection";
+import { ROLES } from "../features/roles/roles";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { showToast } from "../shell/toast";
@@ -308,7 +308,8 @@ function AccountRow({
   const [armed, setArmed] = useState<"reset" | "disable" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const person = row.displayName || row.username;
+  const named = row.displayName.trim() !== "";
+  const person = named ? row.displayName.trim() : row.username;
   const disabled = row.status === "Disabled";
   const resetting = armed === "reset";
 
@@ -350,7 +351,7 @@ function AccountRow({
             {person}
             {self && " (you)"}
           </span>
-          <span className="row-sub">{row.username}</span>
+          {named && <span className="row-sub">{row.username}</span>}
           <span className="row-sub">{meta.join(" · ")}</span>
           {setupLinkLine(row) && <span className="row-sub">{setupLinkLine(row)}</span>}
           {self && (

@@ -68,7 +68,7 @@ Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [au
 - **[P2]** The service worker can serve a stale results body under a fresh "updated" time (fetch-resolution time is stamped on a cache hit).
 - **[P2]** Privacy surface: the import reconciliation table shows each staged student's raw `M`/`F`/`S` category (`app/src/features/imports/ReconciliationSection.tsx`, system administrators only) and bypasses `categoryLabel`; the override badge on an entry row reads as a claim about the student. Both want a documented position.
 - **[P3]** `app/src/api/errorCodes.ts`: `NOT_ASSIGNED_OFFICIAL` is still classed retryable, though the server no longer emits it (the assignment gate is retired).
-- **[P3]** User-facing and API detail strings cite ADR numbers (e.g. `app/src/features/results/AddEntry.tsx` ~164, `EntryRow.tsx` ~395, `app/src/features/schedule/SlotPanel.tsx` ~325, `app/src/features/standings/AdjustmentsPanel.tsx` ~47, `Carnivals/EntryEndpoints.cs` ~164 and ~321).
+- **[P3]** API detail strings cite ADR numbers (`Carnivals/EntryEndpoints.cs` ~164 and ~321, and the same habit in `ResultEndpoints.cs`, `RaceEndpoints.cs`, `AdjustmentEndpoints.cs`, `ScheduleEndpoints.cs`, `CarnivalEventEndpoints.cs`). The app's own strings no longer do.
 - **[P3]** `app/src/results/` coexists with `app/src/features/results/`; fold one into the other.
 - **[P3]** Route typing does not check the HTTP method, and the `client.test.ts` type block is checked by `tsc -b`, not by `npm test`.
 - **[P3]** The drain-invalidation effect keys on the accepted-item count, so an accept and a retention prune in one live-query emission fire nothing.
@@ -76,7 +76,6 @@ Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [au
 - **[P3]** "Latest race" for auto-fill follows organiser-editable `SortOrder`, so a renumbering can redirect auto-fill into an older unswum race; a failed context create falls back to Heat 1 without telling the official.
 - **[P3]** `EventResultsScreen` rebuilds its grid rows on every render, so rows cannot be memoised.
 - **[P3]** The settings PUT returns only the first validation failure; read-only house-code inputs look editable.
-- **[P3]** Manage shows up to four `button.primary` at once (Open/Close carnival, Lanes Save, Scoring Save, Adjustments), against the design system's one per screen.
 - **[P3]** The program builder's "Add an event" label (`SlotPanel.tsx`, `app/src/App.tsx` ~118) names a different act from Event setup's add.
 - **[P3]** Design tokens: `--opacity-quiet` and `--brand-ink-soft` do one job two ways; a spacing token is used as a width addend in `app/src/styles.css` (~849); the legacy off-scale spacing and type tokens are closed to new uses and await retirement.
 - **[P3]** Phone deck header: at 390px the pickers wrap to two lines and "Next event" to a third (~190px before the first swimmer).

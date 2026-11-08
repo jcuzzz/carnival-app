@@ -5,6 +5,8 @@ namespace CarnivalApp.Api.Data.Entities;
 /// </summary>
 public class ImportBatch
 {
+    public const int MaxDisplayNameLength = 128;
+
     public Guid Id { get; set; }
 
     public required string SourceFileName { get; set; }
@@ -14,6 +16,9 @@ public class ImportBatch
     public required string MappingVersion { get; set; }
 
     public required string ImportedBySubject { get; set; }
+
+    /// <summary>Null on batches staged before it was recorded.</summary>
+    public string? ImportedByDisplayName { get; set; }
     public DateTimeOffset ImportedAtUtc { get; set; }
 
     /// <summary>Names STKEYs, so it is discarded on promotion with the staged rows.</summary>

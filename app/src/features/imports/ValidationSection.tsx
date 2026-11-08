@@ -1,6 +1,16 @@
 import { IMPORT_BATCH_EXPIRED_TEXT } from "../../api/errorText";
 import type { ValidationReport } from "../../api/types";
 import type { ApiState } from "../../api/useApiQuery";
+import { rejectedRowsSummary } from "./rejectedRows";
+
+// The report names students, so it goes with the staged rows: no second copy of the roster is kept.
+const PROMOTED_REPORT_TEXT =
+  "This batch has updated the student list. Its row-by-row details, which named students, were " +
+  "deleted then so that no second copy of the list is kept. The counts in the table above, and " +
+  "the record of who updated the list and when, remain.";
+const REJECTED_REPORT_TEXT =
+  "This batch was rejected. Its row-by-row details, which named students, were deleted then. The " +
+  "counts in the table above, and the record of who rejected it and when, remain.";
 
 /** Structural + row-level validation issues for the selected batch. */
 export function ValidationSection({ state }: { state: ApiState<ValidationReport> }) {
@@ -10,37 +20,26 @@ export function ValidationSection({ state }: { state: ApiState<ValidationReport>
     <div className="alert error">Validation report: {state.error.message}</div>
   ) : null;
   const report = state.data;
-  // Promotion purges the stored report with the staged rows; the section explains itself rather
-  // than silently vanishing.
-  if (report?.status === "Promoted" && !report.validation) {
-    return (
-      <>
-        <h2>Validation</h2>
-        <div className="alert notice">
-          The validation report was purged when this batch was promoted — the summary counts and
-          the audit record are the durable evidence.
-        </div>
-      </>
-    );
-  }
+  // Promotion and rejection delete the row-by-row report with the staged rows; the section says so
+  // rather than silently vanishing.
   if (report && !report.validation) {
     return (
       <>
         <h2>Validation</h2>
         {failed}
         <div className="alert notice">
-          {report.status === "Rejected"
-            ? "The validation report was discarded when this batch was rejected — the summary counts and the audit record are the durable evidence."
-            : IMPORT_BATCH_EXPIRED_TEXT}
+          {report.status === "Promoted"
+            ? PROMOTED_REPORT_TEXT
+            : report.status === "Rejected"
+              ? REJECTED_REPORT_TEXT
+              : IMPORT_BATCH_EXPIRED_TEXT}
         </div>
       </>
     );
   }
   if (!report?.validation) return failed;
   const { structuralErrors, rowIssues } = report.validation;
-  const exceptions = rowIssues.filter((r) =>
-    r.issues.some((i) => i.code === "DUPLICATE_STKEY" || i.code === "MISSING_HOUSE"),
-  );
+  const rejected = rejectedRowsSummary(rowIssues);
 
   return (
     <>
@@ -51,7 +50,7 @@ export function ValidationSection({ state }: { state: ApiState<ValidationReport>
       )}
       {structuralErrors.length > 0 && (
         <div className="alert error">
-          <strong>Structural errors (batch cannot promote):</strong>
+          <strong>This file can't update the student list. Problems with its layout:</strong>
           <ul>
             {structuralErrors.map((e, i) => (
               <li key={i}>{e}</li>
@@ -59,10 +58,13 @@ export function ValidationSection({ state }: { state: ApiState<ValidationReport>
           </ul>
         </div>
       )}
-      {exceptions.length > 0 && (
+      {rejected && (
         <div className="alert notice">
-          {exceptions.length} row(s) carry DUPLICATE_STKEY / MISSING_HOUSE exceptions — expected
-          operator work: resolve at source and re-import; these rows never promote.
+          <p className="flush-top">{rejected}</p>
+          <p>
+            The rest can still update the student list. To bring these students in, fix them in
+            your student system and upload a new export.
+          </p>
         </div>
       )}
       {rowIssues.length > 0 && (

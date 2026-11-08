@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CarnivalApp.Api.Carnivals;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
@@ -64,7 +65,9 @@ public class PostgresIntegrationTests
         Skip.IfNot(DockerAvailable.Value, "Docker is not available on this machine.");
         await using var container = new PostgreSqlBuilder("postgres:17-alpine").Build();
         await container.StartAsync();
+        var errors = new ErrorCounter();
         var services = new ServiceCollection()
+            .AddLogging(builder => builder.AddProvider(errors))
             .AddDbContext<CarnivalAppDbContext>(o => o.UseNpgsql(container.GetConnectionString()))
             .BuildServiceProvider();
         var output = new StringWriter();
@@ -75,6 +78,7 @@ public class PostgresIntegrationTests
         Assert.Equal(AccountsCommand.Failure, exit);
         Assert.Equal("", output.ToString());
         Assert.Contains(AccountsCommandHost.NotMigrated, error.ToString());
+        Assert.Equal(0, errors.Count);
     }
 
     [SkippableFact]
@@ -87,6 +91,38 @@ public class PostgresIntegrationTests
             Assert.Empty(pending);
             Assert.Equal(0, await db.Students.CountAsync());
         });
+    }
+
+    [SkippableFact]
+    public async Task Startup_migrations_on_a_fresh_database_log_no_error()
+    {
+        Skip.IfNot(DockerAvailable.Value, "Docker is not available on this machine.");
+        await using var container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+        await container.StartAsync();
+        var errors = new ErrorCounter();
+        using var loggers = LoggerFactory.Create(builder => builder.AddProvider(errors));
+        var options = MigrationContextOptions.Build(container.GetConnectionString(), loggers);
+
+        await using (var db = new CarnivalAppDbContext(options))
+            Assert.NotEmpty(await StartupMigrations.ApplyAsync(db, loggers.CreateLogger("test")));
+        await using (var db = new CarnivalAppDbContext(options))
+            Assert.Empty(await StartupMigrations.ApplyAsync(db, loggers.CreateLogger("test")));
+
+        Assert.Equal(0, errors.Count);
+    }
+
+    private sealed class ErrorCounter : ILoggerProvider, ILogger
+    {
+        public int Count;
+        public ILogger CreateLogger(string categoryName) => this;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel >= LogLevel.Error) Interlocked.Increment(ref Count);
+        }
+        public void Dispose() { }
     }
 
     /// <summary>
