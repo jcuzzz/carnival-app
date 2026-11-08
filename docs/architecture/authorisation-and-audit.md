@@ -205,12 +205,13 @@ Role names are parsed by `PlatformRoles.TryParse`, which accepts the current nam
 - **Revoke** with a reason. Rows are never deleted; revocation stamps who, when and why, and also revokes any other active row for the same role held by the same person under an older UPN. Nobody can revoke their own `SystemAdministrator` (`409 ROLE_SELF_REVOKE`); another administrator can.
 - **Immediate effect.** Every grant or revoke invalidates the cached assignment list synchronously, so it applies on the person's next request, inside their current session. If the assignment read fails, the last good list is served and the error logged once.
 - The list also shows bootstrap administrators, marked as configuration-derived and not revocable in-app, and marks a local account's rows.
+- **Who assigned and revoked.** Each row carries `assignedByDisplayName` and `revokedByDisplayName` beside the stored subjects: today's display name of the local account behind the subject, else the name on that subject's newest role assignment (the same lookup the import list uses, `SubjectNames`), else `null`. The Roles page shows the name, "the host" for the host command's `host` subject, and the raw subject only when no name is known.
 
 ## Local accounts
 
 ### Administration
 
-School → People (`/admin/local-accounts`, `accounts:administer`) lists every local account with its status (awaiting setup, active, disabled), whether it has an authenticator, whether it is a System administrator, whether it is locked out at any address, its last sign-in, and its newest setup link (valid until, or used when and from which address).
+School → People (`/admin/local-accounts`, `accounts:administer`) lists every local account with its status (awaiting setup, active, disabled), whether it has an authenticator, whether it is a System administrator, whether it is locked out at any address, its last sign-in, and its newest setup link (valid until, or used when and from which address). Each row is headed by the display name, with the username beneath; an account whose display name is its username (one the host recovery link created) shows it once.
 
 | Action | Effect |
 |---|---|

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RowValidation } from "../../api/types";
-import { rejectedRowsSummary } from "./rejectedRows";
+import { hasWordsFor, rejectedRowsSummary, rowProblems } from "./rejectedRows";
 
 function row(
   rowNumber: number,
@@ -57,5 +57,20 @@ describe("rejectedRowsSummary", () => {
     expect(
       rejectedRowsSummary([row(2, ["DUPLICATE_STKEY", "Error"], ["DUPLICATE_STKEY", "Error"])]),
     ).toBe("1 row can't be imported: it repeats a student ID.");
+  });
+});
+
+describe("rowProblems", () => {
+  it("says each distinct problem on a row in the summary's words, never its code", () => {
+    expect(rowProblems([{ code: "MISSING_HOUSE" }, { code: "MISSING_BIRTHDATE" }])).toBe(
+      "has no house and has no birth date",
+    );
+    expect(rowProblems([{ code: "DUPLICATE_STKEY" }, { code: "DUPLICATE_STKEY" }])).toBe(
+      "repeats a student ID",
+    );
+    expect(rowProblems([{ code: "NEW_SERVER_CODE" }])).toBe("has another problem");
+    expect(hasWordsFor("MISSING_HOUSE")).toBe(true);
+    expect(hasWordsFor("NEW_SERVER_CODE")).toBe(false);
+    expect(hasWordsFor("toString")).toBe(false);
   });
 });

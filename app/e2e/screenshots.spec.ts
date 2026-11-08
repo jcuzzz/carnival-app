@@ -1506,7 +1506,7 @@ test("the new carnival form, and a roster import with validation issues", async 
   // The default follows the real calendar; the fixed set pins the synthetic year.
   if (FIXED) await year.selectOption("2026");
   await page.locator("input[type=file]").setInputFiles("../data/synthetic/ST_SYNTH.csv");
-  await settled(page.getByRole("heading", { name: /Reconciliation preview/ }));
+  await settled(page.getByRole("heading", { name: /Students in this file/ }));
   for (const width of WIDTHS) {
     await capture(page, "import-review", width);
   }
@@ -1515,7 +1515,7 @@ test("the new carnival form, and a roster import with validation issues", async 
   await page.goto(`/#/import?carnival=${fresh.carnivalId}`);
   await settled(page.getByRole("link", { name: "← Manage" }));
   await expect(year).toHaveValue(FIXED ? "2026" : String(new Date().getFullYear()));
-  await settled(page.getByRole("heading", { name: /Reconciliation preview/ }));
+  await settled(page.getByRole("heading", { name: /Students in this file/ }));
   for (const width of WIDTHS) await capture(page, "import-from-carnival", width);
 
   // ADR-0066 §8: the one press. Both writes are answered here: promoting the synthetic file's
@@ -1760,6 +1760,7 @@ test("People: every account state, and a new person's one-time link", async ({ p
             id: "01900000-0000-7000-8000-00000000a006", upn: "jsmith", displayName: null,
             role: "CarnivalAdministrator", bootstrap: false, boundToSubject: false,
             localAccount: true, reason: "Added on People", assignedBySubject: "local:screens-1",
+            assignedByDisplayName: "Backup Admin", revokedByDisplayName: null,
             assignedAtUtc: day(0), revokedAtUtc: null, revokedBySubject: null,
             revocationReason: null,
           },
@@ -1804,6 +1805,7 @@ test("School settings' Sign-in section beside a provider, and a local role grant
           id: "01900000-0000-7000-8000-00000000a001", upn: "helper1", displayName: "Helper One",
           role: "Recorder", bootstrap: false, boundToSubject: true, localAccount: true,
           reason: "Carnival-day helper with no school account.", assignedBySubject: "local:screens-1",
+          assignedByDisplayName: "Backup Admin", revokedByDisplayName: null,
           assignedAtUtc: new Date().toISOString(), revokedAtUtc: null, revokedBySubject: null,
           revocationReason: null,
         },

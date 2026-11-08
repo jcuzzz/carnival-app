@@ -114,6 +114,28 @@ describe("SchoolPeopleScreen", () => {
     expect(within(nameless).getAllByText("nameless")).toHaveLength(1);
   });
 
+  // The fresh-install walk-through: the first administrator typed "Jo Admin" at setup, and that
+  // name, not the username, heads their own row.
+  it("heads the first administrator's own row with the name typed at setup", async () => {
+    vi.mocked(listLocalAccounts).mockResolvedValue([
+      { ...ME, id: "first", displayName: "Jo Admin" },
+      account({ id: "a5", username: "recovered", displayName: "recovered" }),
+    ]);
+    signIn({
+      subject: "local:first",
+      displayName: "Jo Admin",
+      roles: ["SystemAdministrator"],
+      localAccount: true,
+    });
+    renderWithQuery(<SchoolPeopleScreen />);
+
+    const mine = (await screen.findByText("Jo Admin (you)", { selector: ".row-title" })).closest("li")!;
+    const lines = [...mine.querySelectorAll(".row-title, .row-sub")].map((el) => el.textContent);
+    expect(lines.slice(0, 2)).toEqual(["Jo Admin (you)", "backup-admin"]);
+    // A host recovery account is named by its username: once, not twice.
+    expect(within(rowOf("recovered")).getAllByText("recovered")).toHaveLength(1);
+  });
+
   it("marks an account still awaiting setup, and one locked out", async () => {
     vi.mocked(listLocalAccounts).mockResolvedValue([
       account({ status: "AwaitingSetup", lastSignInAtUtc: null, setupLink: null }),

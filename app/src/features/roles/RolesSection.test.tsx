@@ -33,9 +33,11 @@ function assignment(overrides: Partial<RoleAssignment> = {}): RoleAssignment {
     localAccount: false,
     reason: "Timing desk for the swimming carnival.",
     assignedBySubject: "sys-1",
+    assignedByDisplayName: null,
     assignedAtUtc: "2026-09-01T02:03:04.000Z",
     revokedAtUtc: null,
     revokedBySubject: null,
+    revokedByDisplayName: null,
     revocationReason: null,
     ...overrides,
   };
@@ -143,6 +145,39 @@ describe("RolesSection", () => {
     expect(await screen.findByText(/Revoked .* by sys-2: Left the school\./)).toBeTruthy();
     expect(screen.getByText("revoked")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Revoke / })).toBeNull();
+  });
+
+  it("names who assigned and revoked a row, never a bare local subject", async () => {
+    vi.mocked(listRoleAssignments).mockResolvedValue([
+      assignment({
+        assignedBySubject: "local:0193a1b2-0000-7000-8000-000000000001",
+        assignedByDisplayName: "Jo Admin",
+        revokedAtUtc: "2026-09-03T01:00:00.000Z",
+        revokedBySubject: "local:0193a1b2-0000-7000-8000-000000000002",
+        revokedByDisplayName: "Sam Staff",
+        revocationReason: "Left the school.",
+      }),
+      assignment({ id: "22222222-2222-7222-8222-222222222222", upn: "host@school.test", assignedBySubject: "host" }),
+      assignment({
+        id: "33333333-3333-7333-8333-333333333333",
+        upn: "unnamed@school.test",
+        assignedBySubject: "local:0193a1b2-0000-7000-8000-000000000003",
+      }),
+      assignment({
+        id: "44444444-4444-7444-8444-444444444444",
+        upn: "sso@school.test",
+        assignedBySubject: "entra-oid-1",
+      }),
+    ]);
+    renderWithQuery(<RolesSection offline={false} />);
+
+    expect(await screen.findByText(/^Assigned by Jo Admin · /)).toBeTruthy();
+    expect(screen.getByText(/Revoked .* by Sam Staff: Left the school\./)).toBeTruthy();
+    expect(screen.getByText(/^Assigned by the host · /)).toBeTruthy();
+    // No name known: a local subject is "a local account"; any other id is all there is.
+    expect(screen.getByText(/^Assigned by a local account · /)).toBeTruthy();
+    expect(screen.getByText(/^Assigned by entra-oid-1 · /)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("local:");
   });
 
   it("assigns by UPN with a role and a reason", async () => {

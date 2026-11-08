@@ -19,6 +19,13 @@ function personLabel(row: RoleAssignment): string {
   return row.displayName?.trim() || row.upn;
 }
 
+/** Who granted or revoked a row: a name where one is known, never a bare `local:` subject. */
+function actorLabel(subject: string, displayName: string | null | undefined): string {
+  if (displayName?.trim()) return displayName.trim();
+  if (subject === "host") return "the host";
+  return subject.startsWith("local:") ? "a local account" : subject;
+}
+
 /** The calendar day of an ISO stamp in the reader's zone. */
 function dayOf(isoTimestamp: string | null): string | null {
   return isoTimestamp === null ? null : new Date(isoTimestamp).toLocaleDateString();
@@ -205,7 +212,9 @@ function RoleRow({
             {row.bootstrap
               ? "From the server configuration — it cannot be changed here."
               : [
-                  row.assignedBySubject ? `Assigned by ${row.assignedBySubject}` : "Assigned",
+                  row.assignedBySubject
+                    ? `Assigned by ${actorLabel(row.assignedBySubject, row.assignedByDisplayName)}`
+                    : "Assigned",
                   assignedOn,
                 ]
                   .filter(Boolean)
@@ -215,7 +224,9 @@ function RoleRow({
           {revoked && (
             <span className="row-sub">
               Revoked{revokedOn ? ` ${revokedOn}` : ""}
-              {row.revokedBySubject ? ` by ${row.revokedBySubject}` : ""}
+              {row.revokedBySubject
+                ? ` by ${actorLabel(row.revokedBySubject, row.revokedByDisplayName)}`
+                : ""}
               {row.revocationReason ? `: ${row.revocationReason}` : ""}
             </span>
           )}

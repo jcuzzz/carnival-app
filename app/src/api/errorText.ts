@@ -19,7 +19,7 @@ export const HOUSES_REQUIRED_TEXT =
   "Add the school's houses first: each student's house in the export is checked against them. Then upload the file again.";
 
 export const IMPORT_BATCH_EXPIRED_TEXT =
-  "This batch expired: a batch that is not promoted within 7 days of upload has its staged rows discarded. Upload the file again.";
+  "This upload expired: an upload that hasn't updated the student list within 7 days is discarded. Upload the file again.";
 
 export const SIGN_IN_FAILED_TEXT =
   "That username and password don't match, or this account can't sign in right now. Check them and try again; if it keeps happening, ask a system administrator.";
@@ -48,6 +48,18 @@ const CODE_TEXT: Readonly<Record<string, string>> = {
     "The carnival was finalised before this change reached the server, so the recorded result still stands. What you typed is held on this device — show it to the carnival organiser, who can decide whether the published result needs amending.",
   AUTO_FILL_LANES_REQUIRES_LANE_COUNT: AUTO_FILL_NEEDS_LANE_COUNT_TEXT,
   IMPORT_BATCH_EXPIRED: IMPORT_BATCH_EXPIRED_TEXT,
+  IMPORT_BATCH_WRONG_STATE:
+    "This upload was already approved, rejected or used to update the student list, perhaps in another tab. Reload to see where it stands.",
+  IMPORT_BATCH_NOT_FOUND: "That upload no longer exists. Reload the list of uploads.",
+  IMPORT_BATCH_UNREADABLE:
+    "The server couldn't read this upload back. Reject it and upload the file again.",
+  IMPORT_FILE_REQUIRED: "That file is empty. Choose the CSV export from your student system again.",
+  IMPORT_FILE_TYPE_UNSUPPORTED:
+    "That isn't a CSV file. Export the student list from your student system as CSV and choose that file.",
+  IMPORT_MAPPING_UNAVAILABLE:
+    "The import mapping can't be read on the server. Ask whoever runs the server to check its import settings.",
+  IMPORT_COMPETITION_YEAR_INVALID:
+    "That competition year can't be used. Reload the page and choose a year from the list.",
   ROSTER_REQUIRED: ROSTER_REQUIRED_TEXT,
   // Not HOUSES_REQUIRED: that is School settings' field refusal, whose detail names the field.
   SCHOOL_HOUSES_REQUIRED: HOUSES_REQUIRED_TEXT,

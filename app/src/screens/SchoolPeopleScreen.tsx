@@ -308,7 +308,8 @@ function AccountRow({
   const [armed, setArmed] = useState<"reset" | "disable" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const named = row.displayName.trim() !== "";
+  // A host recovery link names the account by its username: say it once, not twice.
+  const named = row.displayName.trim() !== "" && row.displayName.trim() !== row.username;
   const person = named ? row.displayName.trim() : row.username;
   const disabled = row.status === "Disabled";
   const resetting = armed === "reset";

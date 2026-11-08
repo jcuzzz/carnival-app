@@ -24,6 +24,7 @@
     --warn: #9a6700;
     --bad: #b42318;
     --info: #175cd3;
+    --link: var(--info);
     --warn-deep: #7a5200;
     --bad-deep: #8a1a10;
     --alert-ok-bg: #effaf1;
@@ -182,6 +183,7 @@
     --line: #98a2b3;
     --wash: #e9ecf1;
     --placeholder: #6b7480;
+    --link: #1249a8;
   }
 
   @media (prefers-contrast: more) {
@@ -191,6 +193,7 @@
       --line: #98a2b3;
       --wash: #e9ecf1;
       --placeholder: #6b7480;
+      --link: #1249a8;
     }
   }
 }

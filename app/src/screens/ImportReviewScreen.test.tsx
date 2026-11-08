@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { _resetReachabilityForTests } from "../api/reachability";
@@ -148,8 +148,10 @@ describe("ImportReviewScreen", () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
     await screen.findByText("ST_SYNTH.csv");
-    await screen.findByText(/Reconciliation preview/);
-    expect(screen.getByText("No validation issues.")).toBeTruthy();
+    await screen.findByText(/Students in this file/);
+    expect(screen.getByText("No problems: every row can update the student list.")).toBeTruthy();
+    expect(screen.getByText("Shown below")).toBeTruthy();
+    expect(screen.queryByText("reviewing")).toBeNull();
     expect(screen.getByText("Sam Synth")).toBeTruthy();
   });
 
@@ -231,11 +233,11 @@ describe("ImportReviewScreen", () => {
   it("states the day the staged ages are as at", async () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
-    const heading = await screen.findByText(/Reconciliation preview — competition year 2026/);
+    const heading = await screen.findByText(/Students in this file — competition year 2026/);
     expect(heading.nextElementSibling?.textContent).toBe("Ages as at 31 December 2026.");
   });
 
-  it("counts the exception rows and lists every issue with its severity", async () => {
+  it("counts the rows left out and lists each one's problem in plain words", async () => {
     vi.mocked(getImportValidation).mockResolvedValue(
       validation({
         structuralErrors: [],
@@ -261,11 +263,113 @@ describe("ImportReviewScreen", () => {
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
     await screen.findByText("2 rows can't be imported: 1 has no house, 1 repeats a student ID.");
-    expect(screen.getByText("DUPLICATE_STKEY")).toBeTruthy();
-    expect(screen.getByText("MISSING_HOUSE")).toBeTruthy();
-    expect(screen.getByText("Error").className).toContain("badge");
-    expect(screen.getByText("Exception").className).toContain("badge");
-    expect(screen.queryByText("No validation issues.")).toBeNull();
+    const table = screen.getByRole("table", { name: "Rows with a problem" });
+    expect(within(table).getByText("Repeats a student ID")).toBeTruthy();
+    expect(within(table).getByText("Has no house")).toBeTruthy();
+    expect(within(table).getAllByText("Left out").map((b) => b.className)).toEqual([
+      "badge bad",
+      "badge bad",
+    ]);
+    expect(within(table).getByRole("columnheader", { name: "Student ID" })).toBeTruthy();
+    expect(table.textContent).not.toMatch(/STKEY|MISSING_HOUSE|Error|Exception|appears twice/);
+    expect(screen.queryByText(/No problems/)).toBeNull();
+  });
+
+  it("says Left out on every line of a refused row, and Kept only for a row with warnings alone", async () => {
+    vi.mocked(getImportValidation).mockResolvedValue(
+      validation({
+        structuralErrors: [],
+        rowIssues: [
+          {
+            rowNumber: 4,
+            externalStudentId: "STU007",
+            issues: [
+              { code: "SOMETHING_ODD", message: "Odd.", severity: "Warning" },
+              { code: "MISSING_HOUSE", message: "server copy", severity: "Exception" },
+            ],
+          },
+          {
+            rowNumber: 6,
+            externalStudentId: "STU009",
+            issues: [{ code: "SOMETHING_ODD", message: "Odd.", severity: "Warning" }],
+          },
+        ],
+      }),
+    );
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    const table = await screen.findByRole("table", { name: "Rows with a problem" });
+    const outcomes = within(table)
+      .getAllByRole("row")
+      .slice(1)
+      .map((tr) => {
+        const { cells } = tr as HTMLTableRowElement;
+        return [cells[0]?.textContent, cells[3]?.textContent];
+      });
+    expect(outcomes).toEqual([
+      ["4", "Left out"],
+      ["4", "Left out"],
+      ["6", "Kept"],
+    ]);
+  });
+
+  it("shows the server's sentence only for a code the app has no words for", async () => {
+    vi.mocked(getImportValidation).mockResolvedValue(
+      validation({
+        structuralErrors: [],
+        rowIssues: [
+          {
+            rowNumber: 4,
+            externalStudentId: "STU007",
+            issues: [{ code: "NEW_SERVER_CODE", message: "Something new.", severity: "Error" }],
+          },
+        ],
+      }),
+    );
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    const table = await screen.findByRole("table", { name: "Rows with a problem" });
+    expect(table.textContent).toContain("Has another problem Something new.");
+    expect(table.textContent).not.toContain("NEW_SERVER_CODE");
+  });
+
+  it("calls a refused row Left out in the filter and the table, with its problem in words", async () => {
+    const report = reconciliation();
+    report.summary = { ...report.summary, rejected: 1 };
+    report.rows = [
+      ...report.rows,
+      {
+        ...report.rows[0]!,
+        rowNumber: 3,
+        externalStudentId: "STU002",
+        firstName: "Ari",
+        houseCode: null,
+        disposition: "Rejected",
+        isRejected: true,
+        issues: [{ code: "MISSING_HOUSE", message: "server copy", severity: "Exception" }],
+      },
+    ];
+    report.summary.unmatched = 2;
+    vi.mocked(getImportReconciliation).mockResolvedValue(report);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    const { container } = renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    expect(await screen.findByRole("button", { name: "Left out (1)" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Rejected/ })).toBeNull();
+    const table = screen.getByRole("table", {
+      name: "Each row of this file, and what updating the student list does with it",
+    });
+    expect(within(table).getByText("Left out").className).toBe("badge bad");
+    expect(within(table).getByText("has no house")).toBeTruthy();
+    expect(within(table).getByRole("columnheader", { name: "Outcome" })).toBeTruthy();
+    expect(
+      screen.getByText(/2 students on the student list are not in this file\. Updating the list/),
+    ).toBeTruthy();
+    expect(container.textContent).not.toMatch(
+      /MISSING_HOUSE|STKEY|Disposition|disposition|promot|staged|batch|roster rows|reconcil|report-only/i,
+    );
   });
   it("says an aged-out batch expired, to upload again, and offers only Reject", async () => {
     vi.mocked(getImportValidation).mockResolvedValue({ ...validation(), validation: null });
@@ -279,7 +383,7 @@ describe("ImportReviewScreen", () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
-    const notices = await screen.findAllByText(/This batch expired.*Upload the file again\./);
+    const notices = await screen.findAllByText(/This upload expired.*Upload the file again\./);
     expect(notices.length).toBe(2);
     await waitFor(() =>
       expect(
@@ -396,8 +500,8 @@ describe("ImportReviewScreen", () => {
     localStorage.setItem("carnival.lastImportBatchId", BATCH);
     renderWithQuery(<ImportReviewScreen carnivalId={null} />);
 
-    await screen.findByText(/This batch was rejected\. Its row-by-row details/);
-    expect(screen.queryByText(/This batch expired/)).toBeNull();
+    await screen.findByText(/This upload was rejected\. Its row-by-row details/);
+    expect(screen.queryByText(/This upload expired/)).toBeNull();
   });
 
   // ADR-0066 §4: launched from a carnival, the year is that carnival's.
@@ -481,7 +585,7 @@ describe("ImportReviewScreen", () => {
     fireEvent.click(press);
 
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "The batch is approved, but the student list was not updated. Database unavailable. " +
+      "This upload is approved, but the student list was not updated. Database unavailable. " +
         "Press Update the student list to try again.",
     );
     const promote = await screen.findByRole("button", { name: "Update the student list" });

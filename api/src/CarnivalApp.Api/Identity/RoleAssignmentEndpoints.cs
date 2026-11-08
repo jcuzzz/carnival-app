@@ -10,7 +10,8 @@ namespace CarnivalApp.Api.Identity;
 
 /// <summary>
 /// A bootstrap administrator row carries no Id and cannot be revoked in-app. <c>Upn</c> is a local
-/// account's username when <c>LocalAccount</c> is set.
+/// account's username when <c>LocalAccount</c> is set. The <c>...ByDisplayName</c> fields are today's
+/// name of the person behind each subject, null when none is known.
 /// </summary>
 public sealed record RoleAssignmentDto(
     Guid? Id,
@@ -21,9 +22,11 @@ public sealed record RoleAssignmentDto(
     bool BoundToSubject,
     string? Reason,
     string? AssignedBySubject,
+    string? AssignedByDisplayName,
     DateTimeOffset? AssignedAtUtc,
     DateTimeOffset? RevokedAtUtc,
     string? RevokedBySubject,
+    string? RevokedByDisplayName,
     string? RevocationReason,
     bool LocalAccount);
 
@@ -47,7 +50,7 @@ public static class RoleAssignmentEndpoints
         group.MapDelete("/{id:guid}", RevokeAsync).Produces<RoleAssignmentDto>();
     }
 
-    private static RoleAssignmentDto Project(RoleAssignment row) => new(
+    private static RoleAssignmentDto Project(RoleAssignment row, IReadOnlyDictionary<string, string> names) => new(
         row.Id,
         row.SubjectUpn,
         row.SubjectDisplayName,
@@ -56,9 +59,11 @@ public static class RoleAssignmentEndpoints
         BoundToSubject: row.SubjectId is not null,
         row.Reason,
         row.CreatedBySubject,
+        names.GetValueOrDefault(row.CreatedBySubject),
         row.CreatedAtUtc,
         row.RevokedAtUtc,
         row.RevokedBySubject,
+        row.RevokedBySubject is null ? null : names.GetValueOrDefault(row.RevokedBySubject),
         row.RevocationReason,
         LocalAccount: row.SubjectId?.StartsWith(LocalAccount.SubjectPrefix, StringComparison.Ordinal) == true);
 
@@ -73,9 +78,11 @@ public static class RoleAssignmentEndpoints
             BoundToSubject: true,
             Reason: null,
             AssignedBySubject: null,
+            AssignedByDisplayName: null,
             AssignedAtUtc: null,
             RevokedAtUtc: null,
             RevokedBySubject: null,
+            RevokedByDisplayName: null,
             RevocationReason: null,
             LocalAccount: false));
 
@@ -86,10 +93,11 @@ public static class RoleAssignmentEndpoints
     {
         // Ordered in memory: SQLite cannot ORDER BY a DateTimeOffset.
         var rows = await db.RoleAssignments.AsNoTracking().ToListAsync(ct);
+        var names = await NamesAsync(db, rows, ct);
         var ordered = rows
             .OrderBy(row => row.SubjectUpn, StringComparer.Ordinal)
             .ThenBy(row => row.CreatedAtUtc)
-            .Select(Project);
+            .Select(row => Project(row, names));
         return Results.Ok(BootstrapRows(configuration).Concat(ordered).ToList());
     }
 
@@ -166,7 +174,8 @@ public static class RoleAssignmentEndpoints
         }
 
         provider.Invalidate();
-        return Results.Created($"/api/v1/admin/role-assignments/{assignment.Id}", Project(assignment));
+        return Results.Created($"/api/v1/admin/role-assignments/{assignment.Id}",
+            Project(assignment, await NamesAsync(db, [assignment], ct)));
     }
 
     private static Task<bool> IsActiveAsync(
@@ -192,7 +201,7 @@ public static class RoleAssignmentEndpoints
             return ApiError.Unprocessable(ErrorCodes.RoleReasonRequired,
                 $"Give a reason for this revocation (at most {RoleAssignmentLimits.MaxReasonLength} characters).");
 
-        if (row.RevokedAtUtc is not null) return Results.Ok(Project(row));
+        if (row.RevokedAtUtc is not null) return Results.Ok(Project(row, await NamesAsync(db, [row], ct)));
 
         // A UPN rename between grants leaves one subject holding the role under two rows.
         var role = row.Role;
@@ -222,8 +231,12 @@ public static class RoleAssignmentEndpoints
         await db.SaveChangesAsync(ct);
 
         provider.Invalidate();
-        return Results.Ok(Project(row));
+        return Results.Ok(Project(row, await NamesAsync(db, [row], ct)));
     }
+
+    private static Task<Dictionary<string, string>> NamesAsync(
+        CarnivalAppDbContext db, IEnumerable<RoleAssignment> rows, CancellationToken ct) =>
+        SubjectNames.ResolveAsync(db, rows.SelectMany(row => new[] { row.CreatedBySubject, row.RevokedBySubject }), ct);
 
     private static bool IsCaller(RoleAssignment row, HttpContext ctx)
     {

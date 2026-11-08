@@ -25,6 +25,26 @@ const REASONS: Readonly<Record<string, readonly [one: string, many: string]>> = 
 
 const OTHER: readonly [string, string] = ["has another problem", "have another problem"];
 
+/** One refusal code as what is wrong with the row: "has no house". */
+export function rowProblem(code: string): string {
+  return (hasWordsFor(code) ? REASONS[code] : OTHER)[0];
+}
+
+/** False for a code the app has no words for yet. */
+export function hasWordsFor(code: string): boolean {
+  return Object.hasOwn(REASONS, code);
+}
+
+/** Every distinct problem on a row, joined: "has no house and has no birth date". */
+export function rowProblems(issues: readonly { code: string }[]): string {
+  return [...new Set(issues.map((issue) => rowProblem(issue.code)))].join(" and ");
+}
+
+/** A phrase as the start of a table cell. */
+export function capitalised(phrase: string): string {
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 /**
  * "4 rows can't be imported: 2 have no house, 1 has no birth date, 1 repeats a student ID." A row
  * is refused by any Error or Exception; a Warning lets it through. Null when none is refused.
@@ -36,7 +56,7 @@ export function rejectedRowsSummary(rows: readonly RowValidation[]): string | nu
     const reasons = new Set(
       row.issues
         .filter((issue) => issue.severity !== "Warning")
-        .map((issue) => REASONS[issue.code] ?? OTHER),
+        .map((issue) => (hasWordsFor(issue.code) ? REASONS[issue.code] : OTHER)),
     );
     if (reasons.size === 0) continue;
     rejected++;

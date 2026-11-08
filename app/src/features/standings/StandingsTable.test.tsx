@@ -52,6 +52,14 @@ describe("StandingsTable", () => {
     expect(ranks()).toEqual(["=1", "=1", "3"]);
   });
 
+  it("counts the results under the table without the rule version", () => {
+    const { container } = render(
+      <StandingsTable data={standings([house("BANKSIA", 1, 9)])} settings={undefined} colour />,
+    );
+    expect(screen.getByText(/From 5 results across 2 events\./)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/rules|v1/);
+  });
+
   it("numbers separated houses plainly", () => {
     render(
       <StandingsTable

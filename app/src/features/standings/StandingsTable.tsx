@@ -61,7 +61,7 @@ export function StandingsTable({
         {data.provisional
           ? "Provisional — updates as results are recorded; official once the carnival is finalised."
           : "Final standings."}{" "}
-        From {data.resultsCounted} results across {data.eventsCounted} events · rules {data.ruleVersion}.
+        From {data.resultsCounted} results across {data.eventsCounted} events.
       </p>
       {settings && <p className="row-sub">Scoring: {scoringLegend(settings.scoring, data)}</p>}
     </>

@@ -53,7 +53,7 @@ One snapshot per student per promoted import; snapshots are never rewritten.
 
 | Entity | Fields | Purpose |
 |---|---|---|
-| `RoleAssignments` | `SubjectUpn`, `SubjectId` (bound at first sign-in), `SubjectDisplayName`, `Role`, `Reason`, `CreatedBySubject`, revocation actor, time and reason | In-app role grants (School → Roles). Rows are never deleted, so the table is its own history |
+| `RoleAssignments` | `SubjectUpn`, `SubjectId` (bound at first sign-in), `SubjectDisplayName`, `Role`, `Reason`, `CreatedBySubject`, revocation actor, time and reason | In-app role grants (School → Roles). Rows are never deleted, so the table is its own history. The list also shows the assigning and revoking person's current name, looked up on read, not stored |
 | `CarnivalEventOfficials` | `SubjectId`, `SubjectDisplayName`, `AssignedBySubject` | Advisory "who is expected at this event"; **not an access control** |
 | `DeviceSyncStatuses` | `DeviceId`, `LastSubject`, `LastDisplayName`, `AppVersion`, queue counts and times | Organiser view of outstanding device queues. Counts only; no student data |
 | `AuditEvents` | actor and roles, time, timezone, action, entity, prior and new values, reason, import batch, application and rule versions | The audit trail. Prior and new values can carry student values. Append-only, enforced in the database |

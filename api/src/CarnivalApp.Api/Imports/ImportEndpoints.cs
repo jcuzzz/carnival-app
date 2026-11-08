@@ -265,7 +265,9 @@ public static class ImportEndpoints
     {
         // Ordered in memory: SQLite cannot ORDER BY a DateTimeOffset.
         var batches = await db.ImportBatches.AsNoTracking().ToListAsync(ct);
-        var names = await EarlierImporterNamesAsync(db, batches, ct);
+        // Batches staged before the importer's name was recorded take today's name.
+        var names = await SubjectNames.ResolveAsync(
+            db, batches.Where(b => b.ImportedByDisplayName is null).Select(b => b.ImportedBySubject), ct);
         return Results.Ok(batches
             .OrderByDescending(b => b.ImportedAtUtc)
             .Select(b => new ImportBatchSummary(
@@ -274,34 +276,6 @@ public static class ImportEndpoints
                 b.ImportedAtUtc, b.ImportedBySubject,
                 b.ImportedByDisplayName ?? names.GetValueOrDefault(b.ImportedBySubject)))
             .ToList());
-    }
-
-    /// <summary>
-    /// Batches staged before the name was recorded: today's name of the local account or role
-    /// holder behind the subject, where one is known.
-    /// </summary>
-    private static async Task<Dictionary<string, string>> EarlierImporterNamesAsync(
-        CarnivalAppDbContext db, IEnumerable<ImportBatch> batches, CancellationToken ct)
-    {
-        var subjects = batches.Where(b => b.ImportedByDisplayName is null)
-            .Select(b => b.ImportedBySubject).Distinct().ToList();
-        if (subjects.Count == 0) return [];
-        var names = new Dictionary<string, string>();
-        var accountIds = subjects
-            .Select(s => LocalAccount.TryParseSubject(s, out var id) ? id : (Guid?)null)
-            .OfType<Guid>().ToList();
-        foreach (var account in await db.LocalAccounts.AsNoTracking()
-                     .Where(a => accountIds.Contains(a.Id))
-                     .Select(a => new { a.Id, a.DisplayName }).ToListAsync(ct))
-            names[LocalAccount.SubjectFor(account.Id)] = account.DisplayName;
-        var rows = await db.RoleAssignments.AsNoTracking()
-            .Where(r => r.SubjectId != null && subjects.Contains(r.SubjectId)
-                && r.SubjectDisplayName != null)
-            .Select(r => new { r.SubjectId, r.SubjectDisplayName, r.CreatedAtUtc }).ToListAsync(ct);
-        // Newest grant first, in memory: SQLite cannot ORDER BY a DateTimeOffset.
-        foreach (var row in rows.OrderByDescending(r => r.CreatedAtUtc))
-            names.TryAdd(row.SubjectId!, row.SubjectDisplayName!);
-        return names;
     }
 
     private static async Task<IResult> GetValidationAsync(Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)

@@ -146,4 +146,22 @@ describe("errorText", () => {
       expect(text, code).not.toContain(code);
     }
   });
+
+  it("words every roster-upload refusal an administrator can meet, with no pipeline jargon", () => {
+    const codes = [
+      "IMPORT_BATCH_EXPIRED",
+      "IMPORT_BATCH_WRONG_STATE",
+      "IMPORT_BATCH_NOT_FOUND",
+      "IMPORT_BATCH_UNREADABLE",
+      "IMPORT_FILE_REQUIRED",
+      "IMPORT_FILE_TYPE_UNSUPPORTED",
+      "IMPORT_COMPETITION_YEAR_INVALID",
+      "IMPORT_MAPPING_UNAVAILABLE",
+    ];
+    for (const code of codes) {
+      const text = errorText(new ApiError(409, { error: code, detail: "LOG-ONLY" }, "/x"));
+      expect(text, code).not.toBe("LOG-ONLY");
+      expect(text, code).not.toMatch(/batch|promot|staged|multipart|competitionYear/i);
+    }
+  });
 });

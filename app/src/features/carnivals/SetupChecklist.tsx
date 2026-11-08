@@ -7,7 +7,7 @@ const ICON = 20;
 
 /**
  * A step whose screen is rendering the list keeps its place but drops the link. `actions` puts a
- * step's controls in place beneath it, by step id.
+ * step's controls in place beneath it, by step id, inset to line up with the step's text.
  */
 export function SetupChecklist({
   steps,
@@ -49,12 +49,16 @@ export function SetupChecklist({
                 {body}
               </a>
             )}
-            {step.warning && (
-              <div className="alert warn" role="status">
-                {step.warning}
+            {(step.warning || actions?.[step.id]) && (
+              <div className="setup-step-extra">
+                {step.warning && (
+                  <div className="alert warn" role="status">
+                    {step.warning}
+                  </div>
+                )}
+                {actions?.[step.id]}
               </div>
             )}
-            {actions?.[step.id]}
           </li>
         );
       })}

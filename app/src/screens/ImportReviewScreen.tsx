@@ -133,7 +133,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
     } catch (err) {
       setActionError(
         approved
-          ? "The batch is approved, but the student list was not updated. " +
+          ? "This upload is approved, but the student list was not updated. " +
               `${errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT)} Press Update the student list to try again.`
           : errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT),
       );
@@ -293,7 +293,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
             <strong>
               {selected
                 ? batchLabel(selected)
-                : (validation.data?.sourceFileName ?? "Selected batch")}
+                : (validation.data?.sourceFileName ?? "Selected upload")}
             </strong>{" "}
             {status && <StatusBadge status={status} />}
             {status === "Promoted" && selected && (
@@ -341,7 +341,7 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
                         void run(
                           "reject",
                           () => approveImport(batchId, false, "Rejected in review"),
-                          "Batch rejected.",
+                          "Upload rejected.",
                         )
                       }
                     >

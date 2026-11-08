@@ -1,3 +1,4 @@
+import { errorText } from "../../api/errorText";
 import type { ImportBatchStatus, ImportBatchSummary } from "../../api/types";
 import type { ApiState } from "../../api/useApiQuery";
 
@@ -48,7 +49,7 @@ function uploadedAt(utc: string): string {
   return new Date(utc).toLocaleString();
 }
 
-/** Import batches, most recent first — pick one to review. */
+/** Uploads, most recent first — pick one to review. */
 export function BatchList({
   state,
   selectedId,
@@ -58,11 +59,11 @@ export function BatchList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
-  if (state.loading) return <p>Loading import batches…</p>;
+  if (state.loading) return <p>Loading uploads…</p>;
   // A failed revalidation keeps the cached list selectable and puts the error above it; only an
   // empty cache renders the error alone.
   const failed = state.error ? (
-    <div className="alert error">Import batches: {state.error.message}</div>
+    <div className="alert error">The uploads couldn't be read: {errorText(state.error)}</div>
   ) : null;
   const batches = state.data;
   if (!batches) return failed;
@@ -70,16 +71,16 @@ export function BatchList({
     return (
       <>
         {failed}
-        <p className="row-sub">No import batches yet.</p>
+        <p className="row-sub">No uploads yet.</p>
       </>
     );
 
   return (
     <div className="card table-wrap">
-      <h2 className="flush-top">Import batches</h2>
+      <h2 className="flush-top">Uploads</h2>
       {failed}
       <table>
-        <caption className="visually-hidden">Import batches, most recent first</caption>
+        <caption className="visually-hidden">Uploads, most recent first</caption>
         <thead>
           <tr>
             <th scope="col">File</th>
@@ -88,9 +89,11 @@ export function BatchList({
             <th scope="col">Changed</th>
             <th scope="col">Inactive</th>
             <th scope="col">Left out</th>
-            <th scope="col">Imported</th>
+            <th scope="col">Uploaded</th>
             <th scope="col">By</th>
-            <th scope="col"></th>
+            <th scope="col">
+              <span className="visually-hidden">Review</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -112,7 +115,7 @@ export function BatchList({
               )}
               <td>
                 {batch.id === selectedId ? (
-                  <span className="badge ok">reviewing</span>
+                  <span className="row-sub">Shown below</span>
                 ) : (
                   <button onClick={() => onSelect(batch.id)}>Review</button>
                 )}

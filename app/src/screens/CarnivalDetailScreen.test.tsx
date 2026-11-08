@@ -140,4 +140,12 @@ describe("CarnivalDetailScreen — a Draft carnival with events", () => {
 
     expect(await screen.findByText(/^Cross country · 2027-03-06/)).toBeTruthy();
   });
+
+  it("keeps the internal rule version out of the subtitle", async () => {
+    vi.mocked(getCarnival).mockResolvedValue({ ...carnival, venue: "Aquatic Centre" });
+    renderWithQuery(<CarnivalDetailScreen carnivalId="c-1" />);
+
+    const subtitle = await screen.findByText(/^Swimming · 2027-03-06 · Aquatic Centre/);
+    expect(subtitle.textContent).not.toMatch(/rules|2027\.1/);
+  });
 });

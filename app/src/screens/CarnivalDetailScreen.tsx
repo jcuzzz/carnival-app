@@ -67,7 +67,7 @@ export default function CarnivalDetailScreen({ carnivalId }: { carnivalId: strin
       </h1>
       <p className="row-sub">
         {carnivalTypeLabel(c.type)} · {c.date}
-        {c.venue ? ` · ${c.venue}` : ""} · rules {c.ruleVersion}
+        {c.venue ? ` · ${c.venue}` : ""}
         <Freshness
           updatedAt={oldestUpdatedAt(carnival.updatedAt, events.updatedAt)}
           isRefetching={carnival.isRefetching || events.isRefetching}

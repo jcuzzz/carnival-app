@@ -75,6 +75,16 @@
     padding: 0;
   }
 
+  /* Visited stays --link: these are app routes, not reading history. */
+  a,
+  a:visited {
+    color: var(--link);
+  }
+
+  a:hover {
+    text-decoration-thickness: var(--border-heavy);
+  }
+
   input:focus-visible,
   select:focus-visible,
   button:focus-visible,
@@ -650,6 +660,11 @@
     border-color: var(--alert-warn-line);
   }
 
+  /* A link takes its alert's ink, which is already held to contrast on that tint. */
+  .alert a {
+    color: inherit;
+  }
+
   .alert ul:not(.row-list) {
     margin: var(--space-2xs) 0 0;
     padding-left: var(--space-xl);
@@ -1115,6 +1130,23 @@
 
   .row-list > li.awaiting .row-title {
     font-weight: var(--font-weight-bold);
+  }
+
+  /* A checklist step's warning and controls, inset like the .row-link text above them. */
+  .setup-step-extra {
+    padding: 0 var(--space-2xs) var(--space-sm);
+  }
+
+  .setup-step-extra > p {
+    margin: var(--space-sm) 0;
+  }
+
+  .setup-step-extra > :first-child {
+    margin-top: 0;
+  }
+
+  .setup-step-extra > :last-child {
+    margin-bottom: 0;
   }
 
   .heat-divider {

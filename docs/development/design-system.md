@@ -32,6 +32,7 @@ Source of truth: **`app/src/tokens.json`** (DTCG) → `npm run generate:tokens` 
 | `--status-ink` | `#ffffff` | Text on a filled `ok`/`warn`/`bad`/`info` |
 | `--focus-ring` | `#7aa7d9` | The one `:focus-visible` outline |
 | `--ok` `--warn` `--bad` `--info` | `#1a7f37` `#9a6700` `#b42318` `#175cd3` | State foregrounds and filled badges |
+| `--link` | `var(--info)`; outdoor `#1249a8` | Text links, visited included (≥5:1 on paper and wash; ~7:1 outdoor). Hover thickens the underline to `--border-heavy`; focus takes the one ring. A link inside an `.alert` takes the alert's ink; one on the brand fill takes `--brand-ink` |
 | `--warn-deep` `--bad-deep` | `#7a5200` `#8a1a10` | The edge of an amber/red fill |
 | `--alert-{ok,warn,bad,info}-bg` | `#effaf1` `#fdf7e8` `#fdf1f0` `#eef4fd` | Tinted panel behind a state |
 | `--alert-{ok,warn,bad,info}-line` | `#bfe3c6` `#e6cf9a` `#f1c1bc` `#c3d7f4` | That panel's border |
@@ -70,7 +71,7 @@ Type: `--font-ui` is `"Inter Variable", system-ui, "Segoe UI", Roboto, sans-seri
 
 ## Outdoor / high contrast
 
-`data-theme="outdoor"` on `<html>` overrides `--ink`, `--muted`, `--line`, `--wash` and `--placeholder` at ~7:1. `@media (prefers-contrast: more)` applies the same overrides automatically. The toggle lives in the shell header (`shell/OutdoorToggle.tsx`), is persisted per device in `localStorage["carnival.theme"]`, and is applied before first paint from `main.tsx`. There is no dark mode — on a pool deck it is worse, and nothing here wants it.
+`data-theme="outdoor"` on `<html>` overrides `--ink`, `--muted`, `--line`, `--wash`, `--placeholder` and `--link` at ~7:1. `@media (prefers-contrast: more)` applies the same overrides automatically. The toggle lives in the shell header (`shell/OutdoorToggle.tsx`), is persisted per device in `localStorage["carnival.theme"]`, and is applied before first paint from `main.tsx`. There is no dark mode — on a pool deck it is worse, and nothing here wants it.
 
 To add an outdoor value, put it on the token in `tokens.json`:
 

@@ -85,6 +85,26 @@ public sealed class LocalAccountsHttpTests : IDisposable
     }
 
     [Fact]
+    public async Task The_display_name_typed_at_first_setup_is_the_one_People_lists()
+    {
+        var (_, output) = await _host.RunAccountsCommandAsync("first-admin");
+        var session = _host.Session();
+        var completed = await session.PostAsync("/api/v1/auth/setup/complete", new
+        {
+            token = LocalAccountsHostFactory.TokenFrom(output),
+            username = "backup-admin",
+            displayName = "Jo Admin",
+            password = Password,
+        });
+        Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+
+        var listed = await (await session.GetAsync("/api/v1/admin/local-accounts")).JsonAsync();
+        var row = Assert.Single(listed.EnumerateArray());
+        Assert.Equal("backup-admin", row.GetProperty("username").GetString());
+        Assert.Equal("Jo Admin", row.GetProperty("displayName").GetString());
+    }
+
+    [Fact]
     public async Task Methods_and_identify_answer_password_with_no_provider()
     {
         var session = _host.Session();

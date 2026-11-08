@@ -150,6 +150,9 @@ public sealed class OpenApiDocumentTests(ApiTestFactory factory) : IClassFixture
     [InlineData("ImportDefaults", "latestYear")]
     [InlineData("ImportDefaults", "cutOff")]
     [InlineData("ReconciliationReport", "cutOff")]
+    // The Roles page names who assigned and revoked a row from these, never a bare subject.
+    [InlineData("RoleAssignmentDto", "assignedByDisplayName")]
+    [InlineData("RoleAssignmentDto", "revokedByDisplayName")]
     // ADR-0022: the division profile and the two new endpoints' payloads — the
     // grid and the generate button are generated straight from these.
     [InlineData("GenerateDivisionsRequest", "divisions")]

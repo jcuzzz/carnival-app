@@ -148,6 +148,42 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
         Assert.Equal("Left the school.", row.GetProperty("revocationReason").GetString());
     }
 
+    [Fact]
+    public async Task Each_row_names_who_assigned_and_revoked_it_where_a_name_is_known()
+    {
+        var accountId = Guid.CreateVersion7();
+        var byAccount = Row("helper@school.test", PlatformRole.Viewer);
+        byAccount.CreatedBySubject = LocalAccount.SubjectFor(accountId);
+        var byHost = Row("other@school.test", PlatformRole.Viewer);
+        byHost.CreatedBySubject = "host";
+        var caller = Row("sys@school.test", PlatformRole.SystemAdministrator, subjectId: "sys-1");
+        caller.SubjectDisplayName = "Sam Admin";
+        await SeedAsync(caller, byAccount, byHost);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+            db.LocalAccounts.Add(new LocalAccount
+            {
+                Id = accountId,
+                UserName = "jo",
+                NormalizedUserName = "JO",
+                DisplayName = "Jo Admin",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+        var granted = await GrantedAsync();
+        Assert.Equal(HttpStatusCode.OK, (await RevokeAsync(_admin, granted)).StatusCode);
+
+        var rows = (await ListAsync()).EnumerateArray().ToDictionary(r => r.GetProperty("upn").GetString()!);
+        Assert.Equal("Sam Admin", rows["coach@school.test"].GetProperty("assignedByDisplayName").GetString());
+        Assert.Equal("Sam Admin", rows["coach@school.test"].GetProperty("revokedByDisplayName").GetString());
+        Assert.Equal("Jo Admin", rows["helper@school.test"].GetProperty("assignedByDisplayName").GetString());
+        Assert.Equal("host", rows["other@school.test"].GetProperty("assignedBySubject").GetString());
+        Assert.Equal(JsonValueKind.Null, rows["other@school.test"].GetProperty("assignedByDisplayName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, rows["sys@school.test"].GetProperty("assignedByDisplayName").ValueKind);
+    }
+
     // ---- POST -------------------------------------------------------------
 
     [Fact]

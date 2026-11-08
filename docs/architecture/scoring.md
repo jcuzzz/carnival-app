@@ -34,7 +34,7 @@ Each carnival has its own rules, stored in the carnival's settings and edited on
 | `socialPerEntryPoints` | `1` | Each entry in a Social-scored event (below) |
 
 - Points are awards, never penalties: every value must be zero or more. A write with a negative value is refused (`400 SCORING_RULES_INVALID`); a stored blob that fails the same check is ignored and the defaults apply.
-- Each save stamps a new rule version (`custom-<timestamp>`), shown under the standings and recorded on audit events.
+- Each save stamps a new rule version (`custom-<timestamp>`), returned with the standings and recorded on audit events; the app does not show it.
 - Rules cannot change once the carnival is finalised.
 
 ### Event weight

@@ -10522,6 +10522,7 @@ export interface components {
         RoleAssignmentDto: {
             /** Format: date-time */
             assignedAtUtc: null | string;
+            assignedByDisplayName: null | string;
             assignedBySubject: null | string;
             bootstrap: boolean;
             boundToSubject: boolean;
@@ -10533,6 +10534,7 @@ export interface components {
             revocationReason: null | string;
             /** Format: date-time */
             revokedAtUtc: null | string;
+            revokedByDisplayName: null | string;
             revokedBySubject: null | string;
             role: components["schemas"]["PlatformRole"];
             upn: string;
