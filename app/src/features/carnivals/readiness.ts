@@ -1,4 +1,5 @@
-// Pure, and warnings only: a school may open on last year's roster or without a program on purpose.
+// Pure. Only a missing student list or no events blocks the open (the server refuses it too,
+// CARNIVAL_NOT_READY); the rest warns: a school may open on last year's roster on purpose.
 
 import type { Carnival, CarnivalEvent, Schedule } from "../../api/types";
 import { codesSummary, orderCodes } from "../events/ageCodes";
@@ -6,6 +7,8 @@ import { counted } from "../events/counted";
 
 export interface ReadinessFacts {
   carnival: Pick<Carnival, "date">;
+  /** Active students on the current list; null = unreadable, undefined = unread. */
+  students: number | null | undefined;
   /** Undefined while unread: an unread list claims nothing. */
   events: readonly CarnivalEvent[] | undefined;
   rosterAgeGroups: readonly string[] | undefined;
@@ -14,7 +17,7 @@ export interface ReadinessFacts {
   schedule: Schedule | null | undefined;
 }
 
-export type ReadinessWarningId = "rosterYear" | "unmatchedAges" | "outsideProgram" | "noEvents";
+export type ReadinessWarningId = "rosterYear" | "unmatchedAges" | "outsideProgram";
 
 export interface ReadinessWarning {
   id: ReadinessWarningId;
@@ -27,6 +30,11 @@ export interface Readiness {
   warnings: ReadinessWarning[];
   /** "12 events · 96 divisions"; null while unread or empty. */
   summary: string | null;
+  /**
+   * What must come before opening, as one line; null when nothing known is missing. An unread or
+   * unreadable fact claims nothing, and the server still refuses.
+   */
+  missing: string | null;
 }
 
 /** The all-ages division, which no roster age has to match. */
@@ -87,10 +95,8 @@ export function readiness(facts: ReadinessFacts): Readiness {
     }
   }
 
-  if (events !== undefined && events.length === 0) {
-    warnings.push({ id: "noEvents", text: "No events yet." });
-  }
-
+  const noStudents = facts.students === 0;
+  const noEvents = events !== undefined && events.length === 0;
   const definitions = new Set((events ?? []).map((e) => e.eventDefinitionId)).size;
   return {
     warnings,
@@ -98,5 +104,13 @@ export function readiness(facts: ReadinessFacts): Readiness {
       events === undefined || events.length === 0
         ? null
         : `${counted(definitions, "event")} · ${counted(events.length, "division")}`,
+    missing:
+      noStudents && noEvents
+        ? "Import the students and add events first."
+        : noStudents
+          ? "Import the students first."
+          : noEvents
+            ? "Add events first."
+            : null,
   };
 }

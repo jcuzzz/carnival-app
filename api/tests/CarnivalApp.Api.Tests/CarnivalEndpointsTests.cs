@@ -128,6 +128,7 @@ public sealed class CarnivalEndpointsTests : IClassFixture<ApiTestFactory>
     public async Task Carnival_lifecycle_walks_draft_open_closed_finalised()
     {
         var id = await CreateCarnivalAsync("Lifecycle Carnival");
+        await CarnivalSeed.MakeReadyToOpenAsync(_factory, id);
         foreach (var status in new[] { "Open", "Closed", "Finalised" })
         {
             var response = await _admin.PostAsJsonAsync($"/api/v1/carnivals/{id}/status", new { status });
@@ -155,6 +156,7 @@ public sealed class CarnivalEndpointsTests : IClassFixture<ApiTestFactory>
     public async Task Finalised_carnival_is_terminal_and_uneditable()
     {
         var id = await CreateCarnivalAsync("Terminal");
+        await CarnivalSeed.MakeReadyToOpenAsync(_factory, id);
         foreach (var status in new[] { "Open", "Closed", "Finalised" })
             await _admin.PostAsJsonAsync($"/api/v1/carnivals/{id}/status", new { status });
 

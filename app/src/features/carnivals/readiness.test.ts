@@ -4,7 +4,10 @@ import { readiness, type ReadinessFacts } from "./readiness";
 
 const texts = (facts: ReadinessFacts) => readiness(facts).warnings.map((w) => w.text);
 
-/** ADR-0066 §5: Ready to open warns from what Manage already reads, and never blocks. */
+/**
+ * ADR-0066 §5: Ready to open warns from what Manage already reads; only a missing student list or
+ * no events blocks the open.
+ */
 
 function division(
   id: string,
@@ -22,6 +25,7 @@ const program: Schedule = {
 
 const ready: ReadinessFacts = {
   carnival: { date: "2027-03-06" },
+  students: 412,
   events: [division("e-1", "12", "sl-1"), division("e-2", "13", "sl-1", "def-2")],
   rosterAgeGroups: ["12", "13"],
   rosterYear: 2027,
@@ -30,7 +34,11 @@ const ready: ReadinessFacts = {
 
 describe("readiness", () => {
   it("raises nothing for a carnival that is ready, and counts what it holds", () => {
-    expect(readiness(ready)).toEqual({ warnings: [], summary: "2 events · 2 divisions" });
+    expect(readiness(ready)).toEqual({
+      warnings: [],
+      summary: "2 events · 2 divisions",
+      missing: null,
+    });
   });
 
   it("warns when the roster's year is not the carnival's", () => {
@@ -123,14 +131,43 @@ describe("readiness", () => {
     }
   });
 
-  it("warns when there are no events yet, with no count line", () => {
+  it("blocks on no events, as a missing step rather than a warning", () => {
     expect(readiness({ ...ready, events: [] })).toEqual({
-      warnings: [{ id: "noEvents", text: "No events yet." }],
+      warnings: [],
       summary: null,
+      missing: "Add events first.",
     });
   });
 
-  it("claims nothing about events before the list lands", () => {
-    expect(readiness({ ...ready, events: undefined })).toEqual({ warnings: [], summary: null });
+  it("blocks on no students, and names both when both are missing", () => {
+    expect(readiness({ ...ready, students: 0 }).missing).toBe("Import the students first.");
+    expect(readiness({ ...ready, students: 0, events: [] }).missing).toBe(
+      "Import the students and add events first.",
+    );
+  });
+
+  it("claims nothing about a fact before it lands, or when it can't be read", () => {
+    expect(readiness({ ...ready, events: undefined })).toEqual({
+      warnings: [],
+      summary: null,
+      missing: null,
+    });
+    expect(readiness({ ...ready, students: undefined }).missing).toBeNull();
+    expect(readiness({ ...ready, students: null, events: [] }).missing).toBe("Add events first.");
+  });
+
+  it("never blocks on a warning", () => {
+    const facts = {
+      ...ready,
+      rosterYear: 2026,
+      events: [...ready.events!, division("e-3", "19")],
+    };
+    const result = readiness(facts);
+    expect(result.warnings.map((w) => w.id)).toEqual([
+      "rosterYear",
+      "unmatchedAges",
+      "outsideProgram",
+    ]);
+    expect(result.missing).toBeNull();
   });
 });

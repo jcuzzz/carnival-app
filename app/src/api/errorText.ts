@@ -14,6 +14,10 @@ export const AUTO_FILL_NEEDS_LANE_COUNT_TEXT = "Set the lane count first.";
 export const ROSTER_REQUIRED_TEXT =
   "Import the student list first: this carnival's ages come from it.";
 
+/** Manage greys Open out first; this is for a fact the screen had not read yet (ADR-0066 §5). */
+export const CARNIVAL_NOT_READY_TEXT =
+  "Import the students and add events before opening.";
+
 /** A roster upload before the school has houses: every student's house is checked against them. */
 export const HOUSES_REQUIRED_TEXT =
   "Add the school's houses first: each student's house in the export is checked against them. Then upload the file again.";
@@ -61,6 +65,7 @@ const CODE_TEXT: Readonly<Record<string, string>> = {
   IMPORT_COMPETITION_YEAR_INVALID:
     "That competition year can't be used. Reload the page and choose a year from the list.",
   ROSTER_REQUIRED: ROSTER_REQUIRED_TEXT,
+  CARNIVAL_NOT_READY: CARNIVAL_NOT_READY_TEXT,
   // Not HOUSES_REQUIRED: that is School settings' field refusal, whose detail names the field.
   SCHOOL_HOUSES_REQUIRED: HOUSES_REQUIRED_TEXT,
   // One sentence for every refusal: which part was wrong must not be readable from it.

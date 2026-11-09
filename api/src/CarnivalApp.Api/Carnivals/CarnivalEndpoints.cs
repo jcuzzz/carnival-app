@@ -158,9 +158,37 @@ public static class CarnivalEndpoints
                 "The lifecycle is Draft → Open → Closed → Finalised, and a Closed carnival " +
                 "may be reopened. Finalising publishes the results and cannot be undone.");
 
+        // Not in the write's transaction: a last division deleted in between opens an empty
+        // carnival, which is accepted (it can be closed, and no result is lost).
+        if (carnival.Status == CarnivalStatus.Draft && target == CarnivalStatus.Open
+            && await NotReadyAsync(db, carnival.Id, ct) is { } notReady)
+            return notReady;
+
         return target == CarnivalStatus.Finalised
             ? await FinaliseCarnivalAsync(carnival, request, ctx, db, audit, ct)
             : await ApplyCarnivalStatusAsync(carnival, target, request, ctx, db, audit, ct);
+    }
+
+    /// <summary>
+    /// The first open only (ADR-0066 §5): the student list the Students step counts, and a division.
+    /// Everything else Manage lists before opening is a warning.
+    /// </summary>
+    private static async Task<IResult?> NotReadyAsync(CarnivalAppDbContext db, Guid id, CancellationToken ct)
+    {
+        var students = await db.RosterSnapshots.AnyAsync(s => s.IsCurrent && s.Student.IsActive, ct);
+        var divisions = await db.CarnivalEvents.AnyAsync(e => e.CarnivalId == id, ct);
+        if (students && divisions) return null;
+
+        var detail = (students, divisions) switch
+        {
+            (false, false) => "Import the student list and add events before opening.",
+            (false, _) => "Import the student list before opening.",
+            _ => "Add events before opening.",
+        };
+        var missing = new List<string>();
+        if (!students) missing.Add("studentList");
+        if (!divisions) missing.Add("events");
+        return ApiError.Conflict(ErrorCodes.CarnivalNotReady, detail, new() { ["missing"] = missing });
     }
 
     private static async Task<IResult> ApplyCarnivalStatusAsync(

@@ -56,8 +56,9 @@ Every screen at **390px** (the smallest phone the pilot expects) and **820px**
 | `dashboard-standings-{w}.png` | The Dashboard (ADR-0043 layout A) with house colours configured — standings beside program progress, then records today, participation and the organiser device row |
 | `dashboard-text-only-{w}.png` | The same board at a school that configured no house colours (ADR-0044 §3): every row carried by the house name alone |
 | `manage-{w}.png` | Manage — setup links, house points, lifecycle, and Finalise fenced at the foot |
-| `manage-checklist-{w}.png` | Manage on a carnival created before any student list (ADR-0066 §4): Students, Events, Program, Open, with Students marked as the step to do next and Events reading "Import the students first" |
-| `manage-ready-to-open-{w}.png` | **A region** — checklist step 4, Open, on a Draft carnival (ADR-0066 §5–6): the event and division count, the "Before you open" warnings, and the two opens |
+| `manage-checklist-{w}.png` | Manage on a carnival created before any student list (ADR-0066 §4): Students, Events, Program, Open, with Students marked as the step to do next and Events reading "Import the students first"; step 4 shows both opens greyed |
+| `manage-open-not-ready-{w}.png` | **A region** — checklist step 4 on that empty carnival (ADR-0066 §5): "Open carnival" and "Open the carnival only" greyed out under "Import the students and add events first." |
+| `manage-ready-to-open-{w}.png` | **A region** — checklist step 4, Open, on a Draft carnival (ADR-0066 §5–6): the event and division count, the "Before you open" warnings, and the two opens, enabled |
 | `deck-draft-notice-{w}.png` | The Deck of a Draft carnival that has events: "This carnival isn't open yet", with the way to Manage |
 | `deck-not-set-up-{w}.png` | The Deck of a carnival not yet set up (ADR-0066 §7): one "Set the carnival up" link to Manage |
 | `event-setup-empty-catalogue-{w}.png` | Event setup over an empty catalogue: the standard events, in place |

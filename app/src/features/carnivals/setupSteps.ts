@@ -67,9 +67,14 @@ export function firstUndoneStep(steps: readonly SetupStep[]): SetupStep | undefi
   return steps.find((step) => step.done === false && !step.optional);
 }
 
+/** Active students on the current list: the Students step's count, and what opening needs. */
+export function studentCount(participation: readonly HouseParticipation[]): number {
+  return participation.reduce((total, house) => total + house.competitors, 0);
+}
+
 function studentsStep(facts: SetupFacts): SetupStep {
   const rows = facts.participation;
-  const students = (rows ?? []).reduce((total, house) => total + house.competitors, 0);
+  const students = studentCount(rows ?? []);
   return {
     id: "roster",
     title: "Students",

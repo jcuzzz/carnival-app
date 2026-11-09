@@ -16,14 +16,12 @@ The maintainer asked for this order: create the account, configure the school, c
 4. **Carnival setup has four steps, in order: Students, Events, Program (optional), Open.** Back links from the setup screens lead to Manage.
    - **Students** is done when a promoted roster has students. For a System administrator it links to the roster import launched from this carnival. The import pre-fills the carnival's year and offers a way back afterwards. The student list stays school-wide ([ADR-0060](0060-the-competition-year-is-chosen-at-import.md)): the carnival supplies only the default year, so a second carnival in the same year finds the step done. The step keeps the roster-year warning ([ADR-0060](0060-the-competition-year-is-chosen-at-import.md) §4), and Ready to open repeats it. School → Roster import stays, for re-imports during the year.
    - **Events**: "Add the standard events" (the template apply) sits on Event setup rather than as a section of Manage. Its endpoint and permissions are unchanged. Ages and categories follow [ADR-0067](0067-divisions-come-from-the-student-list.md).
-5. **Ready to open.** Before Open, Manage lists warnings from what it already reads:
+5. **Ready to open.** A carnival opens only once it has a student list (an active student with a current roster snapshot, the Students step's count) and events, meaning at least one division. The server refuses Draft → Open otherwise (`409 CARNIVAL_NOT_READY`, naming what is missing as `studentList` and/or `events`); Open → Closed and a reopen from Closed are not checked. Before Open, Manage also lists warnings from what it already reads, and these never block:
    - a roster year that differs from the carnival's year;
    - the count of events and divisions;
    - divisions whose age no current student has;
    - divisions outside the program.
-
-   It never blocks.
-6. **The primary "Open carnival" opens the carnival and every Scheduled division.** "Open the carnival only" is the secondary, for schools that open events as they are called. Per-division Open and Close remain on the Deck.
+6. **The primary "Open carnival" opens the carnival and every Scheduled division.** "Open the carnival only" is the secondary, for schools that open events as they are called. Both are always shown in step 4, greyed out with one line naming what is missing until the carnival is ready. Per-division Open and Close remain on the Deck.
 7. **The Deck is for the day.** It holds capture and per-division Open and Close, and nothing that sets a carnival up.
    - An empty Deck shows a manager one link, "Set the carnival up", to Manage, as [ADR-0024](0024-carnival-context-and-primary-navigation.md) §5 says, rather than the next step's label. Anyone else sees a line saying the carnival is not set up yet.
    - The Deck no longer offers officials assignment. The assignment API stays, and existing assignments still drive "My events" ([ADR-0016](0016-role-model-simplification.md)). A picker in setup is built only if staff ask for "My events".
@@ -36,6 +34,7 @@ How it looks: [app navigation](../architecture/app-navigation.md), [roster impor
 - A first-time administrator always has a next step, and the Deck no longer teaches setup.
 - An install whose name and houses were seeded from `.env` shows the school row undone until an administrator opens School settings and saves, even with nothing changed.
 - An organiser who presses the primary out of habit opens every division. Closing a division is the undo.
+- A carnival cannot open empty: an open carnival with no students or no events can take no result, and the first entry attempt is a late place to learn it. [ADR-0054](0054-setting-up-a-carnival.md) put no gate on the server; this adds one, for these two facts only. A carnival already run is never trapped, because only the first open is checked.
 - The app offers no way to assign officials, so "My events" shows nothing on new carnivals. The API remains, and a picker in setup is built only if staff ask for "My events".
 - A Carnival administrator still cannot import. The Students step names who can.
 - The separate approve press, a pause before the roster changes, is gone. The review table stays above the button.
@@ -47,5 +46,6 @@ How it looks: [app navigation](../architecture/app-navigation.md), [roster impor
 - **A roster per carnival:** duplicates students, and supersedes [ADR-0060](0060-the-competition-year-is-chosen-at-import.md) §2 for nothing step 4 does not already give.
 - **Copying a new carnival from the last one of its sport:** not now. No school has run a second season yet, and the standard events with the roster's ages rebuild a carnival in one press. Revisit after a school's second season.
 - **Opening divisions on the server whenever the carnival opens:** schools that open events as they are called need the carnival-only open ([ADR-0054](0054-setting-up-a-carnival.md)).
-- **A server-side gate on opening:** a school may deliberately run on last year's roster. The check warns.
+- **A server-side gate on every Ready to open check:** a school may deliberately run on last year's roster, on ages no student has, or without a program. Those checks warn.
+- **Hiding the opens until the carnival is ready:** a greyed button with its reason says what opening will need; a missing one says nothing.
 - **Keeping officials on the Deck with a better field:** assignment is planning done before the day, not capture.

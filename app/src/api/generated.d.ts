@@ -10537,6 +10537,7 @@ export interface components {
             revokedByDisplayName: null | string;
             revokedBySubject: null | string;
             role: components["schemas"]["PlatformRole"];
+            self: boolean;
             upn: string;
         };
         /** @enum {unknown} */

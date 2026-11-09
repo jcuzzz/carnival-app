@@ -1,8 +1,15 @@
 import { useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
 import { IMPORT_BATCH_EXPIRED_TEXT, errorText } from "../../api/errorText";
-import type { ReconciliationReport, RowDisposition, StagedRow } from "../../api/types";
+import type {
+  HouseMarkDto,
+  ReconciliationReport,
+  RowDisposition,
+  StagedRow,
+} from "../../api/types";
 import type { ApiState } from "../../api/useApiQuery";
+import { houseNameOf, useHouseMarks } from "../../branding/houseMarks";
+import { categoryLabel } from "../events/eventLabels";
 import { agesAsAt } from "./cutOff";
 import { rowProblems } from "./rejectedRows";
 
@@ -24,6 +31,7 @@ export function ReconciliationSection({
   state: ApiState<ReconciliationReport>;
 }) {
   const [filter, setFilter] = useState<RowDisposition | "all">("all");
+  const houses = useHouseMarks();
   const report = state.data;
   const rows = useMemo(() => {
     if (!report) return [];
@@ -110,7 +118,7 @@ export function ReconciliationSection({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <RowLine key={row.rowNumber} row={row} />
+              <RowLine key={row.rowNumber} row={row} houses={houses} />
             ))}
           </tbody>
         </table>
@@ -131,7 +139,7 @@ export function ReconciliationSection({
   );
 }
 
-function RowLine({ row }: { row: StagedRow }) {
+function RowLine({ row, houses }: { row: StagedRow; houses: HouseMarkDto[] }) {
   const tone =
     row.disposition === "Rejected"
       ? "bad"
@@ -148,9 +156,9 @@ function RowLine({ row }: { row: StagedRow }) {
         {row.preferredName ?? row.firstName} {row.surname}
       </td>
       <td>{row.yearLevel ?? "—"}</td>
-      <td>{row.houseCode ?? "—"}</td>
+      <td>{row.houseCode ? houseNameOf(houses, row.houseCode) : "—"}</td>
       <td>{row.competitionAgeGroup ?? "—"}</td>
-      <td>{row.competitionCategory ?? "—"}</td>
+      <td>{row.competitionCategory ? categoryLabel(row.competitionCategory) : "—"}</td>
       <td>
         <span className={`badge ${tone}`}>{DISPOSITION_LABEL[row.disposition] ?? row.disposition}</span>
         {row.issues.length > 0 && <span className="row-sub"> {rowProblems(row.issues)}</span>}

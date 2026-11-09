@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./client";
 import {
+  CARNIVAL_NOT_READY_TEXT,
   DIRECT_WRITE_NETWORK_ERROR_TEXT,
   errorText,
   HOUSES_REQUIRED_TEXT,
@@ -63,6 +64,18 @@ describe("errorText", () => {
         ),
       ),
     ).toBe("At least one house is required.");
+  });
+
+  it("words the not-ready refusal of an open, which Manage normally greys out first", () => {
+    const text = errorText(
+      new ApiError(
+        409,
+        { error: "CARNIVAL_NOT_READY", detail: "Add events before opening.", missing: ["events"] },
+        "/x",
+      ),
+    );
+    expect(text).toBe(CARNIVAL_NOT_READY_TEXT);
+    expect(text).not.toContain("CARNIVAL_NOT_READY");
   });
 
   it("tells an official a too-large submission is not theirs to retry", () => {

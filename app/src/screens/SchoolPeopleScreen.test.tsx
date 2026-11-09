@@ -15,9 +15,13 @@ vi.mock("../auth/localAccounts", async (importOriginal) => ({
   changeLocalAccount: vi.fn(),
 }));
 
-vi.mock("../api/resources", () => ({ getSchoolSettings: vi.fn(), grantRole: vi.fn() }));
+vi.mock("../api/resources", () => ({
+  getSchoolSettings: vi.fn(),
+  grantRole: vi.fn(),
+  listRoleAssignments: vi.fn(),
+}));
 
-import { getSchoolSettings, grantRole } from "../api/resources";
+import { getSchoolSettings, grantRole, listRoleAssignments } from "../api/resources";
 import {
   changeLocalAccount,
   createLocalAccount,
@@ -76,6 +80,7 @@ beforeEach(() => {
   vi.mocked(getSchoolSettings).mockReset().mockResolvedValue({} as SchoolSettings);
   vi.mocked(createLocalAccount).mockReset();
   vi.mocked(grantRole).mockReset().mockResolvedValue({} as RoleAssignment);
+  vi.mocked(listRoleAssignments).mockReset().mockResolvedValue([]);
   vi.mocked(resetLocalAccount).mockReset();
   vi.mocked(changeLocalAccount).mockReset();
 });
@@ -95,6 +100,31 @@ describe("SchoolPeopleScreen", () => {
     expect(within(row).getByText(/Last signed in/)).toBeTruthy();
     expect(within(row).getByText(/Setup link used .* from 10\.1\.2\.3/)).toBeTruthy();
     expect(within(rowOf("Backup Admin")).getByText(/System administrator/)).toBeTruthy();
+  });
+
+  it("shows each person's active roles from the role list", async () => {
+    const grant = (upn: string, role: RoleAssignment["role"], revoked = false) =>
+      ({ upn, role, revokedAtUtc: revoked ? "2026-11-04T00:00:00Z" : null }) as RoleAssignment;
+    vi.mocked(listRoleAssignments).mockResolvedValue([
+      grant("helper1", "Recorder"),
+      grant("helper1", "Viewer", true),
+      grant("HELPER1", "CarnivalAdministrator"),
+      grant("someone-else", "Viewer"),
+    ]);
+    vi.mocked(listLocalAccounts).mockResolvedValue([
+      ME,
+      account(),
+      account({ id: "a3", username: "new1", displayName: "New Person" }),
+    ]);
+    renderWithQuery(<SchoolPeopleScreen />);
+
+    await waitFor(() =>
+      expect(within(rowOf("Helper One")).getByText(/Carnival administrator, Recorder/)).toBeTruthy(),
+    );
+    expect(within(rowOf("Helper One")).queryByText(/Viewer/)).toBeNull();
+    // Held through the account itself, with no row in the role list.
+    expect(within(rowOf("Backup Admin")).getByText(/System administrator/)).toBeTruthy();
+    expect(within(rowOf("New Person")).getByText(/No role/)).toBeTruthy();
   });
 
   it("names each person by display name, with the username beneath", async () => {

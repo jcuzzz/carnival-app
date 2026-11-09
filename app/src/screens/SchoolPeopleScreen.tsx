@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
-import { getSchoolSettings, grantRole } from "../api/resources";
-import type { IssuedSetupLink, LocalAccount, PlatformRole } from "../api/types";
+import { getSchoolSettings, grantRole, listRoleAssignments } from "../api/resources";
+import type { IssuedSetupLink, LocalAccount, PlatformRole, RoleAssignment } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import {
   changeLocalAccount,
@@ -15,7 +15,7 @@ import {
 } from "../auth/localAccounts";
 import { hasRole, useSession } from "../auth/session";
 import { QrCode } from "../features/accounts/QrCode";
-import { ROLES } from "../features/roles/roles";
+import { activeRolesOf, ROLES, roleListLabel } from "../features/roles/roles";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href } from "../router";
 import { showToast } from "../shell/toast";
@@ -34,6 +34,9 @@ export default function SchoolPeopleScreen() {
     enabled: isAdmin,
   });
   const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: isAdmin });
+  const assignments = useApiQuery(keys.roleAssignments(), listRoleAssignments, {
+    enabled: isAdmin,
+  });
   const invalidate = useInvalidate();
   const [issued, setIssued] = useState<IssuedSetupLink | null>(null);
   const [username, setUsername] = useState("");
@@ -146,6 +149,7 @@ export default function SchoolPeopleScreen() {
               key={row.id}
               row={row}
               self={session?.subject === `local:${row.id}`}
+              assignments={assignments.error ? undefined : assignments.data}
               writable={!offline}
               onChanged={refresh}
               onIssued={setIssued}
@@ -292,15 +296,27 @@ function setupLinkLine(row: LocalAccount): string | null {
     : `Setup link valid until ${when(link.expiresAtUtc)}`;
 }
 
+/** The roles line: the app's own grants, else, unread, what the account itself says. */
+function rolesLine(row: LocalAccount, assignments: readonly RoleAssignment[] | undefined) {
+  if (assignments === undefined) return row.isSystemAdministrator ? "System administrator" : null;
+  const roles = activeRolesOf(row.username, assignments);
+  if (row.isSystemAdministrator && !roles.includes("SystemAdministrator"))
+    roles.unshift("SystemAdministrator");
+  return roles.length > 0 ? roleListLabel(roles) : "No role";
+}
+
 function AccountRow({
   row,
   self,
+  assignments,
   writable,
   onChanged,
   onIssued,
 }: {
   row: LocalAccount;
   self: boolean;
+  /** Undefined while unread or unreadable. */
+  assignments: readonly RoleAssignment[] | undefined;
   writable: boolean;
   onChanged: () => void;
   onIssued: (issued: IssuedSetupLink) => void;
@@ -335,7 +351,7 @@ function AccountRow({
     });
 
   const meta = [
-    row.isSystemAdministrator ? "System administrator" : null,
+    rolesLine(row, assignments),
     row.status === "AwaitingSetup"
       ? null
       : row.authenticatorEnrolled

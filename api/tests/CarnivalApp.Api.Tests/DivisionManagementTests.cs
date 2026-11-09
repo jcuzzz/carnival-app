@@ -878,6 +878,7 @@ public sealed class OpenScheduledDivisionsTests(ApiTestFactory factory) : IClass
     private async Task<(Guid CarnivalId, List<Guid> Scheduled)> SeedAsync(HttpClient admin, string name)
     {
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, name);
+        await CarnivalSeed.SeedStudentAsync(factory);
         var definitionId = await DivisionFixture.CreateDefinitionAsync(admin, "OPENALL");
         Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync(
             $"/api/v1/carnivals/{carnivalId}/events/generate", FiveDivisions(definitionId))).StatusCode);

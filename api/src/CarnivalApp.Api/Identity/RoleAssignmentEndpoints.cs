@@ -11,7 +11,8 @@ namespace CarnivalApp.Api.Identity;
 /// <summary>
 /// A bootstrap administrator row carries no Id and cannot be revoked in-app. <c>Upn</c> is a local
 /// account's username when <c>LocalAccount</c> is set. The <c>...ByDisplayName</c> fields are today's
-/// name of the person behind each subject, null when none is known.
+/// name of the person behind each subject, null when none is known. <c>Self</c>: the row is the
+/// caller's own, by subject or sign-in address, as the self-revoke refusal decides it.
 /// </summary>
 public sealed record RoleAssignmentDto(
     Guid? Id,
@@ -28,7 +29,8 @@ public sealed record RoleAssignmentDto(
     string? RevokedBySubject,
     string? RevokedByDisplayName,
     string? RevocationReason,
-    bool LocalAccount);
+    bool LocalAccount,
+    bool Self);
 
 /// <summary><c>Upn</c> is a sign-in address, or a local account's username (no '@').</summary>
 public sealed record GrantRoleRequest(string? Upn, string? Role, string? Reason);
@@ -50,7 +52,8 @@ public static class RoleAssignmentEndpoints
         group.MapDelete("/{id:guid}", RevokeAsync).Produces<RoleAssignmentDto>();
     }
 
-    private static RoleAssignmentDto Project(RoleAssignment row, IReadOnlyDictionary<string, string> names) => new(
+    private static RoleAssignmentDto Project(
+        RoleAssignment row, IReadOnlyDictionary<string, string> names, HttpContext ctx) => new(
         row.Id,
         row.SubjectUpn,
         row.SubjectDisplayName,
@@ -65,9 +68,10 @@ public static class RoleAssignmentEndpoints
         row.RevokedBySubject,
         row.RevokedBySubject is null ? null : names.GetValueOrDefault(row.RevokedBySubject),
         row.RevocationReason,
-        LocalAccount: row.SubjectId?.StartsWith(LocalAccount.SubjectPrefix, StringComparison.Ordinal) == true);
+        LocalAccount: row.SubjectId?.StartsWith(LocalAccount.SubjectPrefix, StringComparison.Ordinal) == true,
+        Self: IsCaller(row, ctx));
 
-    private static IEnumerable<RoleAssignmentDto> BootstrapRows(IConfiguration configuration) =>
+    private static IEnumerable<RoleAssignmentDto> BootstrapRows(IConfiguration configuration, HttpContext ctx) =>
         GroupToRoleClaimsTransformation.BootstrapAdministrators(configuration)
         .Select(entry => new RoleAssignmentDto(
             Id: null,
@@ -84,9 +88,11 @@ public static class RoleAssignmentEndpoints
             RevokedBySubject: null,
             RevokedByDisplayName: null,
             RevocationReason: null,
-            LocalAccount: false));
+            LocalAccount: false,
+            Self: string.Equals(ctx.User.GetUpn()?.Trim(), entry, StringComparison.OrdinalIgnoreCase)));
 
     private static async Task<IResult> ListAsync(
+        HttpContext ctx,
         [FromServices] CarnivalAppDbContext db,
         [FromServices] IConfiguration configuration,
         CancellationToken ct)
@@ -97,8 +103,8 @@ public static class RoleAssignmentEndpoints
         var ordered = rows
             .OrderBy(row => row.SubjectUpn, StringComparer.Ordinal)
             .ThenBy(row => row.CreatedAtUtc)
-            .Select(row => Project(row, names));
-        return Results.Ok(BootstrapRows(configuration).Concat(ordered).ToList());
+            .Select(row => Project(row, names, ctx));
+        return Results.Ok(BootstrapRows(configuration, ctx).Concat(ordered).ToList());
     }
 
     private static async Task<IResult> GrantAsync(
@@ -175,7 +181,7 @@ public static class RoleAssignmentEndpoints
 
         provider.Invalidate();
         return Results.Created($"/api/v1/admin/role-assignments/{assignment.Id}",
-            Project(assignment, await NamesAsync(db, [assignment], ct)));
+            Project(assignment, await NamesAsync(db, [assignment], ct), ctx));
     }
 
     private static Task<bool> IsActiveAsync(
@@ -201,7 +207,7 @@ public static class RoleAssignmentEndpoints
             return ApiError.Unprocessable(ErrorCodes.RoleReasonRequired,
                 $"Give a reason for this revocation (at most {RoleAssignmentLimits.MaxReasonLength} characters).");
 
-        if (row.RevokedAtUtc is not null) return Results.Ok(Project(row, await NamesAsync(db, [row], ct)));
+        if (row.RevokedAtUtc is not null) return Results.Ok(Project(row, await NamesAsync(db, [row], ct), ctx));
 
         // A UPN rename between grants leaves one subject holding the role under two rows.
         var role = row.Role;
@@ -231,19 +237,21 @@ public static class RoleAssignmentEndpoints
         await db.SaveChangesAsync(ct);
 
         provider.Invalidate();
-        return Results.Ok(Project(row, await NamesAsync(db, [row], ct)));
+        return Results.Ok(Project(row, await NamesAsync(db, [row], ct), ctx));
     }
 
     private static Task<Dictionary<string, string>> NamesAsync(
         CarnivalAppDbContext db, IEnumerable<RoleAssignment> rows, CancellationToken ct) =>
         SubjectNames.ResolveAsync(db, rows.SelectMany(row => new[] { row.CreatedBySubject, row.RevokedBySubject }), ct);
 
+    // As the claims transformation grants: a bound row by subject only, an unbound one by UPN.
     private static bool IsCaller(RoleAssignment row, HttpContext ctx)
     {
-        var subject = ctx.User.GetStableSubject();
-        if (row.SubjectId is not null && subject is not null
-            && row.SubjectId.Equals(subject, StringComparison.OrdinalIgnoreCase))
-            return true;
+        if (row.SubjectId is not null)
+        {
+            var subject = ctx.User.GetStableSubject();
+            return subject is not null && row.SubjectId.Equals(subject, StringComparison.OrdinalIgnoreCase);
+        }
         var upn = ctx.User.GetUpn();
         return upn is not null && row.SubjectUpn.Equals(upn.Trim(), StringComparison.OrdinalIgnoreCase);
     }

@@ -545,9 +545,9 @@ public sealed class ApplyTemplateEndpointTests : IDisposable
     public async Task Apply_refuses_a_closed_carnival()
     {
         var carnivalId = await CreateCarnivalAsync();
-        foreach (var status in new[] { "Open", "Closed" })
-            Assert.Equal(HttpStatusCode.OK, (await _admin.PostAsJsonAsync(
-                $"/api/v1/carnivals/{carnivalId}/status", new { status })).StatusCode);
+        // Set directly: an empty carnival cannot be opened (ADR-0066 §5).
+        await CarnivalSeed.MutateAsync(_factory, db =>
+            db.Carnivals.Single(c => c.Id == carnivalId).Status = CarnivalStatus.Closed);
 
         Assert.Equal(HttpStatusCode.Conflict, (await ApplyAsync(carnivalId)).StatusCode);
     }
@@ -867,9 +867,9 @@ public sealed class ApplyTemplateAgesTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
         await unknown.AssertErrorAsync(ErrorCodes.TemplateInvalid);
 
-        foreach (var status in new[] { "Open", "Closed" })
-            Assert.Equal(HttpStatusCode.OK, (await _admin.PostAsJsonAsync(
-                $"/api/v1/carnivals/{carnivalId}/status", new { status })).StatusCode);
+        // Set directly: an empty carnival cannot be opened (ADR-0066 §5).
+        await CarnivalSeed.MutateAsync(_factory, db =>
+            db.Carnivals.Single(c => c.Id == carnivalId).Status = CarnivalStatus.Closed);
         await (await ApplyAsync(carnivalId)).AssertErrorAsync(ErrorCodes.CarnivalNotEditable);
     }
 

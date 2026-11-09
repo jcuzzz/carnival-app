@@ -174,6 +174,8 @@ function RoleRow({
   const [error, setError] = useState<string | null>(null);
   const person = personLabel(row);
   const revoked = row.revokedAtUtc !== null;
+  // The server refuses it (ROLE_SELF_REVOKE), so offer no button that only refuses.
+  const ownAdministrator = row.self && row.role === "SystemAdministrator";
 
   function disarm(): void {
     setArmed(false);
@@ -221,6 +223,9 @@ function RoleRow({
                   .join(" · ")}
           </span>
           {row.reason && <span className="row-sub">{row.reason}</span>}
+          {ownAdministrator && !revoked && (
+            <span className="row-sub">You can't remove your own administrator role.</span>
+          )}
           {revoked && (
             <span className="row-sub">
               Revoked{revokedOn ? ` ${revokedOn}` : ""}
@@ -238,7 +243,7 @@ function RoleRow({
           {!row.bootstrap && !revoked && !row.boundToSubject && (
             <span className="badge warn">{UNBOUND_NOTE}</span>
           )}
-          {!row.bootstrap && !revoked && !armed && (
+          {!row.bootstrap && !revoked && !armed && !ownAdministrator && (
             <button
               type="button"
               className="danger"

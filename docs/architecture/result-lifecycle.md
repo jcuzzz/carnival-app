@@ -38,9 +38,11 @@ stateDiagram-v2
 
 Only these transitions exist (`ILLEGAL_CARNIVAL_TRANSITION` otherwise), each audited (`carnival.status`) with an optional reason. Closed can reopen because capture needs Open and finalisation needs a result for every entry: without it, a missed DNS would be a dead end. Finalised is terminal.
 
+The first open, Draft → Open, needs the carnival to be ready ([ADR-0066](../adr/0066-the-setup-flow.md) §5): a student list (at least one active student with a current roster snapshot, the count the Students step shows) and events, meaning at least one division. Otherwise it is refused with `409 CARNIVAL_NOT_READY` and nothing is written or audited; the detail names what is missing ("Import the student list and add events before opening.") and `missing` lists `studentList` and/or `events`. The transition check runs first, so a wrong target is still `ILLEGAL_CARNIVAL_TRANSITION`. Open → Closed and a reopen from Closed are not checked. Nothing else blocks the open: the roster's year, ages no student has and divisions outside the program are warnings on Manage only.
+
 ### Division status
 
-Each division (`CarnivalEvent`) has its own status, set by a carnival administrator: `Scheduled → Open ⇄ Closed`. "Open all scheduled" opens every scheduled division in one act; Manage's primary "Open carnival" opens the carnival and then does the same, and "Open the carnival only" leaves the divisions Scheduled ([ADR-0066](../adr/0066-the-setup-flow.md) §6). A legacy `Finalised` division can only move back to `Closed`; nothing enters `Finalised`. Division status changes are refused once the carnival is finalised.
+Each division (`CarnivalEvent`) has its own status, set by a carnival administrator: `Scheduled → Open ⇄ Closed`. "Open all scheduled" opens every scheduled division in one act; Manage's primary "Open carnival" opens the carnival and then does the same, only once the open succeeded, so a carnival that is not ready opens no divisions either; and "Open the carnival only" leaves the divisions Scheduled ([ADR-0066](../adr/0066-the-setup-flow.md) §6). A legacy `Finalised` division can only move back to `Closed`; nothing enters `Finalised`. Division status changes are refused once the carnival is finalised.
 
 ### What each state allows
 

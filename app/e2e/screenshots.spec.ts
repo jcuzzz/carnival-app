@@ -411,6 +411,15 @@ test("a fresh carnival with no student list: the checklist, the blocked setup sc
     await expect(page.getByText("Import the students first")).toBeVisible();
     await capture(page, "manage-checklist", width);
 
+    // ADR-0066 §5: both opens shown, greyed, with what they wait on.
+    const openStep = page.locator("li").filter({
+      has: page.getByRole("button", { name: "Open carnival" }),
+    });
+    await expect(openStep.getByText("Import the students and add events first.")).toBeVisible();
+    await expect(openStep.getByRole("button", { name: "Open carnival" })).toBeDisabled();
+    await expect(openStep.getByRole("button", { name: "Open the carnival only" })).toBeDisabled();
+    await captureRegion(page, openStep, "manage-open-not-ready", width);
+
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
     await settled(notice);
     await expect(page.getByRole("link", { name: "Import the students" })).toBeVisible();

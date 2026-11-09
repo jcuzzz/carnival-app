@@ -368,6 +368,75 @@ public sealed class RoleAssignmentEndpointTests : IDisposable
         Assert.Null((await RowAsync(id)).RevokedAtUtc);
     }
 
+    /// <summary>Roles hides Revoke on this row by the same test the refusal uses.</summary>
+    [Fact]
+    public async Task The_list_marks_the_callers_own_rows()
+    {
+        var id = await GrantedAsync("sys-boss@school.test", "SystemAdministrator");
+        var self = _factory.CreateClientAs("sys-boss@school.test", "SystemAdministrator");
+
+        static async Task<bool> SelfFlag(HttpClient client, Guid id) =>
+            (await client.GetFromJsonAsync<JsonElement>(Path)).EnumerateArray()
+                .Single(r => r.GetProperty("id").ValueKind != JsonValueKind.Null
+                             && r.GetProperty("id").GetGuid() == id)
+                .GetProperty("self").GetBoolean();
+
+        Assert.True(await SelfFlag(self, id));
+        Assert.False(await SelfFlag(_admin, id));
+    }
+
+    private static async Task<bool> SelfOf(HttpClient client, Guid id) =>
+        (await client.GetFromJsonAsync<JsonElement>(Path)).EnumerateArray()
+            .Single(r => r.GetProperty("id").ValueKind != JsonValueKind.Null
+                         && r.GetProperty("id").GetGuid() == id)
+            .GetProperty("self").GetBoolean();
+
+    private HttpClient ClientAs(string subject, string? upn = null)
+    {
+        var client = _factory.CreateClientAs(subject, "SystemAdministrator");
+        if (upn is not null) client.DefaultRequestHeaders.Add(DevAuthentication.UpnHeader, upn);
+        return client;
+    }
+
+    /// <summary>A local account's session carries <c>local:&lt;id&gt;</c> and no UPN.</summary>
+    [Fact]
+    public async Task A_local_account_is_matched_by_its_subject_alone()
+    {
+        var mine = Row("backup-admin", PlatformRole.SystemAdministrator, "local:acct-1");
+        var theirs = Row("helper1", PlatformRole.Recorder, "local:acct-2");
+        await SeedAsync(mine, theirs);
+        var local = ClientAs("local:acct-1");
+
+        Assert.True(await SelfOf(local, mine.Id));
+        Assert.False(await SelfOf(local, theirs.Id));
+        await (await RevokeAsync(local, mine.Id)).AssertErrorAsync(ErrorCodes.RoleSelfRevoke);
+    }
+
+    [Fact]
+    public async Task A_bound_provider_row_is_matched_by_its_oid()
+    {
+        var row = Row("boss@school.test", PlatformRole.SystemAdministrator, "oid-boss");
+        await SeedAsync(row);
+
+        Assert.True(await SelfOf(ClientAs("oid-boss", "renamed@school.test"), row.Id));
+    }
+
+    /// <summary>
+    /// The claims transformation grants a bound row by subject only, so a caller holding its old
+    /// UPN does not hold the role, and may revoke it.
+    /// </summary>
+    [Fact]
+    public async Task A_bound_row_is_not_yours_by_a_matching_upn()
+    {
+        var row = Row("boss@school.test", PlatformRole.SystemAdministrator, "oid-someone-else");
+        await SeedAsync(row);
+        var caller = ClientAs("oid-caller", "boss@school.test");
+
+        Assert.False(await SelfOf(caller, row.Id));
+        Assert.Equal(HttpStatusCode.OK, (await RevokeAsync(caller, row.Id)).StatusCode);
+        Assert.NotNull((await RowAsync(row.Id)).RevokedAtUtc);
+    }
+
     [Fact]
     public async Task Another_system_administrator_may_revoke_yours()
     {

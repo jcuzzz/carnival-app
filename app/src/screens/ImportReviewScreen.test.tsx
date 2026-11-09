@@ -11,6 +11,7 @@ import type {
   ValidationReport,
 } from "../api/types";
 import { signIn, signOut } from "../auth/session";
+import { _resetHouseMarksForTests, applyHouseMarks } from "../branding/houseMarks";
 import { renderWithQuery } from "../test/queryWrapper";
 
 vi.mock("../api/resources", () => ({
@@ -141,6 +142,7 @@ beforeEach(() => {
 afterEach(() => {
   signOut();
   vi.unstubAllEnvs();
+  _resetHouseMarksForTests();
 });
 
 describe("ImportReviewScreen", () => {
@@ -153,6 +155,19 @@ describe("ImportReviewScreen", () => {
     expect(screen.getByText("Shown below")).toBeTruthy();
     expect(screen.queryByText("reviewing")).toBeNull();
     expect(screen.getByText("Sam Synth")).toBeTruthy();
+  });
+
+  it("names each student's house and category as the school does, not by code", async () => {
+    applyHouseMarks([{ code: "WATTLE", name: "Wattle House", colour: null }]);
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={null} />);
+
+    const row = (await screen.findByText("Sam Synth")).closest("tr")!;
+    const cells = [...row.querySelectorAll("td")].map((td) => td.textContent);
+    expect(cells).toContain("Wattle House");
+    expect(cells).toContain("Boys");
+    expect(cells).not.toContain("WATTLE");
+    expect(cells).not.toContain("M");
   });
 
   it("renders with no batch selected", async () => {

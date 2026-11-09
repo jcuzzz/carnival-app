@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiError } from "../api/client";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
 import {
@@ -20,7 +21,7 @@ import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
 import { readiness } from "../features/carnivals/readiness";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
-import { setupSteps } from "../features/carnivals/setupSteps";
+import { setupSteps, studentCount } from "../features/carnivals/setupSteps";
 import { counted } from "../features/events/counted";
 import { carnivalSport, carnivalTypeLabel } from "../features/events/eventLabels";
 import { DEVICE_TICK_MS, DevicesPanel, useNow } from "../features/devices/DevicesPanel";
@@ -130,6 +131,9 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
     } catch (err) {
       // A direct write: the "saved on this device" default would be false.
       report(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
+      // The screen was behind: re-read what step 4 greys out on.
+      if (err instanceof ApiError && err.code === "CARNIVAL_NOT_READY")
+        invalidate(keys.progress(carnivalId), keys.carnivalEvents(carnivalId));
       return false;
     } finally {
       setBusy(false);
@@ -195,10 +199,11 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
   const isFinal = c.status === "Finalised";
   const warning = fleetWarning(devices.data?.devices, now, devices.error !== undefined);
   const overrideReason = finaliseReason(devices.data?.devices, now, devices.error !== undefined);
+  const participation = progress.error ? null : progress.data?.participation;
   const steps = setupSteps({
     carnivalId,
     status: c.status,
-    participation: progress.error ? null : progress.data?.participation,
+    participation,
     canImport,
     rosterYear: settings.data?.rosterYear,
     carnivalDate: c.date,
@@ -220,6 +225,7 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
   const ready = draft
     ? readiness({
         carnival: c,
+        students: participation ? studentCount(participation) : participation,
         events: events.data,
         rosterAgeGroups: settings.data?.rosterAgeGroups,
         rosterYear: settings.data?.rosterYear,
@@ -247,22 +253,32 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
           </ul>
         </div>
       )}
+      {/* Shown greyed rather than hidden, so the step says what opening will need. */}
+      {ready.missing && (
+        <p className="row-sub" id="open-missing">
+          {ready.missing}
+        </p>
+      )}
       <div className="button-row">
         {/* Every division is born Scheduled, so the primary open opens them too. */}
         <button
           className="primary"
-          disabled={busy}
+          disabled={busy || ready.missing !== null}
+          aria-describedby={ready.missing ? "open-missing" : undefined}
           onClick={() => void openCarnivalAndDivisions()}
         >
           {busy ? "Saving…" : "Open carnival"}
         </button>
-        {scheduled > 0 && (
-          <button disabled={busy} onClick={() => void change("Open")}>
-            {busy ? "Saving…" : "Open the carnival only"}
-          </button>
-        )}
+        <button
+          disabled={busy || ready.missing !== null}
+          aria-describedby={ready.missing ? "open-missing" : undefined}
+          onClick={() => void change("Open")}
+        >
+          {busy ? "Saving…" : "Open the carnival only"}
+        </button>
       </div>
-      {scheduled > 0 && (
+      {/* Not while the opens are greyed, nor once every division is open already. */}
+      {ready.missing === null && !(scheduled === 0 && (events.data?.length ?? 0) > 0) && (
         <p className="row-sub">
           With “Open the carnival only”, every division stays unopened, so you can open them one
           at a time on the day.

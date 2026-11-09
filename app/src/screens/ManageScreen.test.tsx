@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { CARNIVAL_NOT_READY_TEXT } from "../api/errorText";
 import { _resetReachabilityForTests } from "../api/reachability";
 import type { Carnival, CarnivalSettings, CarnivalStatus } from "../api/types";
 import { signIn, signOut } from "../auth/session";
@@ -421,6 +422,7 @@ describe("ManageScreen", () => {
   // ---- Opening, and Ready to open (ADR-0066 §5–6) ----
 
   it("opens the carnival and every scheduled division with the primary", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
@@ -440,6 +442,7 @@ describe("ManageScreen", () => {
   });
 
   it("opens only the carnival with the secondary", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
@@ -454,6 +457,7 @@ describe("ManageScreen", () => {
   });
 
   it("opens the divisions too while the event list is loading, or after it failed", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(changeCarnivalStatus).mockResolvedValue(carnival("Open"));
     const loading = () => new Promise<never>(() => {});
@@ -467,7 +471,9 @@ describe("ManageScreen", () => {
 
       const primary = await screen.findByRole("button", { name: "Open carnival" });
       expect(primary.className).toBe("primary");
-      expect(screen.queryByRole("button", { name: "Open the carnival only" })).toBeNull();
+      // An unread list claims nothing: the server is the check.
+      await waitFor(() => expect(getProgress).toHaveBeenCalled());
+      expect((primary as HTMLButtonElement).disabled).toBe(false);
       fireEvent.click(primary);
 
       await waitFor(() => expect(openScheduledEvents).toHaveBeenCalledWith("c-1"));
@@ -476,6 +482,7 @@ describe("ManageScreen", () => {
   });
 
   it("opens no divisions when opening the carnival was refused", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
     vi.mocked(changeCarnivalStatus).mockRejectedValue(new TypeError("Failed to fetch"));
@@ -492,6 +499,7 @@ describe("ManageScreen", () => {
   });
 
   it("says the carnival opened when only its divisions failed, and offers the retry", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1"), division("e-2")]);
     vi.mocked(changeCarnivalStatus).mockImplementation(async () => {
@@ -513,6 +521,7 @@ describe("ManageScreen", () => {
   });
 
   it("lists what to check before opening, without disabling Open", async () => {
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(getCarnivalSettings).mockResolvedValue({
       ...settings,
@@ -547,6 +556,105 @@ describe("ManageScreen", () => {
     expect(
       (screen.getByRole("button", { name: "Open carnival" }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  // ---- Not ready to open (ADR-0066 §5): shown greyed, never hidden ----
+
+  it.each([
+    ["no students and no events", 0, [], "Import the students and add events first."],
+    ["no events", 412, [], "Add events first."],
+    ["no students", 0, [division("e-1")], "Import the students first."],
+  ] as const)(
+    "greys both opens out with %s, saying what is missing",
+    async (_case, students, divisions, reason) => {
+      vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+      vi.mocked(getProgress).mockResolvedValue(progress(students));
+      vi.mocked(listCarnivalEvents).mockResolvedValue([...divisions]);
+      renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+      const line = await screen.findByText(reason);
+      const step = screen.getByText(/^4\. Open/).closest("li")!;
+      expect(step.contains(line)).toBe(true);
+      for (const name of ["Open carnival", "Open the carnival only"]) {
+        const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute("aria-describedby")).toBe(line.id);
+      }
+      expect(screen.getByRole("button", { name: "Open carnival" }).className).toBe("primary");
+      expect(step.textContent).not.toContain("With “Open the carnival only”");
+      fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
+      expect(changeCarnivalStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it("enables both opens once there are students and events, with no missing line", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByText("1 event · 1 division");
+    await waitFor(() =>
+      expect(screen.getByText(/^1\. Students/).closest("li")!.textContent).toContain("Done"),
+    );
+    for (const name of ["Open carnival", "Open the carnival only"]) {
+      const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+      expect(button.hasAttribute("aria-describedby")).toBe(false);
+    }
+    expect(screen.queryByText(/first\.$/)).toBeNull();
+  });
+
+  it("words the server's not-ready refusal in step 4, should the screen be behind", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    vi.mocked(changeCarnivalStatus).mockRejectedValue(
+      new ApiError(
+        409,
+        {
+          error: "CARNIVAL_NOT_READY",
+          detail: "Import the student list before opening.",
+          missing: ["studentList"],
+        },
+        "/x",
+      ),
+    );
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByText("1 event · 1 division");
+    fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(CARNIVAL_NOT_READY_TEXT);
+    expect(screen.getByText(/^4\. Open/).closest("li")!.contains(alert)).toBe(true);
+    expect(openScheduledEvents).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the students and events on a not-ready refusal, so the opens grey out", async () => {
+    vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
+    vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
+    vi.mocked(changeCarnivalStatus).mockImplementation(async () => {
+      // Another administrator removed the student list since this screen read it.
+      vi.mocked(getProgress).mockResolvedValue(progress(0));
+      throw new ApiError(
+        409,
+        { error: "CARNIVAL_NOT_READY", detail: "x", missing: ["studentList"] },
+        "/x",
+      );
+    });
+    renderWithQuery(<ManageScreen carnivalId="c-1" />);
+
+    await screen.findByText("1 event · 1 division");
+    await waitFor(() =>
+      expect(screen.getByText(/^1\. Students/).closest("li")!.textContent).toContain("Done"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open carnival" }));
+
+    expect(await screen.findByText("Import the students first.")).toBeTruthy();
+    for (const name of ["Open carnival", "Open the carnival only"])
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("links divisions outside the program to the program builder", async () => {
@@ -628,6 +736,7 @@ describe("ManageScreen", () => {
 
   it("opens from the checklist's last step while Draft, with no status section", async () => {
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
+    vi.mocked(getProgress).mockResolvedValue(progress(412));
     vi.mocked(listCarnivalEvents).mockResolvedValue([division("e-1")]);
     renderWithQuery(<ManageScreen carnivalId="c-1" />);
 

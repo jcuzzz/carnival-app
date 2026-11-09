@@ -153,6 +153,84 @@ public static class CarnivalSeed
             eligibleBoy, secondBoy, girl, youngerBoy, sStudent, inactive, noSnapshot);
     }
 
+    /// <summary>One active student with a current snapshot, under a unique age group.</summary>
+    public static async Task SeedStudentAsync(ApiTestFactory factory)
+    {
+        var n = Interlocked.Increment(ref _sequence);
+        await MutateAsync(factory, db =>
+        {
+            var batch = new ImportBatch
+            {
+                Id = Guid.CreateVersion7(),
+                SourceFileName = $"student-{n}.csv",
+                SourceFileHash = $"student-hash-{n}",
+                MappingVersion = "test",
+                ImportedBySubject = "seeder",
+                ImportedAtUtc = DateTimeOffset.UtcNow,
+                Status = ImportBatchStatus.Promoted,
+            };
+            var student = new Student
+            {
+                Id = Guid.CreateVersion7(),
+                ExternalStudentId = $"STUDENT{n}",
+                Surname = "Lane",
+                FirstName = "Indi",
+                IsActive = true,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            db.ImportBatches.Add(batch);
+            db.Students.Add(student);
+            db.RosterSnapshots.Add(new RosterSnapshot
+            {
+                Id = Guid.CreateVersion7(),
+                StudentId = student.Id,
+                SchoolYear = 2027,
+                YearLevel = 7,
+                HouseCode = "BANKSIA",
+                CompetitionAgeGroup = $"R{n}",
+                CompetitionCategory = CompetitionCategory.M,
+                ImportBatchId = batch.Id,
+                EffectiveDate = new DateOnly(2027, 1, 30),
+                IsCurrent = true,
+            });
+        });
+    }
+
+    /// <summary>
+    /// What Draft → Open needs (ADR-0066 §5): a student, and one Scheduled division of a fresh
+    /// definition. Returns the division's id.
+    /// </summary>
+    public static async Task<Guid> MakeReadyToOpenAsync(ApiTestFactory factory, Guid carnivalId)
+    {
+        await SeedStudentAsync(factory);
+        var n = Interlocked.Increment(ref _sequence);
+        var eventId = Guid.CreateVersion7();
+        await MutateAsync(factory, db =>
+        {
+            var definition = new EventDefinition
+            {
+                Id = Guid.CreateVersion7(),
+                Code = $"READY-{n}",
+                Name = "Freestyle 50m",
+                Sport = "Swimming",
+                MeasureType = MeasureType.Time,
+                Units = "s",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            db.EventDefinitions.Add(definition);
+            db.CarnivalEvents.Add(new CarnivalEvent
+            {
+                Id = eventId,
+                CarnivalId = carnivalId,
+                EventDefinitionId = definition.Id,
+                AgeGroup = "12",
+                Category = CompetitionCategory.M,
+                Status = CarnivalEventStatus.Scheduled,
+            });
+        });
+        return eventId;
+    }
+
     /// <summary>
     /// Schedule another division of the seeded event's DEFINITION — a sibling by
     /// category and/or tier (ADR-0023 §3), or by age. Returns its event id.

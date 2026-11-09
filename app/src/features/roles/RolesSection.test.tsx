@@ -31,6 +31,7 @@ function assignment(overrides: Partial<RoleAssignment> = {}): RoleAssignment {
     bootstrap: false,
     boundToSubject: false,
     localAccount: false,
+    self: false,
     reason: "Timing desk for the swimming carnival.",
     assignedBySubject: "sys-1",
     assignedByDisplayName: null,
@@ -308,6 +309,29 @@ describe("RolesSection", () => {
         "Left the school.",
       ]),
     );
+  });
+
+  it("offers no Revoke on your own administrator row, and says why", async () => {
+    vi.mocked(listRoleAssignments).mockResolvedValue([
+      assignment({ role: "SystemAdministrator", boundToSubject: true, self: true }),
+      assignment({
+        id: "22222222-2222-7222-8222-222222222222",
+        role: "Recorder",
+        boundToSubject: true,
+        self: true,
+      }),
+    ]);
+    renderWithQuery(<RolesSection offline={false} />);
+
+    expect(await screen.findByText("You can't remove your own administrator role.")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Revoke System administrator for coach@school.test" }),
+    ).toBeNull();
+    // Only the administrator role is refused: your other roles stay yours to drop.
+    expect(
+      screen.getByRole("button", { name: "Revoke Recorder for coach@school.test" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("You can't remove your own administrator role.")).toHaveLength(1);
   });
 
   it("relays a self-revoke refusal and leaves the strip open", async () => {

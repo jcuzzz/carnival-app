@@ -72,7 +72,9 @@ You open the carnival from the last step of the checklist on Manage. Under **4. 
 - divisions for an age no student has;
 - divisions that aren't in the program, such as ages the program doesn't cover, with an **Add them to the program** link.
 
-These are warnings only. You can still open. The buttons are in the same step:
+These are warnings only: you can still open. What you can't do is open a carnival with no student list or no events. Until it has both, the buttons are greyed out, and a line above them says what's missing, such as "Import the students and add events first."
+
+The buttons are in the same step:
 
 - **Open carnival** opens the carnival and every event in it, ready for results. Most schools want this.
 - **Open the carnival only** leaves each event waiting until you open it on the Deck, for schools that open events as they are called.

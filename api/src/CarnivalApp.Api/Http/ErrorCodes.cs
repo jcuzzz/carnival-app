@@ -80,6 +80,12 @@ public static class ErrorCodes
 
     public const string IllegalCarnivalTransition = "ILLEGAL_CARNIVAL_TRANSITION";
 
+    /// <summary>
+    /// 409: Draft → Open needs a student list and events, at least one division (ADR-0066 §5).
+    /// <c>missing</c> names <c>studentList</c> and/or <c>events</c>. A reopen is not checked.
+    /// </summary>
+    public const string CarnivalNotReady = "CARNIVAL_NOT_READY";
+
     public const string CarnivalFinalisationBlocked = "CARNIVAL_FINALISATION_BLOCKED";
 
     /// <summary>
