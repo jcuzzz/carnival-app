@@ -8,38 +8,39 @@
 - **Name:** `Carnival App` / `carnival-app` / `CarnivalApp`, kept for now (maintainer, 2026-10-21); renaming later is a find-and-replace across the tree (the prefix names databases, roles, cookies and storage keys: `carnival`, `carnival_app`, `carnival.*`); the pilot's port script no longer applies.
 - **Licence:** AGPL-3.0 with dual licensing (commercial licences for closed integration). Dependencies are permissive only, checked per push by `scripts/check_licences.py` (MS-PL allowed in the test project, OFL for the bundled font). **No CLA and no outside pull requests** (maintainer, 2026-10-21: no lawyer); if contributions are wanted later, adopt an established CLA text unmodified.
 - **Docs:** the current-state tree in `docs/README.md` is the primary documentation (architecture, admin, development); ADRs are short decision records (`docs/adr/README.md`). Staff guide: signing in and setting up a carnival are written; the other pages are planned.
-- **Gates:** API 2257 passed / 0 skipped · app tsc, lint, vitest 1774 / 125 files, build clean.
+- **Gates (branch `feature/setup-flow`, `0627733`):** API 2280 passed / 0 skipped (Docker tests included) · app tsc, lint, vitest 1833 / 127 files, build clean · local-accounts e2e 1/1 · dev e2e 84/88 (only the BACKLOG template test, on each device).
 
 ## Where code is written
 
 **Here.** The port from the private pilot repository ended on 2026-11-04: a fresh code-only port of the pilot's last commit matched this tree file for file (one line-ending difference in a synthetic CSV). Work goes on a feature branch and merges to `main` when ready. **Never run the pilot's port script against this tree again**: with `--force` it clears and rewrites `api/`, `app/`, `config/`, `data/`, `deploy/`, `scripts/` and `.github/`. The school pilot instance still runs from the pilot repository; a fix it needs is made in both repositories by hand.
 
-## In progress: local accounts (branch `feature/local-accounts`)
+## Done: local accounts (merged to `main`, `39b5867`, 2026-11-07)
 
-- **Built, reviewed and committed; not merged.** API 2232 tests (Docker tests included), app 1678 tests, the local-accounts e2e journey, 36 screenshots, docs and governance. Every package had an independent review (OWASP ASVS 5.0 L2 for API and app); accepted risks are in `architecture/authorisation-and-audit.md`.
-- **VM test passed (2026-11-06, `carnival`, 192.168.0.65, Debian 13)** on `4b436d6`: every sign-in, setup, authenticator, reset/disable, sign-out, cross-site and role check; 200 guesses at 8 in parallel all `SIGN_IN_FAILED`, `/health` p99 48 ms, API peak 171 MiB of 768. The VM clone keeps the maintainer's runbook notes stashed (`stash@{0}`), now folded into the runbook.
-- **Deploy-script defects from the fresh-clone run fixed and VM-tested (2026-11-07, `07cb151`):** first start on an empty database with no workaround, HTTPS by IP (`SITE_ADDRESS=192.168.0.65`), no-change redeploys, a branch with no upstream, a tag, the upstream currency refusal and both fresh-database refusals all pass. The stack runs on the branch with `SITE_ADDRESS=192.168.0.65` and no account yet; `APPLY_MIGRATIONS` is still `true`. Disk 16 GB at 72%: grow it to 32 GB, since local builds refill the cache.
-- Next: merge to `main`, then the rest of "Before the first release".
-- No .NET SDK on the maintainer's Linux machine: sessions ran it in the `mcr.microsoft.com/dotnet/sdk:10.0` container (repo mounted at the same path, host Docker socket and CLI mounted so the Testcontainers tests run).
+Built-in local accounts ([ADR-0065](adr/0065-built-in-local-accounts.md)), VM-tested, plus the deploy-script fixes from the first fresh-clone run (empty-database first start, branch/tag deploys, HTTPS by IP, no-change redeploys).
 
-## In progress: the setup flow (branch `feature/setup-flow`)
+## In progress: the setup flow (branch `feature/setup-flow`, not merged)
 
-- [ADR-0066](adr/0066-the-setup-flow.md) and [ADR-0067](adr/0067-divisions-come-from-the-student-list.md), accepted 2026-11-07. **Phase 1 is committed** (`b900e72`): first run lands on School and its "Set up your school" list; a new carnival lands on Manage; the Deck holds no setup and no officials assignment; Manage's Students step, Ready to open and the open-everything primary; the import launched from a carnival with one approve-and-promote press; People adds a person with a role.
-- **Phase 2 is built, not committed or reviewed as a whole:** divisions come from the student list. The checklist is Students, Events, Program, Open. Event setup shows the ages line with "Ages and categories", warns about saved ages no student has ("Remove those ages") and notes left-out ages quietly, and holds the standard events (primary on an empty carnival, a disclosure after). With no student list, Event setup, New event and the ages editor point at the import, and the API refuses the template apply with `409 ROSTER_REQUIRED`. The template apply uses the carnival's ages, else the roster's; no 5–21 fallback. Gates (2026-11-08): API 2247 passed / 0 skipped (the last full run, after P2-A's review fixes); app 1770 tests / 125 files, lint, tsc and build clean; API types regenerated with no diff; dev e2e 84 of 88 on four devices (only the BACKLOG template test, on each); 40 screenshot tests, 8 new captures, `manage-apply-template` retired, `divisions-no-roster` now `ages-no-roster`; the local-accounts journey was not run (port 5081 held by a stale API container).
-- **Phase 2 reviewed and committed (`866eca6`)**; the local-accounts e2e journey passes. **Deployed to the VM (2026-11-08)** with its data kept: smoke checks pass, migrations 28 → 28. VM disk is down to 3.3 GB free; prune the build cache before the next deploy, or grow the disk to 32 GB.
-- **School checklist fix (uncommitted, 2026-11-08):** the school step is done only once an administrator saves School settings (`setupConfirmed`, kept in `SettingsJson`; the VM's seeded name no longer ticks it); a new install seeds no sample name or houses, and a roster upload with no houses is refused `409 SCHOOL_HOUSES_REQUIRED`; a set-up school shows no setup block and no "School set up" line.
-- **First-run polish (uncommitted, 2026-11-08):** built in three packages (role words and the pre-name header; Open inside checklist step 4 with Carnival status hidden while Draft and a Draft notice on the Deck; the import's result line, status labels and "Update the student list"). Reviewed with nothing blocking and the review's fixes folded in (plain words for a file with layout problems, no School redirect on the demo, a Draft open error inside step 4, the newest role grant names an earlier importer); pending the closing gates' review and the maintainer's walk-through.
-- **Open needs a student list and an event (uncommitted, 2026-11-09, maintainer's call):** Draft → Open is refused `409 CARNIVAL_NOT_READY` without a student list and events (`missing`: `studentList`, `events`); Manage step 4 shows both opens greyed with what is missing; reopening is not checked; every other Ready to open item still only warns (ADR-0066 §5–6 edited in place). Walk-through fixes with it: the import table shows house names and Boys/Girls/Open; Roles hides Revoke on your own administrator row (rows carry `self`); People shows each person's roles.
-- **Next:** the maintainer tries the flow on the VM, then merge to `main`. The plan lives outside the repository with the maintainer.
+- **What it is:** [ADR-0066](adr/0066-the-setup-flow.md) (the flow) and [ADR-0067](adr/0067-divisions-come-from-the-student-list.md) (divisions come from the student list), both accepted and edited in place before merge. Research and proposal: [setup flow](research/2026-11-07-setup-flow.md).
+- **State:** all committed, reviewed and walked through three times on a fresh install; deployed to the VM (`0627733`, data kept, migrations 28 → 29). Behaviour in short: the first admin lands on School's "Set up your school" list (done only after School settings is saved; a set-up school shows nothing); a new carnival lands on Manage (Students → Events → Program → Open); students are imported from the carnival; Event setup holds the ages line and the standard events; **a carnival opens only with a student list and events** (`409 CARNIVAL_NOT_READY`; step 4 shows both opens greyed with what is missing); the Deck is for the day only. New installs seed no sample school name or houses.
+- **Next step:** the maintainer tries the flow on the VM (`https://192.168.0.65`); on their OK, merge `feature/setup-flow` into `main` and push.
+- **Screenshots for the maintainer:** a private artifact page, "Carnival App: first-run walk-through" (the maintainer views from another PC; republish it after UI changes).
+
+## Working notes for the next agent
+
+- **No .NET SDK on the maintainer's Linux machine.** Sessions ran it in `mcr.microsoft.com/dotnet/sdk:10.0` through a wrapper script (repo mounted at the same path, host Docker socket and CLI mounted so Testcontainers run, `ASPNETCORE_*`/`DOTNET_ENVIRONMENT`/`Section__Key` variables forwarded). Its containers outlive killed parents: after e2e runs, `docker ps` and stop any `dotnet/sdk` container. Installing the SDK locally would remove this friction.
+- **The dev SQLite database** is created with `EnsureCreated`, so a schema change needs it deleted (`~/.cache/carnival-dotnet-home/.local/share/CarnivalApp/dev.db*` under the wrapper).
+- **Test VM** `ssh carnival` (192.168.0.65, Debian 13, 2 vCPU, 3.8 GiB, Proxmox VM 165; 443 allowed from the LAN). Disk is 16 GB at about 77%: each `LOCAL_BUILD` deploy needs `docker builder prune -af` first until it is grown to 32 GB. The VM's checked-out branch refuses a direct push: push to `refs/deploy/<sha>`, then `git merge --ff-only` on the VM. `APPLY_MIGRATIONS` is still `true` there. `stash@{0}` holds the maintainer's runbook notes (already folded into the runbook).
+- **How to work here** (maintainer, 2026-11-09): show mockups or screenshots before building UI; walk through a real fresh install before calling UX done; subagents for large parallel work and one review per phase, small fixes directly, nits batched or to BACKLOG.
 
 ## Before the first release
 
 Done 2026-10-21: dependency licence audit and CI check; the wide synthetic roster regenerated by the port so it reproduces (ADR-0033); tag-triggered releases (`vX.Y.Z` → `X.Y.Z`/`X.Y` images and a GitHub release, ADR-0049); contribution policy (issues only); [Linux runbook](admin/linux-runbook.md); squashed and pushed to the private GitHub repository.
 
-1. **Built-in local accounts** ([ADR-0065](adr/0065-built-in-local-accounts.md), accepted 2026-11-04; built on `feature/local-accounts`, VM-tested; research in [built-in accounts](research/2026-11-04-built-in-accounts.md)): ships in v0.1.0 (maintainer, 2026-11-04), so a school without Entra can install and sign in. Optional authenticator app, one sign-in box, administrator-issued setup links, a local backup admin beside Entra (a school setting decides whether anyone else may hold a local account). The research note's "What the build must handle" lists the design review's findings.
-2. **Fresh-clone test on the maintainer's homelab** (template VM being set up, 2026-10-31) following [the Linux runbook](admin/linux-runbook.md), parts A and B. Part A5 with Docker also runs the six Testcontainers tests that skip on the Windows machine; part B5 is the first run of the retention sweep's PostgreSQL path. Fix the runbook where reality differs.
-3. **First release:** push tag `v0.1.0`; check the workflow published four images and a release, then set each GHCR package's visibility to public (packages do not reliably inherit it).
-4. Check private vulnerability reporting is enabled on the public repository.
+Done since: built-in local accounts (ADR-0065, merged); the fresh-clone homelab test (runbook parts A and B, fixed where reality differed).
+
+1. **Merge the setup flow** (above).
+2. **First release:** push tag `v0.1.0`; check the workflow published four images and a release, then set each GHCR package's visibility to public (packages do not reliably inherit it).
+3. Check private vulnerability reporting is enabled on the public repository.
 
 Nice to have at launch: README screenshots (synthetic data only) and a live demo (`docs/architecture/demo-mode.md`; the template build and demo deploy tooling are not in the repo yet).
 
@@ -56,6 +57,8 @@ Open defects and debt: `docs/BACKLOG.md`.
 ## Open decisions (maintainer)
 
 - ADR-0056 (high-jump heights ladder): confirm Accepted.
+- The setup flow: try it on the VM, then approve the merge of `feature/setup-flow`.
+- Grow the test VM's disk to 32 GB (optional; saves a cache prune per deploy).
 
 ## Constraints
 
