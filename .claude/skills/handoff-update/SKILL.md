@@ -8,7 +8,7 @@ description: End-of-session sync — check every behaviour change made in the se
 Before ending a work session that changed anything meaningful:
 
 1. **Docs-tree check.** For every change this session that altered behaviour, structure, configuration or operation, confirm the relevant page was updated: `docs/architecture/` (how it works), `docs/admin/` (running it), `docs/guide/` (using it). Fix any that were missed; a change without its docs update is incomplete. If a significant design decision was made, confirm a short ADR exists (the `new-adr` skill) and that no ADR was appended to instead of superseded.
-2. **`docs/HANDOFF.md`**: update the state of play, active work (what moved, what is half-done with the exact next step) and anything new a following agent must know. Terse: a pointer document, not a diary. Delete stale lines rather than appending.
+2. **`docs/HANDOFF.md`**: update the state of play, active work (what moved, what is half-done with the exact next step) and anything new a following agent must know. For work planned as an OpenSpec change, point at `openspec/changes/<name>/` and its next unticked task rather than restating `tasks.md`; tick finished tasks there; drop the pointer once the change is archived. Terse: a pointer document, not a diary. Delete stale lines rather than appending.
 3. **`docs/BACKLOG.md`**: tick or add items only if no other agent is working on it concurrently; otherwise list the deltas in HANDOFF.
 4. Sync `api/README.md` or `app/README.md` if your work invalidated them.
 5. Commit the docs sync as its own commit (e.g. `Docs sync: handoff after <work>`). Do not push unless asked.

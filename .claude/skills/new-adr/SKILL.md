@@ -18,5 +18,5 @@ Only for a **significant design decision**: one a future contributor would other
 3. Status is `Proposed` until the maintainer accepts it in review (usually on the pull request), then `Accepted (YYYY-MM)`. Never mark your own ADR accepted.
 4. Write the Decision as the rule that holds, in the present tense. **No implementation notes, file lists, test counts, ruling transcripts, review logs or dated amendment sections.** Implementation detail goes in the architecture page; history goes in git.
 5. **A changed decision gets a new ADR** that supersedes the old one. Set the old one's Status to `Superseded by ADR-NNNN` (or `Partly superseded by ADR-NNNN`, saying which part); do not append to it.
-6. Substantial option analysis goes in `docs/research/<topic>.md`, linked from Context.
+6. Substantial option analysis goes in `docs/research/<topic>.md`, linked from Context. When the work is an OpenSpec change, its `design.md` links the ADR rather than repeating it.
 7. **In the same change, update the docs tree**: `docs/architecture/` (how it works), `docs/admin/` (running it) or `docs/guide/` (using it). Link the ADR from that page where it explains why. A decision without its docs update is incomplete.

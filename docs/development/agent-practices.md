@@ -5,9 +5,22 @@ How this project's work is done with AI coding agents (Claude Code and similar).
 ## Session shape
 
 1. **Start:** read `AGENTS.md`, then `docs/HANDOFF.md`, then the docs-tree pages and ADRs the task touches. Do not re-derive a decision an accepted ADR already records.
-2. **Decide before building.** A significant design decision is proposed as a short ADR with status `Proposed` (the `new-adr` skill); the maintainer accepts it in review of the change or pull request. Routine changes, fixes and UI tweaks need no ADR.
+2. **Plan before building.** Non-trivial work becomes an OpenSpec change (see below). A significant design decision is proposed as a short ADR with status `Proposed` (the `new-adr` skill); the maintainer accepts it in review of the change or pull request. Routine changes, fixes and UI tweaks need neither.
 3. **Build, then update the docs tree in the same change**: `docs/architecture/`, `docs/admin/` or `docs/guide/`. A change without its docs update is incomplete.
 4. **End:** run the `handoff-update` skill: docs-tree check, `docs/HANDOFF.md` current, backlog deltas recorded.
+
+## Planning a change with OpenSpec
+
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) (MIT) keeps each change's plan in the repository, so a fresh session picks up a half-done change from its files rather than from a chat transcript.
+
+1. **Grill (optional):** `/grill-me` interviews the maintainer in rounds of numbered questions, each with a recommended answer, until every decision the plan depends on is settled. The agent looks facts up itself; the decisions are the maintainer's.
+2. **Propose:** the `openspec-propose` skill writes `openspec/changes/<name>/`: `proposal.md` (why, who needs it, out of scope), `specs/<capability>/spec.md` (requirement deltas: ADDED, MODIFIED, REMOVED), `design.md` (how; links the ADR and names the docs pages it updates) and `tasks.md`. It plans only; nothing is built until the maintainer has reviewed the artifacts. `openspec-explore` is a thinking step before a proposal; `openspec-update-change` revises one.
+3. **Apply:** the `openspec-apply-change` skill works through `tasks.md`, ticking items as they are done. Every task list ends with the docs-tree update, screenshots and a fresh-install walk-through for UI, one review, the full gates and the handoff.
+4. **Archive:** the `openspec-archive-change` skill merges the spec deltas into `openspec/specs/` (or `openspec-sync-specs` on its own) and moves the change to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+
+`openspec/specs/` holds testable requirements (SHALL statements with scenarios), grouped by the capability names of the `docs/architecture/` pages; the docs tree still explains how things work. It grows only as changes touch an area, so there is no back-fill. The project's rules for every artifact (the docs-tree, ADR, mockup and review steps) live in `openspec/config.yaml`, which the OpenSpec skills read each time. `docs/HANDOFF.md` points at active changes rather than restating their tasks.
+
+The `openspec` CLI is installed per machine (`npm install -g @fission-ai/openspec`, Node 22.12+). After upgrading it, run `openspec update` to regenerate the skills; they live in `.agents/skills/`, linked from `.claude/skills/`. Turn off its anonymous usage telemetry with `openspec config set telemetry.enabled false`.
 
 Before building a new surface, check that a named user needs it. Asking costs minutes; building and retiring a speculative screen costs days.
 
@@ -58,6 +71,7 @@ Make the data rule mechanical in your local agent settings rather than advisory,
 ## In the code
 
 - `AGENTS.md`: the rules every agent loads
-- `.claude/skills/`: `new-adr`, `handoff-update`, `sanitize-data`
+- `.claude/skills/`: `new-adr`, `handoff-update`, `sanitize-data`; `grill-me` and `grilling` (adapted from mattpocock/skills, MIT); the `openspec-*` skills (generated, linked from `.agents/skills/`)
+- `openspec/config.yaml`: project context and per-artifact rules for OpenSpec
 - `app/e2e/fixed.ts`: pixel-reproducible screenshot mode
 - `scripts/sanitize_export.py`, `scripts/generate_synthetic_roster.py`
