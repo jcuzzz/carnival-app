@@ -20,6 +20,7 @@ This file is the canonical instruction set for humans and AI coding agents alike
 - App: `cd app && npm ci && npm run build` (Vite); dev server `npm run dev`; tests `npm test` (Vitest)
 - Synthetic data: `python scripts/generate_synthetic_roster.py`
 - Testcontainers tests skip when Docker is unavailable.
+- Planned changes: `openspec list`, `openspec show <change>`, `openspec validate <change>` (CLI: `npm install -g @fission-ai/openspec`, Node 22.12+).
 - Machine-specific notes (paths, interpreters) go in a git-ignored `AGENTS.local.md`, not here.
 
 ## Documentation
@@ -28,13 +29,15 @@ This file is the canonical instruction set for humans and AI coding agents alike
 
 ADRs are secondary and short. Write one only for a significant design decision: context, decision, consequences, rejected alternatives, about a page. **No implementation notes, ruling transcripts, review logs or dated amendment histories in ADRs**: implementation detail belongs in the architecture page, history belongs in git. If a later decision changes an earlier one, write a new ADR that supersedes it; do not append to the old one.
 
+`openspec/` plans the work: `openspec/changes/<name>/` holds a change in flight (proposal, spec deltas, design, tasks) and moves to `changes/archive/` when done; `openspec/specs/` holds only testable requirements for the areas changes have touched. It does not replace the docs tree or ADRs: specs link the docs page that explains a behaviour, and `design.md` links the ADR.
+
 ## Conventions
 
 - Significant design decisions → `docs/adr/NNNN-title.md` (the `new-adr` skill), before the behaviour changes; then the docs tree.
 - **Code comments: minimal and concise.** Comment only a non-obvious constraint or a why the code cannot express, in one or two lines. Never narrate the code or restate ADR history in comments. Reviewers flag comment bloat like any other defect.
 - Research → `docs/research/`. Governance templates → `docs/governance/`.
 - Result lifecycle: draft/queued → provisional → verified → final → ratified record. Offline submissions are idempotent (client-generated UUIDv7 keys, ADR-0002).
-- Change flow: document the decision → implement → static validation → runtime smoke test → docs sync.
+- Change flow: plan non-trivial work as an OpenSpec change (`openspec-propose`; `/grill-me` first to stress-test the plan) → ADR if a significant decision → implement (`openspec-apply-change`) → static validation → runtime smoke test → docs sync → archive (`openspec-archive-change`). Small fixes skip OpenSpec. Project rules for the artifacts live in `openspec/config.yaml`.
 - **Before any UI change, read `docs/development/design-system.md`** (ADR-0040): tokens, component vocabulary, icon/type/44px rules. No raw hex or size literals outside `app/src/tokens.css`.
 - **After any UI-affecting change**, run `cd app && npm run screenshots` and review the PNGs in `app/ui-review/` (open `app/ui-review/index.html`) before committing. Captures use synthetic data only.
 - **Before ending a work session**, update `docs/HANDOFF.md` (the `handoff-update` skill).

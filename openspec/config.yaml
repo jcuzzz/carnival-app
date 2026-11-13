@@ -1,0 +1,40 @@
+schema: spec-driven
+
+context: |
+  AGENTS.md is the canonical rule set; its hard rules bind every artifact (synthetic data only,
+  data minimisation, server-side authorisation, school rules as configuration not code forks).
+  Read docs/HANDOFF.md before proposing.
+  The docs tree (docs/README.md) is the primary current-state documentation. openspec/specs/
+  holds only testable requirements (SHALL + scenarios) for the areas changes have touched; link
+  the docs page that explains a behaviour instead of restating it.
+  Capability names follow the docs/architecture page names where one fits (imports, scoring,
+  result-lifecycle, offline-outbox, records, reports, races-and-lanes, authorisation-and-audit,
+  app-navigation, data-model); otherwise a short kebab-case area name (e.g. setup-flow).
+  Significant design decisions still get a short ADR (new-adr skill, status Proposed, never
+  self-accepted); design.md links it rather than repeating it.
+  The maintainer is the only decision-maker. UI work shows mockups or screenshots first and is
+  checked by a fresh-install walk-through with shipped defaults.
+
+rules:
+  proposal:
+    - Name the user who needs the change and say what is out of scope
+    - Say whether the change needs an ADR and whether it needs mockups before building
+  specs:
+    - Describe observable behaviour only; no implementation detail, ADR numbers or dates
+  design:
+    - Keep it short; link the ADR for the decision and list the docs pages the change updates
+    - For UI, follow docs/development/design-system.md
+  tasks:
+    - Keep tasks small enough to verify one at a time
+    - "End with: update the docs-tree pages named in design.md; for UI changes, npm run screenshots and a fresh-install walk-through; one independent review; full gates (dotnet test, npm test); handoff-update"
+
+operations:
+  apply:
+    guidance:
+      - Use subagents only for large parallel work on disjoint files and for one review per phase; do small fixes directly
+      - Run only the relevant tests while iterating; one full suite per commit
+      - Never run prettier; keep code comments minimal; commits carry no AI attribution
+  archive:
+    guidance:
+      - Confirm the docs-tree pages were updated before archiving
+      - Sync delta specs, then remove the change's pointer from docs/HANDOFF.md
