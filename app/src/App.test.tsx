@@ -5,7 +5,7 @@ import { renderWithQuery } from "./test/queryWrapper";
 import { signIn, signOut } from "./auth/session";
 import { _resetBrandingForTests, applyBranding } from "./branding/branding";
 import { db } from "./db/db";
-import { _resetSelectedCarnivalForTests } from "./carnivals/selectedCarnival";
+import { _resetSelectedCarnivalForTests, selectCarnival } from "./carnivals/selectedCarnival";
 
 /**
  * ADR-0031 (B4): `/outbox` is the one screen that prints other officials'
@@ -249,6 +249,36 @@ describe("the landing at / (ADR-0066 §1)", () => {
 
     await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
     expect(getSchoolSettings).not.toHaveBeenCalled();
+  });
+
+  it("keeps a signed-out visitor on / rather than a remembered Draft carnival, so sign-in returns here", async () => {
+    const draft = { ...openCarnival, id: "d1", status: "Draft" } as Carnival;
+    vi.mocked(listCarnivals).mockResolvedValue([draft]);
+    selectCarnival(draft);
+    renderWithQuery(<App />);
+
+    expect((await screen.findAllByRole("link", { name: "Sign in" })).length).toBeGreaterThan(0);
+    expect(location.hash).toBe("#/");
+  });
+
+  it("sends a system administrator signing in from there to School, past the remembered Draft carnival", async () => {
+    const draft = { ...openCarnival, id: "d1", status: "Draft" } as Carnival;
+    vi.mocked(listCarnivals).mockResolvedValue([draft]);
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings(false));
+    selectCarnival(draft);
+    renderWithQuery(<App />);
+    await screen.findAllByRole("link", { name: "Sign in" });
+
+    act(() => signIn({ subject: "s4", displayName: "Sam Sysadmin", roles: ["SystemAdministrator"] }));
+
+    await waitFor(() => expect(location.hash).toBe("#/school"));
+  });
+
+  it("still lands a signed-out visitor on an open carnival's Deck", async () => {
+    selectCarnival(openCarnival);
+    renderWithQuery(<App />);
+
+    await waitFor(() => expect(location.hash).toBe("#/carnivals/c1"));
   });
 
   it("falls through to the carnivals when the settings can't be read", async () => {

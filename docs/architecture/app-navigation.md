@@ -8,7 +8,7 @@ The app uses **hash routing** (`#/carnivals/…`), so the static host needs no r
 
 | Route | Screen |
 |---|---|
-| `/` | Home: School for a System administrator whose school is not set up; else the selected carnival's landing tab, else the carnival switcher |
+| `/` | Home: School for a System administrator whose school is not set up; else the selected carnival's landing tab (not a Draft carnival while signed out), else the carnival switcher |
 | `/carnivals` | Carnival switcher (and New carnival, for administrators) |
 | `/carnivals/:id` | **Deck**: the carnival's events, to reach the one being captured |
 | `/carnivals/:id/events/:eventId` | The capture deck for one division (`?heat=<raceId>` selects a heat) |
@@ -86,7 +86,7 @@ flowchart TD
 
   | Status | Lands on |
   |---|---|
-  | Draft | Manage. Deck for anyone who cannot manage, so nobody lands on a page that refuses them |
+  | Draft | Manage. Deck for a signed-in official who cannot manage, so nobody lands on a page that refuses them. Signed out, `/` stays on the switcher and its Sign in: the Deck's Sign in would return to the Deck, past the School check below |
   | Open | Deck |
   | Closed, Finalised | Dashboard |
 

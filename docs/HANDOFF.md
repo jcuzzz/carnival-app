@@ -56,7 +56,6 @@ Open defects and debt: `docs/BACKLOG.md`.
 
 ## Open decisions (maintainer)
 
-- ADR-0056 (high-jump heights ladder): confirm Accepted.
 - The setup flow: try it on the VM, then approve the merge of `feature/setup-flow`.
 - Grow the test VM's disk to 32 GB (optional; saves a cache prune per deploy).
 

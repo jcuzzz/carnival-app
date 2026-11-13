@@ -229,11 +229,15 @@ function Home() {
   const systemAdmin = settled && !isDemoBuild() && hasRole(session, "SystemAdministrator");
   const settings = useApiQuery(keys.schoolSettings(), getSchoolSettings, { enabled: systemAdmin });
   const deciding = !settled || (systemAdmin && settings.loading);
+  // A Draft carnival holds nothing for a signed-out visitor, and landing them on it made the
+  // shell's Sign in return there, past the School check above. Staying on "/" lets the sign-in
+  // come back here, where the landing is decided by role.
+  const draftSignedOut = !session && selected?.status === "Draft";
   const target = deciding
     ? null
     : systemAdmin && settings.data?.setupConfirmed === false
       ? "/school"
-      : selected
+      : selected && !draftSignedOut
         ? landingPath(selected.id, selected.status, canManage)
         : null;
   useEffect(() => {
