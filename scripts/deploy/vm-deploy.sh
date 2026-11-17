@@ -743,6 +743,29 @@ set_pin_comment "# Digest pins written by vm-deploy.sh — ${PIN_NOTE}commit $NE
 ENV_PIN_PENDING=0
 echo "   .env now names $NEW_SHA, and only because every check above passed"
 
+# Test hosts only: this removes the previous deploy's images, so a rollback must rebuild or re-pull.
+prune_images() {
+  local in_use id removed=0
+  in_use="$(docker ps -aq | xargs -r docker inspect -f '{{.Image}}')"
+  for id in $(docker images --no-trunc -q --filter 'reference=carnival-app-local/*' \
+                --filter "reference=ghcr.io/$GHCR_OWNER/carnival-app-*" | sort -u); do
+    grep -qxF "$id" <<<"$in_use" && continue
+    docker image rm -f "$id" >/dev/null && removed=$((removed + 1))
+  done
+  echo "   removed $removed image(s) no container uses"
+  docker image prune -f >/dev/null
+  docker builder prune -af --max-used-space "$PRUNE_KEEP_CACHE" >/dev/null
+  echo "   build cache trimmed to at most $PRUNE_KEEP_CACHE"
+  df -h / | awk 'NR==2 { print "   disk: " $3 " used, " $4 " free (" $5 ")" }'
+}
+DEPLOY_PRUNE_IMAGES="${DEPLOY_PRUNE_IMAGES:-$(env_value DEPLOY_PRUNE_IMAGES)}"
+PRUNE_KEEP_CACHE="${PRUNE_KEEP_CACHE:-1GB}"
+PRUNED=0
+if [ "$DEPLOY_PRUNE_IMAGES" = "true" ] || [ "$DEPLOY_PRUNE_IMAGES" = "1" ]; then
+  step "Pruning old images and build cache (DEPLOY_PRUNE_IMAGES)"
+  if prune_images; then PRUNED=1; else echo "   prune failed; the deploy itself succeeded"; fi
+fi
+
 IMAGES_BLOCK="$API_IMAGE
                   $WEB_IMAGE
                   $BACKUP_IMAGE"
@@ -761,6 +784,10 @@ if [ "$LOCAL_BUILD" = "1" ]; then
   ROLLBACK_NOTE="(the pins in $PINS are what the previous deploy ran: 'docker compose up -d'
     pulls them when they are digests. If they are local tags whose images are gone, re-run
     this script with LOCAL_BUILD=1 at $OLD_SHA to rebuild them here.)"
+fi
+if [ "$PRUNED" = "1" ]; then
+  ROLLBACK_NOTE="$ROLLBACK_NOTE
+    (DEPLOY_PRUNE_IMAGES removed the previous images: a local build must be rebuilt.)"
 fi
 
 cat <<SUMMARY

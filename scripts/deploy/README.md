@@ -75,7 +75,11 @@ own location, so the working directory does not matter and the repo path can mov
    denied, `SELECT` from `"Students"` → a count.
 10. **Only once every check has passed**, rewrites the `PENDING` comment in `.env` to name the new
     commit — so the record of what is deployed can never name a commit that failed. Any earlier
-    exit puts the previous comment line back.
+    exit puts the previous comment line back. Then, only with `DEPLOY_PRUNE_IMAGES=true` (in `.env`
+    or on the command line; test hosts only), removes every app image no container uses, dangling
+    images and build cache beyond 1 GB (`PRUNE_KEEP_CACHE`), and prints the free disk space. The
+    previous deploy's images go too, so a rollback rebuilds or re-pulls; a failed prune does not
+    fail the deploy.
 11. Prints a summary: old → new commit, the three image digests, the previous-pins path, dump path,
     history before/after, roles, smoke results. When no local account exists yet it runs
     `accounts first-admin` in the api container and prints the first-admin setup link (valid 24

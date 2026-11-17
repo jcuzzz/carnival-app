@@ -178,7 +178,9 @@ PREFLIGHT_OK=1 bash scripts/deploy/vm-deploy.sh
 
 Read the release notes for anything the upgrade needs first, such as `APPLY_MIGRATIONS=true` for a migration (below). A release tag's images carry the same `sha-<short>` tags the script resolves. To roll back, check out the previous tag and follow **Rollback** below.
 
-**Image retention.** No retention policy is configured: nothing prunes old images on the host or in the registry. A digest pin can be pulled again for a rollback; a local build cannot, so roll back to one only while its images are still on the host (or re-run with `LOCAL_BUILD=1` at the old commit). The deploy's own pre-deploy dumps (`~/pre-*.dump`, unencrypted) are pruned to the newest five.
+**Image retention.** By default nothing prunes old images on the host or in the registry. A digest pin can be pulled again for a rollback; a local build cannot, so roll back to one only while its images are still on the host (or re-run with `LOCAL_BUILD=1` at the old commit). The deploy's own pre-deploy dumps (`~/pre-*.dump`, unencrypted) are pruned to the newest five.
+
+**On a test host that deploys often,** set `DEPLOY_PRUNE_IMAGES=true` in `.env` (or pass it on the command line). After every check has passed, the script then removes each app image (`carnival-app-local/*` and the GHCR `carnival-app-*` images) that no container uses, removes dangling images, trims the build cache to 1 GB (`PRUNE_KEEP_CACHE`), and prints the free disk space. This leaves one set of app images on the host, but the previous deploy's images are gone: a rollback must rebuild with `LOCAL_BUILD=1` at the old commit, or re-pull its digests. A failed prune does not fail the deploy. Leave it off in production.
 
 **Migrations do not apply themselves** (`APPLY_MIGRATIONS` defaults to false). Before an upgrade, check with git whether the span carries one:
 
