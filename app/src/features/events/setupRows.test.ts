@@ -71,6 +71,12 @@ describe("buildEventSetupRows", () => {
     expect(row!.tiers).toBe("Comp");
   });
 
+  it("ends the span on the open-ended oldest age", () => {
+    const divisions = ["12", "13", "14+"].map((age) => division(free.id, age, "M"));
+    const [row] = buildEventSetupRows([free], divisions);
+    expect(row!.ages).toBe("12–14+");
+  });
+
   it("lists a gapped age span rather than claiming the ages in between", () => {
     const [row] = buildEventSetupRows(
       [free],

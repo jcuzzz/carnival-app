@@ -187,7 +187,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task Applying_a_template_seeds_the_profile_and_a_reapply_leaves_an_edited_one_alone()
     {
         var admin = Admin;
-        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
+        await TemplateAges.SchoolAsync(factory);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Seeded profile");
         var applied = await admin.PostAsJsonAsync($"/api/v1/carnivals/{carnivalId}/apply-template",
             new { template = "swimming" });
@@ -198,7 +198,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
         var seeded = (await DivisionFixture.Json(
                 await admin.GetAsync($"/api/v1/carnivals/{carnivalId}/settings")))
             .GetProperty("divisions");
-        Assert.Equal(TemplateRoster.SwimmingAges,
+        Assert.Equal(TemplateAges.SwimmingAges,
             seeded.GetProperty("ageGroups").EnumerateArray().Select(a => a.GetString()!));
         Assert.Equal(["Competitive", "Social"],
             seeded.GetProperty("tiers").EnumerateArray().Select(t => t.GetString()!));
@@ -397,7 +397,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task A_profile_that_could_not_have_fitted_the_settings_column_seeds_in_full()
     {
         var admin = Admin;
-        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
+        await TemplateAges.SchoolAsync(factory);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Crowded settings");
         // Fills the blob to just under its 4000-character limit, so the swimming
         // profile could not have been added to it.
@@ -430,7 +430,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task The_profile_rows_the_apply_and_the_generate_endpoint_agree_on_the_matrix()
     {
         var admin = Admin;
-        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
+        await TemplateAges.SchoolAsync(factory);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "One loop");
         Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync(
             $"/api/v1/carnivals/{carnivalId}/apply-template", new { template = "swimming" })).StatusCode);
@@ -475,7 +475,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task Applying_a_template_repairs_rows_that_do_not_read_as_a_profile()
     {
         var admin = Admin;
-        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
+        await TemplateAges.SchoolAsync(factory);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Junk rows");
         // A 20-character age code: storable on SQLite, but longer than AgeScope
         // allows, so the profile these rows describe fails Validate.
@@ -518,7 +518,7 @@ public sealed class DivisionProfileSettingsTests(ApiTestFactory factory) : IClas
     public async Task An_apply_that_loses_the_profile_seed_race_still_succeeds()
     {
         var admin = Admin;
-        await TemplateRoster.SeedAsync(factory, TemplateRoster.SwimmingAges);
+        await TemplateAges.SchoolAsync(factory);
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(admin, "Seed race");
         factory.Race.ArmOnce("INSERT INTO \"CarnivalDivisions\"", transaction =>
         {
@@ -1028,17 +1028,17 @@ public sealed class OpenScheduledDivisionsTests(ApiTestFactory factory) : IClass
 }
 
 /// <summary>
-/// ADR-0057 §1-§2: the settings read carries the current roster's age codes and,
-/// while no profile is saved, the profile those codes describe. Each test owns
-/// its factory — the roster is school-wide, so a shared database would let one
-/// test's students turn up in another's codes.
+/// ADR-0067 §3, §5-§6: the settings read carries the current roster's age codes, the school's
+/// range as the default while no profile is saved, and which students and ages the carnival's
+/// ages leave uncovered. Each test owns its factory — the roster is school-wide, so a shared
+/// database would let one test's students turn up in another's codes.
 /// </summary>
-public sealed class RosterAgeGroupsSettingsTests : IDisposable
+public sealed class CarnivalAgesSettingsTests : IDisposable
 {
     private readonly ApiTestFactory _factory = new();
     private readonly HttpClient _admin;
 
-    public RosterAgeGroupsSettingsTests() =>
+    public CarnivalAgesSettingsTests() =>
         _admin = _factory.CreateClientAs("roster-default-admin", "CarnivalAdministrator");
 
     public void Dispose() => _factory.Dispose();
@@ -1097,7 +1097,7 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
     private async Task<JsonElement> SettingsAsync(Guid carnivalId) => await DivisionFixture.Json(
         await _admin.GetAsync($"/api/v1/carnivals/{carnivalId}/settings"));
 
-    private static void AssertRosterDefault(JsonElement settings, params string[] codes)
+    private static void AssertDefault(JsonElement settings, params string[] codes)
     {
         var profile = settings.GetProperty("divisionsDefault");
         Assert.Equal(codes,
@@ -1108,26 +1108,103 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
             profile.GetProperty("tiers").EnumerateArray().Select(t => t.GetString()!));
     }
 
+    private static List<string> Strings(JsonElement settings, string property) =>
+        [.. settings.GetProperty(property).EnumerateArray().Select(c => c.GetString()!)];
+
+    private static List<(string, int)> Uncovered(JsonElement settings) =>
+        [.. settings.GetProperty("uncoveredAges").EnumerateArray()
+            .Select(u => (u.GetProperty("ageGroup").GetString()!, u.GetProperty("students").GetInt32()))];
+
     [Fact]
-    public async Task The_codes_are_the_current_rosters_youngest_first_and_they_become_the_default()
+    public async Task The_codes_are_the_current_rosters_youngest_first_and_never_the_default()
     {
         await SeedRosterAsync(
             ("13", true, true), ("12", true, true), ("SNR", true, true), ("13", true, true),
             // Neither of these is a student an entry could match, so neither
             // contributes a code: one superseded snapshot, one departed student.
             ("11", false, true), ("11", true, false));
-        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Roster default");
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Roster codes");
 
         var settings = await SettingsAsync(carnivalId);
-        Assert.Equal(["12", "13", "SNR"],
-            settings.GetProperty("rosterAgeGroups").EnumerateArray().Select(c => c.GetString()!));
+        Assert.Equal(["12", "13", "SNR"], Strings(settings, "rosterAgeGroups"));
         Assert.Equal(JsonValueKind.Null, settings.GetProperty("divisions").ValueKind);
-        AssertRosterDefault(settings, "12", "13", "SNR");
+        Assert.Equal(JsonValueKind.Null, settings.GetProperty("divisionsDefault").ValueKind);
+        Assert.Empty(Uncovered(settings));
+        Assert.Empty(Strings(settings, "agesWithoutStudents"));
+    }
+
+    [Fact]
+    public async Task The_default_is_the_schools_range_with_the_oldest_age_taking_everyone_older()
+    {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 12, 18);
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "School range");
+
+        AssertDefault(await SettingsAsync(carnivalId), "12", "13", "14", "15", "16", "17", "18+");
+    }
+
+    [Fact]
+    public async Task A_one_age_range_is_that_age_and_over()
+    {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 15, 15);
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "One age");
+
+        AssertDefault(await SettingsAsync(carnivalId), "15+");
+    }
+
+    [Fact]
+    public async Task Students_no_age_covers_are_counted_and_ages_with_no_students_are_named()
+    {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 12, 18);
+        await SeedRosterAsync(
+            ("11", true, true), ("11", true, true), ("10", true, true), ("SNR", true, true),
+            ("12", true, true), ("13", true, true), ("19", true, true), ("20", true, true),
+            // Not a current, active student: counted nowhere.
+            ("9", true, false));
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Uncovered");
+
+        var settings = await SettingsAsync(carnivalId);
+        Assert.Equal([("10", 1), ("11", 2), ("SNR", 1)], Uncovered(settings));
+        // 18+ takes the 19- and 20-year-olds.
+        Assert.Equal(["14", "15", "16", "17"], Strings(settings, "agesWithoutStudents"));
+    }
+
+    [Fact]
+    public async Task A_saved_profile_is_what_coverage_is_measured_against()
+    {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 12, 18);
+        await SeedRosterAsync(("12", true, true), ("14", true, true), ("18", true, true));
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Saved coverage");
+        Assert.Equal(HttpStatusCode.OK, (await _admin.PutAsJsonAsync(
+            $"/api/v1/carnivals/{carnivalId}/settings", new
+            {
+                divisions = new
+                {
+                    ageGroups = new[] { "12", "13" },
+                    categories = new[] { "M" },
+                    tiers = new[] { "Competitive" },
+                },
+            })).StatusCode);
+
+        var settings = await SettingsAsync(carnivalId);
+        Assert.Equal([("14", 1), ("18", 1)], Uncovered(settings));
+        Assert.Equal(["13"], Strings(settings, "agesWithoutStudents"));
+    }
+
+    [Fact]
+    public async Task Without_any_ages_nothing_is_uncovered()
+    {
+        await SeedRosterAsync(("11", true, true));
+        var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "No ages");
+
+        var settings = await SettingsAsync(carnivalId);
+        Assert.Empty(Uncovered(settings));
+        Assert.Empty(Strings(settings, "agesWithoutStudents"));
     }
 
     [Fact]
     public async Task A_saved_profile_leaves_no_default_but_the_codes_are_still_read()
     {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 12, 18);
         await SeedRosterAsync(("12", true, true), ("13", true, true));
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Saved profile");
         Assert.Equal(HttpStatusCode.OK, (await _admin.PutAsJsonAsync(
@@ -1180,10 +1257,10 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
     /// <summary>
     /// An implausible birthdate past the cut-off derives a negative age, which
     /// AgeScope refuses: the editor must not offer an age the settings PUT would
-    /// then reject, and the default must not name one either.
+    /// then reject.
     /// </summary>
     [Fact]
-    public async Task A_code_no_division_could_carry_is_neither_offered_nor_defaulted()
+    public async Task A_code_no_division_could_carry_is_not_offered()
     {
         await SeedRosterAsync(("12", true, true), ("-12", true, true), ("13", true, true));
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Impossible code");
@@ -1191,14 +1268,14 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
         var settings = await SettingsAsync(carnivalId);
         Assert.Equal(["12", "13"],
             settings.GetProperty("rosterAgeGroups").EnumerateArray().Select(c => c.GetString()!));
-        AssertRosterDefault(settings, "12", "13");
     }
 
-    /// <summary>Both fields are read-only: a client that echoes the whole settings
-    /// document back is accepted and stores neither.</summary>
+    /// <summary>The derived fields are read-only: a client that echoes the whole settings
+    /// document back is accepted and stores none of them.</summary>
     [Fact]
-    public async Task The_put_ignores_the_two_read_only_fields()
+    public async Task The_put_ignores_the_read_only_fields()
     {
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 12, 13);
         await SeedRosterAsync(("12", true, true));
         var carnivalId = await DivisionFixture.CreateCarnivalAsync(_admin, "Echoed fields");
 
@@ -1206,6 +1283,8 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
         {
             laneCount = 6,
             rosterAgeGroups = new[] { "99" },
+            uncoveredAges = new[] { new { ageGroup = "99", students = 1 } },
+            agesWithoutStudents = new[] { "99" },
             divisionsDefault = new
             {
                 ageGroups = new[] { "99" },
@@ -1220,49 +1299,54 @@ public sealed class RosterAgeGroupsSettingsTests : IDisposable
         Assert.Equal(["12"],
             settings.GetProperty("rosterAgeGroups").EnumerateArray().Select(c => c.GetString()!));
         Assert.Equal(JsonValueKind.Null, settings.GetProperty("divisions").ValueKind);
-        AssertRosterDefault(settings, "12");
+        AssertDefault(settings, "12", "13+");
         Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory,
             db => db.CarnivalDivisions.CountAsync(d => d.CarnivalId == carnivalId)));
     }
 }
 
-/// <summary>ADR-0057 §2: the roster default is a profile the editor could save,
-/// or nothing at all — never an invalid one.</summary>
-public sealed class DivisionProfileFromRosterTests
+/// <summary>ADR-0067 §2-§3: the school's range as a profile, and the one "N+" age.</summary>
+public sealed class DivisionProfileAgesTests
 {
     [Fact]
-    public void A_roster_past_the_age_ceiling_has_no_default()
+    public void The_school_range_ends_in_its_oldest_age_and_over()
     {
-        var codes = Enumerable.Range(1, DivisionProfile.MaxAgeGroups).Select(i => $"A{i}").ToList();
-
-        var atCeiling = DivisionProfile.FromRoster(codes);
-        Assert.NotNull(atCeiling);
-        Assert.Equal(DivisionProfile.MaxAgeGroups, atCeiling.AgeGroups.Count);
-        Assert.Null(DivisionProfile.Validate(atCeiling.ToDto()));
-
-        Assert.Null(DivisionProfile.FromRoster([.. codes, "A33"]));
-        Assert.Null(DivisionProfile.FromRoster([]));
+        var profile = DivisionProfile.FromSchoolAges(5, 8);
+        Assert.Equal(["5", "6", "7", "8+"], profile.AgeGroups);
+        Assert.Null(DivisionProfile.Validate(profile.ToDto()));
+        Assert.Equal(["8+"], DivisionProfile.FromSchoolAges(8, 8).AgeGroups);
+        Assert.Equal(5, profile.YoungestAge());
     }
 
-    /// <summary>A birthdate the import accepts but no school has ("2039") derives
-    /// a negative age, which no division may carry — one such row must not cost
-    /// every carnival in the school its default.</summary>
-    [Fact]
-    public void A_code_no_division_could_carry_is_skipped_rather_than_refusing_the_default()
+    [Theory]
+    [InlineData("12,13+")]
+    [InlineData("13+,12")]
+    [InlineData("SNR,13+")]
+    [InlineData("12,18")]
+    public void One_and_over_age_that_is_the_oldest_is_accepted(string ages) =>
+        Assert.Null(DivisionProfile.Validate(new DivisionProfileDto(
+            ages.Split(','), [CompetitionCategory.M], [EventTier.Competitive])));
+
+    [Theory]
+    [InlineData("12+,13")]
+    [InlineData("13,13+")]
+    [InlineData("12+,13+")]
+    public void An_and_over_age_below_another_or_a_second_one_is_refused(string ages)
     {
-        var profile = DivisionProfile.FromRoster(["12", "-9", "13"]);
-        Assert.NotNull(profile);
-        Assert.Equal(["12", "13"], profile.AgeGroups);
-        Assert.Null(DivisionProfile.FromRoster(["-9"]));
+        var refusal = DivisionProfile.Validate(new DivisionProfileDto(
+            ages.Split(','), [CompetitionCategory.M], [EventTier.Competitive]));
+        Assert.NotNull(refusal);
+        Assert.Equal(ErrorCodes.AgeScopeInvalid, refusal.Value.Code);
     }
 
-    /// <summary>The stored code upper-cases, so two casings of one age are one
-    /// row; as two they would share a key and refuse the whole default.</summary>
     [Fact]
-    public void Two_casings_of_one_code_are_one_age()
+    public void An_and_over_age_covers_every_numeric_age_from_it()
     {
-        var profile = DivisionProfile.FromRoster(["SNR", "snr"]);
-        Assert.NotNull(profile);
-        Assert.Single(profile.AgeGroups);
+        var profile = DivisionProfile.FromSchoolAges(12, 18);
+        Assert.False(profile.Covers("11"));
+        Assert.True(profile.Covers("17"));
+        Assert.True(profile.Covers("18"));
+        Assert.True(profile.Covers("19"));
+        Assert.False(profile.Covers("SNR"));
     }
 }

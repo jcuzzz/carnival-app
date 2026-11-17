@@ -2,7 +2,11 @@
 
 How to get a new carnival ready, from creating it to opening it on the day. You need to be a carnival administrator or a system administrator. Only a system administrator can import the student list.
 
-Every carnival is set up in the same four steps: **Students**, **Events**, **Program** (optional) and **Open**. You can stop at any point and come back later.
+Every carnival is set up in the same four steps: **Students**, **Events**, **Program** (optional) and **Open**. You can stop at any point and come back later, and do Students and Events in either order.
+
+## Before your first carnival: the school's ages
+
+A carnival's ages start as the school's. A system administrator sets them once, in **School** → **School settings** → **Ages**: the **Youngest** and **Oldest** age, for example 12 and 18 for a secondary school or 5 and 12 for a primary school. A new install offers 12 and 18; press **Save** to keep them. The oldest age takes every student that age or older, so with 18 as the oldest an 18-year-old and a 19-year-old both run in **18+**.
 
 ## Create the carnival
 
@@ -14,7 +18,7 @@ Manage has a list headed **Set the carnival up**. It shows the four steps, ticks
 
 ## 1. Students
 
-The carnival's ages come from the student list, so it goes in first.
+The student list says who can be entered in each event. You can add events before it is in.
 
 1. On Manage, press **Import the students**. The year is filled in from the carnival's date.
 2. Choose the CSV export from your student system. The app checks it and shows what will change. If some rows can't be imported, a line above the table says how many and why, for example "2 have no house". The rest can still go in; fix those students in your student system and import again later.
@@ -31,13 +35,13 @@ The import checks each student's house against the school's houses, so the schoo
 
 Press **Add events** on Manage to open **Event setup**.
 
-Near the top, one line shows the ages, categories and tiers this carnival will use, for example "Ages 12–18 from the student list · Boys, Girls · Competitive".
+Near the top, one line headed **Ages and categories** shows what this carnival will use, for example "12 to 18+ · Boys, Girls · Competitive".
 
-- **Ages** come from the student list. You can leave some out, but you can't add an age no student has.
+- **Ages** start as the school's. 18+ means 18 and over.
 - **Categories** are Boys, Girls and Open (boys and girls together).
 - **Tiers** are Competitive and Social.
 
-To change them, press **Ages and categories**, make your changes and press **Save**.
+To change them for this carnival only, press **Change**, pick **From** and **To (and over)**, tick the categories and tiers, and press **Save**. The school's ages stay as they are. A lower **From** adds the new ages to your events the same way **Add age** does.
 
 Then add the events:
 
@@ -49,14 +53,14 @@ Once the carnival has events, the standard events sit behind **Add the rest of t
 
 To run an event for fewer ages, open it from **In this carnival** and untick the boxes you don't want.
 
-If Event setup says **Import the student list first**, step 1 isn't done yet.
+If Event setup says **This carnival has no ages yet**, the school's ages aren't set: a system administrator sets them in School settings (see above).
 
-### When the student list changes
+### Students younger than the carnival's ages
 
-Importing a new student list never changes a carnival's saved ages by itself.
+If the student list has students younger than the carnival's youngest age, Event setup says so, for example "14 students are aged 11, and this carnival has no events for age 11." The import says it too, when you import from the carnival, and so does **Before you open**.
 
-- If the carnival has an age no student has any more, Event setup warns you. Press **Remove those ages** to fix it.
-- If the student list has ages the carnival leaves out, Event setup notes them quietly. That is fine if you left them out on purpose. Otherwise, add them on **Ages and categories**.
+- Press **Add age 11** to include them. It adds age 11 to this carnival and adds its divisions to every event that runs the carnival's youngest age, with the same scoring and place in the program. The school's ages don't change.
+- Leave it if they won't compete. It never stops you opening.
 
 ## 3. Program (optional)
 
@@ -69,7 +73,8 @@ Press **Build the program** on Manage. If you added the standard events, a progr
 You open the carnival from the last step of the checklist on Manage. Under **4. Open**, Manage counts the events and divisions and lists anything worth checking under **Before you open**, such as:
 
 - a student list from a different year;
-- divisions for an age no student has;
+- students whose age no event has, with a link to **Event setup**;
+- an age with no students, such as "Age 18+ has no students: 26 divisions will be empty.";
 - divisions that aren't in the program, such as ages the program doesn't cover, with an **Add them to the program** link.
 
 These are warnings only: you can still open. What you can't do is open a carnival with no student list or no events. Until it has both, the buttons are greyed out, and a line above them says what's missing, such as "Import the students and add events first."

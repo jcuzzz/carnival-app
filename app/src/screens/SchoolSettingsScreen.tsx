@@ -14,6 +14,7 @@ import { getSchoolSettings, putSchoolSettings } from "../api/resources";
 import type {
   HouseSettingRequest,
   LocalAccountAccess,
+  SchoolAges,
   SchoolSettings,
   SchoolSettingsRequest,
 } from "../api/types";
@@ -46,6 +47,12 @@ const MAX_HOUSE_NAME = 60;
 /** Last resort where nothing is painted and no colour is set. */
 const PICKER_FALLBACK = color.paper.$value;
 
+/** The server's bounds (SCHOOL_AGES_INVALID), checked here before the request. */
+const MIN_AGE = 1;
+const MAX_AGE = 25;
+/** What a new install offers: a secondary school's 12 to 18 and over. */
+const DEFAULT_AGES = { youngest: 12, oldest: 18 };
+
 const IN_USE_NOTE = "in use — referenced by roster or carnival data";
 
 interface HouseRow {
@@ -62,6 +69,8 @@ interface FormState {
   name: string;
   brandColour: string;
   houses: HouseRow[];
+  youngest: string;
+  oldest: string;
   requireAuthenticator: boolean;
   localAccounts: LocalAccountAccess;
 }
@@ -75,6 +84,8 @@ function formOf(settings: SchoolSettings): FormState {
     // The bootstrap's placeholder is never a name to keep.
     name: settings.name === UNCONFIGURED_SCHOOL_NAME ? "" : settings.name,
     brandColour: settings.brandColour ?? "",
+    youngest: String((settings.ages ?? DEFAULT_AGES).youngest),
+    oldest: String((settings.ages ?? DEFAULT_AGES).oldest),
     houses: settings.houses.map((house) => ({
       key: `h${++rowKeySeed}`,
       code: house.code,
@@ -91,6 +102,8 @@ function signatureOf(form: FormState): string {
     form.name.trim(),
     form.brandColour.trim().toLowerCase(),
     form.houses.map((h) => [h.code.trim(), h.name.trim(), h.colour.trim().toLowerCase()]),
+    form.youngest.trim(),
+    form.oldest.trim(),
     form.requireAuthenticator,
     form.localAccounts,
   ]);
@@ -102,7 +115,7 @@ function pickerValue(colour: string | null): string {
 }
 
 interface ServerFieldError {
-  /** `name`, `brandColour`, `houses`, or `houses[i].code|name|colour`. */
+  /** `name`, `brandColour`, `houses`, `houses[i].code|name|colour`, or `ages`. */
   field: string;
   detail: string;
 }
@@ -117,6 +130,7 @@ function fieldErrorOf(err: unknown): ServerFieldError | null {
 function controlIdOf(field: string): string | null {
   if (field === "name") return "school-name";
   if (field === "brandColour") return "brand-colour";
+  if (field.startsWith("ages")) return field === "ages.oldest" ? "ages-oldest" : "ages-youngest";
   const house = /^houses\[(\d+)\]\.(code|name|colour)$/.exec(field);
   return house ? houseFieldId(Number(house[1]), house[2]!) : null;
 }
@@ -163,6 +177,9 @@ export default function SchoolSettingsScreen() {
   // Until the first save, Save confirms what was seeded even with nothing changed.
   const confirmed = baseline?.setupConfirmed !== false;
   const blank = baselineForm !== null && baselineForm.name === "" && baselineForm.houses.length === 0;
+  // The offered 12 to 18 is not saved until Save, so Save stays live for it.
+  const agesUnsaved = baseline !== null && baseline.ages == null;
+  const ages = form ? agesOf(form) : null;
 
   // A background refetch must never discard typed edits: a newer stamp arriving
   // mid-edit says so and leaves the form alone until Reload asks for it.
@@ -227,7 +244,7 @@ export default function SchoolSettingsScreen() {
   async function save(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (saving) return;
-    if (!form || !baseline) return;
+    if (!form || !baseline || !ages) return;
     setSaving(true);
     setServerError(null);
     setError(null);
@@ -241,6 +258,7 @@ export default function SchoolSettingsScreen() {
           name: blankToNull(row.name),
           colour: blankToNull(row.colour),
         })),
+        ages,
         // Null keeps the stored value: a demo build never shows these controls.
         requireAuthenticator: isDemoBuild() ? null : form.requireAuthenticator,
         localAccounts: isDemoBuild() ? null : form.localAccounts,
@@ -252,6 +270,8 @@ export default function SchoolSettingsScreen() {
       // The School hub's setup list reads the same key.
       invalidate(keys.schoolSettings());
       invalidate(keys.houses());
+      // A carnival's ages default to the school's.
+      invalidate(keys.carnivals());
       // The chrome, the sign-in screen and the dashboard read these, not the
       // form — repaint them here rather than making the administrator reload.
       await refreshBranding();
@@ -302,14 +322,15 @@ export default function SchoolSettingsScreen() {
       </p>
       <h1>School settings</h1>
       <p className="row-sub">
-        The school's name, its brand colour, its houses and how local accounts sign in. Saving
-        repaints the app for every device the next time it reaches the server.
+        The school's name, its brand colour, its houses, its ages and how local accounts sign in.
+        Saving repaints the app for every device the next time it reaches the server.
       </p>
       {!confirmed && (
         <p className="row-sub">
           {blank
-            ? "Name the school and add its houses, then press Save."
-            : "Check the name and the houses, then press Save to finish setting up the school."}
+            ? "Name the school, add its houses and check its ages, then press Save."
+            : "Check the name, the houses and the ages, then press Save to finish setting up " +
+              "the school."}
         </p>
       )}
 
@@ -401,6 +422,14 @@ export default function SchoolSettingsScreen() {
             </button>
           </div>
 
+          <AgesFields
+            form={form}
+            valid={ages !== null}
+            serverError={serverError?.field.startsWith("ages") ? serverError.detail : null}
+            unsaved={agesUnsaved && confirmed}
+            onChange={change}
+          />
+
           {!isDemoBuild() && (
             <SignInSettings
               form={form}
@@ -413,7 +442,7 @@ export default function SchoolSettingsScreen() {
             <button
               className="primary"
               type="submit"
-              disabled={saving || (!dirty && confirmed) || offline}
+              disabled={saving || (!dirty && confirmed && !agesUnsaved) || offline || !ages}
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -424,6 +453,72 @@ export default function SchoolSettingsScreen() {
         </form>
       )}
     </>
+  );
+}
+
+function AgesFields({
+  form,
+  valid,
+  serverError,
+  unsaved,
+  onChange,
+}: {
+  form: FormState;
+  valid: boolean;
+  /** The server's refusal of the ages, worded by `errorText`. */
+  serverError: string | null;
+  unsaved: boolean;
+  onChange: (next: FormState) => void;
+}) {
+  const invalid = valid && serverError === null ? undefined : true;
+  const describedAges = describedBy("ages-hint", invalid && "ages-error");
+  return (
+    <section aria-labelledby="ages-heading">
+      <h2 id="ages-heading">Ages</h2>
+      <div className="form-grid">
+        <label className="field">
+          <span>Youngest</span>
+          <input
+            id="ages-youngest"
+            type="number"
+            inputMode="numeric"
+            min={MIN_AGE}
+            max={MAX_AGE}
+            value={form.youngest}
+            aria-describedby={describedAges}
+            aria-invalid={invalid}
+            onChange={(e) => onChange({ ...form, youngest: e.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Oldest</span>
+          <input
+            id="ages-oldest"
+            type="number"
+            inputMode="numeric"
+            min={MIN_AGE}
+            max={MAX_AGE}
+            value={form.oldest}
+            aria-describedby={describedAges}
+            aria-invalid={invalid}
+            onChange={(e) => onChange({ ...form, oldest: e.target.value })}
+          />
+        </label>
+      </div>
+      {invalid && (
+        <p className="field-error" id="ages-error" role="alert">
+          {valid
+            ? serverError
+            : `Ages are whole numbers from ${MIN_AGE} to ${MAX_AGE}, and the youngest can’t be ` +
+              "older than the oldest."}
+        </p>
+      )}
+      <p className="row-sub" id="ages-hint">
+        Each carnival starts with these ages, one division per age for Boys and for Girls. The
+        oldest age takes every student that age or older. A carnival can change its own ages.
+      </p>
+      {unsaved && <p className="row-sub">These ages aren’t saved yet: press Save to use them.</p>}
+    </section>
   );
 }
 
@@ -479,6 +574,16 @@ function SignInSettings({
       )}
     </section>
   );
+}
+
+/** Null where the server would refuse the pair. */
+function agesOf(form: Pick<FormState, "youngest" | "oldest">): SchoolAges | null {
+  const [youngest, oldest] = [form.youngest.trim(), form.oldest.trim()];
+  if (!/^\d+$/.test(youngest) || !/^\d+$/.test(oldest)) return null;
+  const ages = { youngest: Number(youngest), oldest: Number(oldest) };
+  return ages.youngest >= MIN_AGE && ages.youngest <= ages.oldest && ages.oldest <= MAX_AGE
+    ? ages
+    : null;
 }
 
 function blankToNull(value: string): string | null {

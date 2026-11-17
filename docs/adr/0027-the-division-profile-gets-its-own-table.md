@@ -1,6 +1,6 @@
 # ADR-0027: The division profile gets its own table
 
-- **Status:** Accepted (2026-08). Supersedes [ADR-0022](0022-event-and-division-management.md) §2's storage choice. The row's age axis is amended by [ADR-0058](0058-one-age-per-division.md): one age per row, no merged bands or labels. Partly superseded by [ADR-0067](0067-divisions-come-from-the-student-list.md): §3, a template's seed holds the carnival's ages (saved, else the roster's), not the template's.
+- **Status:** Accepted (2026-08). Supersedes [ADR-0022](0022-event-and-division-management.md) §2's storage choice. The row's age axis is amended by [ADR-0058](0058-one-age-per-division.md): one age per row, no merged bands or labels. Partly superseded by [ADR-0067](0067-ages-come-from-the-schools-range.md): §3, a template's seed holds the carnival's ages (saved, else the roster's), not the template's.
 
 ## Context
 

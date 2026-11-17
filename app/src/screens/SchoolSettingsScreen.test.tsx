@@ -7,7 +7,7 @@ import { _resetReachabilityForTests } from "../api/reachability";
 import type { SchoolSettings } from "../api/types";
 import { signIn, signOut } from "../auth/session";
 import { _resetToastsForTests, getToasts } from "../shell/toast";
-import { renderWithQuery } from "../test/queryWrapper";
+import { createTestQueryClient, renderWithQuery } from "../test/queryWrapper";
 
 /**
  * ADR-0045 §6. The screen previews the server's rules but never enforces them:
@@ -47,6 +47,7 @@ function settings(overrides: Partial<SchoolSettings> = {}): SchoolSettings {
       { code: "WATTLE", name: "Waratah", colour: "#b42318", inUse: false },
       { code: "MOUNTAIN ASH", name: "Mountain Ash", colour: "#1a7f37", inUse: false },
     ],
+    ages: { youngest: 12, oldest: 18 },
     requireAuthenticator: false,
     localAccounts: "SystemAdministrators",
     providerConfigured: false,
@@ -126,8 +127,90 @@ describe("SchoolSettingsScreen", () => {
     renderWithQuery(<SchoolSettingsScreen />);
 
     expect(((await screen.findByLabelText("School name")) as HTMLInputElement).value).toBe("");
-    expect(screen.getByText("Name the school and add its houses, then press Save.")).toBeTruthy();
-    expect(screen.queryByText(/Check the name and the houses/)).toBeNull();
+    expect(
+      screen.getByText("Name the school, add its houses and check its ages, then press Save."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Check the name, the houses/)).toBeNull();
+  });
+
+  it("offers 12 to 18 on a school with no ages yet, and saves them with the rest", async () => {
+    vi.mocked(getSchoolSettings).mockResolvedValue(settings({ ages: null }));
+    vi.mocked(putSchoolSettings).mockResolvedValue(settings());
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    const youngest = (await screen.findByLabelText("Youngest")) as HTMLInputElement;
+    const oldest = screen.getByLabelText("Oldest") as HTMLInputElement;
+    expect([youngest.value, oldest.value]).toEqual(["12", "18"]);
+    expect(screen.getByRole("heading", { name: "Ages", level: 2 })).toBeTruthy();
+    expect(screen.getByText(/The oldest age takes every student that age or older/)).toBeTruthy();
+    // Nothing typed, but the offered ages are not saved yet.
+    expect(screen.getByText(/These ages aren’t saved yet/)).toBeTruthy();
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+
+    fireEvent.change(youngest, { target: { value: "5" } });
+    fireEvent.change(oldest, { target: { value: "12" } });
+    fireEvent.click(save);
+    await waitFor(() => expect(putSchoolSettings).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(putSchoolSettings).mock.calls[0]![0].ages).toEqual({
+      youngest: 5,
+      oldest: 12,
+    });
+  });
+
+  it("marks every carnival read stale on save, since their ages default to the school's", async () => {
+    vi.mocked(putSchoolSettings).mockResolvedValue(settings());
+    const client = createTestQueryClient();
+    const settingsKey = ["/carnivals", "c-1", "settings"];
+    client.setQueryData(settingsKey, { divisions: null });
+    renderWithQuery(<SchoolSettingsScreen />, client);
+
+    fireEvent.change(await screen.findByLabelText("Oldest"), { target: { value: "17" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.getQueryState(settingsKey)?.isInvalidated).toBe(true));
+  });
+
+  it("refuses ages the server would, inline and before any request", async () => {
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    const youngest = (await screen.findByLabelText("Youngest")) as HTMLInputElement;
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    for (const [lo, hi] of [
+      ["15", "14"],
+      ["0", "12"],
+      ["12", "26"],
+      ["", "18"],
+    ] as const) {
+      fireEvent.change(youngest, { target: { value: lo } });
+      fireEvent.change(screen.getByLabelText("Oldest"), { target: { value: hi } });
+      expect(screen.getByRole("alert").textContent).toMatch(/from 1 to 25/);
+      expect(youngest.getAttribute("aria-invalid")).toBe("true");
+      expect(save.disabled).toBe(true);
+    }
+    fireEvent.change(youngest, { target: { value: "13" } });
+    fireEvent.change(screen.getByLabelText("Oldest"), { target: { value: "13" } });
+    expect(screen.queryByText(/from 1 to 25/)).toBeNull();
+    expect(save.disabled).toBe(false);
+    expect(putSchoolSettings).not.toHaveBeenCalled();
+  });
+
+  it("says a refused age range in plain words", async () => {
+    vi.mocked(putSchoolSettings).mockRejectedValue(
+      new ApiError(
+        422,
+        { error: "SCHOOL_AGES_INVALID", detail: "ages.youngest out of range", field: "ages" },
+        "/school/settings",
+      ),
+    );
+    renderWithQuery(<SchoolSettingsScreen />);
+
+    fireEvent.change(await screen.findByLabelText("Oldest"), { target: { value: "17" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.id).toBe("ages-error");
+    expect(alert.textContent).toMatch(/youngest/);
+    expect(screen.queryByText("ages.youngest out of range")).toBeNull();
+    await waitFor(() => expect(document.activeElement?.id).toBe("ages-youngest"));
   });
 
   it("is name, brand and houses only — roles and templates moved (ADR-0055 §1)", async () => {
@@ -289,6 +372,7 @@ describe("SchoolSettingsScreen", () => {
         { code: "WATTLE", name: "Waratah", colour: "#b42318" },
         { code: "MOUNTAIN ASH", name: "Mountain Ash", colour: "#1a7f37" },
       ],
+      ages: { youngest: 12, oldest: 18 },
       requireAuthenticator: false,
       localAccounts: "SystemAdministrators",
       updatedAtUtc: STAMP,

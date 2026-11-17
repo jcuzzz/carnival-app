@@ -19,7 +19,7 @@ import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { adjustmentItemsForCarnival } from "../adjustments/submitAdjustment";
 import { hasRole, useSession } from "../auth/session";
 import { syncSelectedCarnival } from "../carnivals/selectedCarnival";
-import { readiness } from "../features/carnivals/readiness";
+import { readiness, type ReadinessWarningId } from "../features/carnivals/readiness";
 import { SetupChecklist } from "../features/carnivals/SetupChecklist";
 import { setupSteps, studentCount } from "../features/carnivals/setupSteps";
 import { counted } from "../features/events/counted";
@@ -39,6 +39,14 @@ const NEXT_CARNIVAL_STATUS: Partial<Record<CarnivalStatus, CarnivalStatus>> = {
   Draft: "Open",
   Open: "Closed",
   Closed: "Finalised",
+};
+
+/** Where a Before you open warning is fixed, under the carnival. */
+const WARNING_PATHS: Readonly<Record<ReadinessWarningId, string>> = {
+  rosterYear: "manage",
+  uncoveredAges: "setup/events",
+  emptyAges: "setup/events",
+  outsideProgram: "schedule",
 };
 
 const PENDING_STATUSES: readonly OutboxStatus[] = ["queued", "syncing"];
@@ -227,7 +235,8 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
         carnival: c,
         students: participation ? studentCount(participation) : participation,
         events: events.data,
-        rosterAgeGroups: settings.data?.rosterAgeGroups,
+        uncoveredAges: settings.data?.uncoveredAges,
+        agesWithoutStudents: settings.data?.agesWithoutStudents,
         rosterYear: settings.data?.rosterYear,
         schedule: schedule.data,
       })
@@ -242,10 +251,12 @@ export default function ManageScreen({ carnivalId }: { carnivalId: string }) {
             {ready.warnings.map((warning) => (
               <li key={warning.id}>
                 {warning.text}
-                {warning.id === "outsideProgram" && warning.action && (
+                {warning.action && (
                   <>
                     {" "}
-                    <a href={href(`/carnivals/${carnivalId}/schedule`)}>{warning.action}</a>
+                    <a href={href(`/carnivals/${carnivalId}/${WARNING_PATHS[warning.id]}`)}>
+                      {warning.action}
+                    </a>
                   </>
                 )}
               </li>

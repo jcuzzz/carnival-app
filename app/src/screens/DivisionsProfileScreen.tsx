@@ -1,18 +1,26 @@
 import { useState, type FormEvent } from "react";
-import { ApiError } from "../api/client";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
-import { getCarnival, getCarnivalSettings, updateCarnivalSettings } from "../api/resources";
-import type { Carnival, CompetitionCategory, DivisionProfile, EventTier } from "../api/types";
+import {
+  extendCarnivalAges,
+  getCarnival,
+  getCarnivalSettings,
+  updateCarnivalSettings,
+} from "../api/resources";
+import type {
+  Carnival,
+  CompetitionCategory,
+  DivisionProfile,
+  EventTier,
+} from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
-import { RosterRequiredNotice } from "../features/carnivals/RosterRequiredNotice";
+import { AgesRequiredNotice } from "../features/carnivals/AgesRequiredNotice";
 import {
-  codeRange,
+  ageNumber,
   codesSummary,
-  nonNumericCodes,
-  numericCodes,
   orderCodes,
+  rangeCodes,
 } from "../features/events/ageCodes";
 import { categoryLabel } from "../features/events/eventLabels";
 import { href } from "../router";
@@ -21,26 +29,38 @@ import { useConnectivity } from "../shell/useOnline";
 
 const CATEGORIES: CompetitionCategory[] = ["M", "F", "S"];
 const TIERS: EventTier[] = ["Competitive", "Social"];
+/** The ages From and To offer; a seeded age outside them is offered as well. */
+const YOUNGEST_OFFERED = 3;
+const OLDEST_OFFERED = 25;
 
 // Direct write, not the outbox.
-export default function DivisionsProfileScreen({ carnivalId }: { carnivalId: string }) {
+export default function DivisionsProfileScreen({
+  carnivalId,
+}: {
+  carnivalId: string;
+}) {
   const session = useSession();
-  const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
-  const canImport = hasRole(session, "SystemAdministrator");
+  const canManage = hasRole(
+    session,
+    "CarnivalAdministrator",
+    "SystemAdministrator",
+  );
+  const canSetAges = hasRole(session, "SystemAdministrator");
   const connectivity = useConnectivity();
-  const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
+  const carnival = useApiQuery(keys.carnival(carnivalId), () =>
+    getCarnival(carnivalId),
+  );
   const settings = useApiQuery(keys.carnivalSettings(carnivalId), () =>
     getCarnivalSettings(carnivalId),
   );
-  // No fallback range (ADR-0067 §5): with no roster and no saved ages there is nothing to edit.
-  const noAges =
-    orderCodes(settings.data?.rosterAgeGroups ?? []).length === 0 &&
-    orderCodes(settings.data?.divisions?.ageGroups ?? []).length === 0;
+  const seed = settings.data?.divisions ?? settings.data?.divisionsDefault;
 
   return (
     <>
       <p>
-        <a href={href(`/carnivals/${carnivalId}/setup/events`)}>← Event setup</a>
+        <a href={href(`/carnivals/${carnivalId}/setup/events`)}>
+          ← Event setup
+        </a>
       </p>
       <h1>Ages and categories</h1>
       {carnival.data && (
@@ -49,8 +69,9 @@ export default function DivisionsProfileScreen({ carnivalId }: { carnivalId: str
         </p>
       )}
       <p className="row-sub">
-        Ages come from the student list; narrow them here if this carnival runs fewer. Categories
-        and tiers apply to every event.
+        This carnival’s ages start as the school’s; change them here if this
+        carnival runs others. The oldest age takes every student that age or
+        older. Categories and tiers apply to every event.
       </p>
       {settings.error && (
         <div className="alert error" role="alert">
@@ -64,8 +85,8 @@ export default function DivisionsProfileScreen({ carnivalId }: { carnivalId: str
           the stored profile on Save. */}
       {settings.loading || carnival.loading ? (
         <p>Loading…</p>
-      ) : settings.error ? null : noAges ? (
-        <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+      ) : settings.error ? null : seed == null ? (
+        <AgesRequiredNotice canSetAges={canSetAges} />
       ) : (
         <ProfileForm
           // The draft is seeded once; without this, walking from one carnival's
@@ -74,8 +95,7 @@ export default function DivisionsProfileScreen({ carnivalId }: { carnivalId: str
           carnivalId={carnivalId}
           carnival={carnival.data}
           profile={settings.data?.divisions}
-          rosterDefault={settings.data?.divisionsDefault}
-          rosterCodes={settings.data?.rosterAgeGroups ?? []}
+          seed={seed}
           canManage={canManage}
           offline={connectivity !== "connected"}
         />
@@ -88,57 +108,59 @@ function ProfileForm({
   carnivalId,
   carnival,
   profile,
-  rosterDefault,
-  rosterCodes,
+  seed,
   canManage,
   offline,
 }: {
   carnivalId: string;
   carnival: Carnival | undefined;
   profile: DivisionProfile | null | undefined;
-  /** Pre-fills when nothing is saved. */
-  rosterDefault: DivisionProfile | null | undefined;
-  rosterCodes: readonly string[];
+  /** The saved profile, else the school's ages. */
+  seed: DivisionProfile;
   canManage: boolean;
   offline: boolean;
 }) {
   const invalidate = useInvalidate();
-  const seed = profile ?? rosterDefault;
-  const roster = orderCodes(rosterCodes);
-  const saved = orderCodes(profile?.ageGroups ?? []);
-  // With no roster there is nothing to narrow the saved ages against, so they stay as saved.
-  const agesFixed = roster.length === 0;
-  // Narrowing only: the roster's ages, plus saved ones it no longer has, so they can be left out.
-  const pickable = orderCodes([...roster, ...saved]);
-  const range = numericCodes(pickable);
-  const seedNumerics = numericCodes(seed?.ageGroups ?? []).filter((code) => range.includes(code));
-  const [from, setFrom] = useState(() => seedNumerics[0] ?? range[0] ?? "");
-  const [to, setTo] = useState(() => seedNumerics.at(-1) ?? range.at(-1) ?? "");
-
-  // Non-numeric codes no range can reach (SNR).
-  const others = nonNumericCodes(pickable);
-  const [ticked, setTicked] = useState<string[]>(() => nonNumericCodes(seed?.ageGroups ?? []));
-  const [categories, setCategories] = useState<CompetitionCategory[]>(
-    () => seed?.categories ?? ["M", "F"],
+  const seedAges = (seed.ageGroups ?? [])
+    .map(ageNumber)
+    .filter((age): age is number => age !== null);
+  const [from, setFrom] = useState(() =>
+    seedAges.length > 0 ? Math.min(...seedAges) : YOUNGEST_OFFERED,
   );
-  const [tiers, setTiers] = useState<EventTier[]>(() => seed?.tiers ?? ["Competitive"]);
+  const [to, setTo] = useState(() =>
+    seedAges.length > 0 ? Math.max(...seedAges) : from,
+  );
+  const [categories, setCategories] = useState<CompetitionCategory[]>(
+    () => seed.categories ?? ["M", "F"],
+  );
+  const [tiers, setTiers] = useState<EventTier[]>(
+    () => seed.tiers ?? ["Competitive"],
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const selected = agesFixed ? saved : orderCodes([...codeRange(pickable, from, to), ...ticked]);
-  const uncontested = roster.filter((code) => !selected.includes(code));
-  const underived = agesFixed ? [] : saved.filter((code) => !roster.includes(code));
-  // A saved set with a gap ({12, 13, 15}) is one the From/To pair cannot restate,
-  // so the screen says what saving will do to it rather than silently widening it.
-  const savedNumerics = numericCodes(saved);
-  const gapped =
-    !agesFixed &&
-    savedNumerics.length > 0 &&
-    savedNumerics.length !== Number(savedNumerics.at(-1)) - Number(savedNumerics[0]) + 1;
+  const offered = ages(
+    Math.min(YOUNGEST_OFFERED, ...seedAges),
+    Math.max(OLDEST_OFFERED, ...seedAges),
+  );
+  const selected = rangeCodes(from, to);
+  const lowered = seedAges.length > 0 && from < Math.min(...seedAges);
+  // A saved set the range cannot restate (a gap, a plain oldest age, a senior code): say what
+  // saving will do to it rather than silently replacing it.
+  const saved = orderCodes(profile?.ageGroups ?? []);
+  const restated =
+    saved.length === 0 ||
+    (saved.length === selected.length &&
+      saved.every((code, i) => code === selected[i]));
 
   const writable = canManage && carnival?.status !== "Finalised" && !offline;
 
-  function toggle<T>(values: T[], set: (next: T[]) => void, order: T[], value: T): void {
+  function toggle<T>(
+    values: T[],
+    set: (next: T[]) => void,
+    order: T[],
+    value: T,
+  ): void {
     const next = new Set(values);
     if (next.has(value)) next.delete(value);
     else next.add(value);
@@ -150,15 +172,24 @@ function ProfileForm({
     setError(null);
     setSaving(true);
     try {
+      // A lower From adds the new ages to the events as Add age does, so no student is left
+      // without a division while the warning goes quiet.
+      if (lowered) {
+        await extendCarnivalAges(carnivalId, from);
+      }
       // Only this screen's slice: an absent field leaves the stored value alone,
       // and the scoring rules and lane count are not ours to restate.
       await updateCarnivalSettings(carnivalId, {
         divisions: { ageGroups: selected, categories, tiers },
       });
-      invalidate(keys.carnivalSettings(carnivalId));
+      invalidate(
+        keys.carnivalSettings(carnivalId),
+        keys.carnivalEvents(carnivalId),
+        keys.eventDefinitions(true),
+      );
       showToast("Ages and categories saved.");
     } catch (err) {
-      setError(saveErrorText(err));
+      setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
     } finally {
       setSaving(false);
     }
@@ -168,8 +199,8 @@ function ProfileForm({
     <>
       {offline && (
         <div className="alert notice" role="status">
-          Can’t reach the server, so this screen is read-only for now — setup keeps no offline copy.
-          Reconnect and the fields come back.
+          Can’t reach the server, so this screen is read-only for now — setup
+          keeps no offline copy. Reconnect and the fields come back.
         </div>
       )}
       {carnival?.status === "Finalised" && (
@@ -179,8 +210,8 @@ function ProfileForm({
       )}
       {profile == null && (
         <p className="row-sub">
-          Nothing is saved yet, so these are the student list’s ages; they are saved when the first
-          events are added.
+          Nothing is saved yet, so these are the school’s ages; they are saved
+          when the first events are added.
         </p>
       )}
       {error && (
@@ -191,93 +222,53 @@ function ProfileForm({
 
       <form className="card" onSubmit={(e) => void save(e)}>
         <h2 className="flush-top">Ages</h2>
-        {agesFixed ? (
-          <>
-            <p>{codesSummary(saved)}</p>
-            <p className="row-sub">
-              No student list is imported yet, so the saved ages stay as they are; categories and
-              tiers can still change.
-            </p>
-          </>
-        ) : (
-          <>
-            {gapped && (
-              <p className="row-sub">
-                Saved ages: {savedNumerics.join(", ")} — saving replaces them with the range below.
-              </p>
-            )}
-            <div className="form-grid">
-              <label className="field">
-                <span>From</span>
-                <select
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  disabled={!writable || range.length === 0}
-                >
-                  {range
-                    .filter((code) => to === "" || Number(code) <= Number(to))
-                    .map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>To</span>
-                <select
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  disabled={!writable || range.length === 0}
-                >
-                  {range
-                    .filter((code) => from === "" || Number(code) >= Number(from))
-                    .map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            </div>
-            <p className="row-sub">
-              Every age from From to To is contested. Nothing reaches the server until Save.
-            </p>
-
-            {others.length > 0 && (
-              <div className="form-divider">
-                <h2 className="flush-top">Other ages</h2>
-                <div className="button-row">
-                  {others.map((code) => (
-                    <label key={code} className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={ticked.includes(code)}
-                        disabled={!writable}
-                        onChange={() => toggle(ticked, setTicked, others, code)}
-                      />
-                      {code}
-                    </label>
-                  ))}
-                </div>
-                <p className="row-sub">An age no range can reach, such as a senior code.</p>
-              </div>
-            )}
-          </>
-        )}
-
-        {uncontested.length > 0 && (
+        {!restated && (
           <p className="row-sub">
-            Ages on the student list left out: {uncontested.join(", ")} — students of that age
-            cannot be entered.
+            Saved ages: {codesSummary(saved)}. Saving replaces them with{" "}
+            {codesSummary(selected, " to ")}.
           </p>
         )}
-        {underived.length > 0 && (
-          <p className="row-sub">
-            Saved ages no current student has: {underived.join(", ")} — the divisions already made
-            from them still run.
-          </p>
-        )}
+        <div className="form-grid">
+          <label className="field">
+            <span>From</span>
+            <select
+              value={from}
+              onChange={(e) => setFrom(Number(e.target.value))}
+              disabled={!writable}
+            >
+              {offered
+                .filter((age) => age <= to)
+                .map((age) => (
+                  <option key={age} value={age}>
+                    {age}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>To (and over)</span>
+            <select
+              value={to}
+              onChange={(e) => setTo(Number(e.target.value))}
+              disabled={!writable}
+            >
+              {offered
+                .filter((age) => age >= from)
+                .map((age) => (
+                  <option key={age} value={age}>
+                    {age}+
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+        <p className="row-sub">
+          {codesSummary(selected, " to ")}: one age per division, and {to}+
+          takes every student aged {to} or older. Nothing reaches the server
+          until Save.
+          {lowered &&
+            " Saving also adds the younger ages to every event that runs the youngest age now."}
+        </p>
 
         <div className="form-divider">
           <h2 className="flush-top">Categories</h2>
@@ -288,7 +279,9 @@ function ProfileForm({
                   type="checkbox"
                   checked={categories.includes(category)}
                   disabled={!writable}
-                  onChange={() => toggle(categories, setCategories, CATEGORIES, category)}
+                  onChange={() =>
+                    toggle(categories, setCategories, CATEGORIES, category)
+                  }
                 />
                 {categoryLabel(category)}
               </label>
@@ -315,7 +308,11 @@ function ProfileForm({
 
         {canManage && (
           <div className="button-row">
-            <button className="primary" type="submit" disabled={!writable || saving}>
+            <button
+              className="primary"
+              type="submit"
+              disabled={!writable || saving}
+            >
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
@@ -325,10 +322,6 @@ function ProfileForm({
   );
 }
 
-// The server's sentence names the offending code; what it cannot know is that
-// nothing here is typed, so the only code it can be refusing is a saved one.
-function saveErrorText(err: unknown): string {
-  if (err instanceof ApiError && err.code === "AGE_SCOPE_INVALID")
-    return `${err.message} Leave out any age no current student has and save again.`;
-  return errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT);
+function ages(from: number, to: number): number[] {
+  return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }

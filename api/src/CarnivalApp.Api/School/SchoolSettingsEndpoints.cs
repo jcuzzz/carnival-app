@@ -17,7 +17,8 @@ public sealed record SchoolSettingsResponse(
     LocalAccountAccess LocalAccounts,
     bool ProviderConfigured,
     DateTimeOffset? UpdatedAtUtc,
-    bool SetupConfirmed);
+    bool SetupConfirmed,
+    SchoolAges? Ages);
 
 /// <summary>
 /// <c>InUse</c> is the PUT's removal guard read ahead, so the screen can disable Remove.
@@ -28,8 +29,8 @@ public sealed record HouseSettingResponse(string Code, string Name, string? Colo
 public sealed record HouseSettingRequest(string? Code, string? Name, string? Colour);
 
 /// <summary>
-/// Full replacement, except that a null sign-in setting keeps its value; a save not carrying the
-/// current <c>UpdatedAtUtc</c> is refused.
+/// Full replacement, except that a null sign-in setting or <c>Ages</c> keeps its value; a save not
+/// carrying the current <c>UpdatedAtUtc</c> is refused.
 /// </summary>
 public sealed record SchoolSettingsRequest(
     string? Name,
@@ -37,7 +38,8 @@ public sealed record SchoolSettingsRequest(
     List<HouseSettingRequest>? Houses,
     DateTimeOffset? UpdatedAtUtc,
     bool? RequireAuthenticator = null,
-    LocalAccountAccess? LocalAccounts = null);
+    LocalAccountAccess? LocalAccounts = null,
+    SchoolAges? Ages = null);
 
 /// <summary>
 /// Refuses a bad value rather than degrading it, because a person is present to fix it.
@@ -68,7 +70,8 @@ public static class SchoolSettingsEndpoints
             settings.LocalAccounts,
             LocalAccountPolicy.ProviderConfigured(configuration),
             settings.UpdatedAtUtc,
-            settings.SetupConfirmed);
+            settings.SetupConfirmed,
+            settings.Ages);
 
     private static async Task<IResult> GetAsync(
         [FromServices] SchoolSettingsProvider provider,
@@ -119,6 +122,11 @@ public static class SchoolSettingsEndpoints
                     + "can be written on it. Choose a darker or lighter colour.");
             brandColour = normalisedBrand;
         }
+
+        if (request.Ages is { IsValid: false })
+            return Invalid(ErrorCodes.SchoolAgesInvalid, "ages",
+                $"The youngest age must be at least {SchoolAges.Minimum}, the oldest at most "
+                + $"{SchoolAges.Maximum}, and the youngest no older than the oldest.");
 
         if (request.Houses is not { Count: > 0 })
             return Invalid(ErrorCodes.HousesRequired, "houses", "At least one house is required.");
@@ -176,6 +184,7 @@ public static class SchoolSettingsEndpoints
             Houses = houses,
             RequireAuthenticator = request.RequireAuthenticator ?? current.RequireAuthenticator,
             LocalAccounts = request.LocalAccounts ?? current.LocalAccounts,
+            Ages = request.Ages ?? current.Ages,
             UpdatedAtUtc = savedAt,
             SetupConfirmed = true,
         };
@@ -185,6 +194,7 @@ public static class SchoolSettingsEndpoints
         row.SettingsJson = SchoolSettings.SerialiseSignIn(
             updated.RequireAuthenticator, updated.LocalAccounts, row.SettingsJson);
         row.SettingsJson = SchoolSettings.SerialiseSetupConfirmed(savedAt, row.SettingsJson);
+        row.SettingsJson = SchoolSettings.SerialiseAges(updated.Ages, row.SettingsJson);
         row.UpdatedAtUtc = updated.UpdatedAtUtc;
 
         audit.Record(SessionActor.From(ctx), AuditActions.SchoolSettings, nameof(SchoolConfiguration),

@@ -70,7 +70,7 @@ describe("SchoolScreen — Set up your school", () => {
     const checklist = document.querySelector("ol.row-list")!;
     await waitFor(() => expect(checklist.querySelectorAll(".badge.info")).toHaveLength(1));
     const titles = [...checklist.querySelectorAll(".row-title")].map((t) => t.textContent);
-    expect(titles[0]).toMatch(/^1\. School name, colours and houses.*Do this next/);
+    expect(titles[0]).toMatch(/^1\. School name, colours, houses and ages.*Do this next/);
     expect(titles[1]).toMatch(/^2\. Staff accounts.*Optional/);
     expect(titles[2]).toMatch(/^3\. Your first carnival/);
     expect(
@@ -87,7 +87,7 @@ describe("SchoolScreen — Set up your school", () => {
 
     await screen.findByRole("heading", { name: "Set up your school", level: 2 });
     const next = document.querySelector("ol.row-list a.row-link")!;
-    await waitFor(() => expect(next.textContent).toMatch(/School name, colours and houses.*Do this next/));
+    await waitFor(() => expect(next.textContent).toMatch(/School name, colours, houses and ages.*Do this next/));
   });
 
   it("shows nothing of setup once the settings are saved and a carnival exists", async () => {

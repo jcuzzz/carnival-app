@@ -238,7 +238,7 @@ public static class ProgressService
 
         var eligible = contested
             .Where(d => blobs[d.EventDefinitionId] is { } categories
-                        && categories.Contains((d.AgeGroup, d.Category!.Value)))
+                        && RecordCategories.Covers(categories, d.AgeGroup, d.Category!.Value))
             .ToList();
         if (eligible.Count == 0) return [];
 

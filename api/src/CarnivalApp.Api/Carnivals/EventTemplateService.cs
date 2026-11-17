@@ -5,6 +5,7 @@ using CarnivalApp.Api.Auditing;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
 using CarnivalApp.Api.Http;
+using CarnivalApp.Api.School;
 
 namespace CarnivalApp.Api.Carnivals;
 
@@ -12,7 +13,7 @@ namespace CarnivalApp.Api.Carnivals;
 // reconciling a template change is TemplateReconciler's job.
 public partial class EventTemplateService(
     CarnivalAppDbContext db, AuditService audit, IConfiguration config, IHostEnvironment env,
-    ILogger<EventTemplateService> logger)
+    SchoolSettingsProvider school, ILogger<EventTemplateService> logger)
 {
     [GeneratedRegex("^[a-z0-9][a-z0-9-]*$")]
     private static partial Regex TemplateKeyPattern();
@@ -160,27 +161,16 @@ public partial class EventTemplateService(
         int EventsPlaced,
         bool DivisionProfileSeeded);
 
-    // Exactly one is set. A refusal (ADR-0067 §5) has written nothing.
-    public sealed record ApplyOutcome(ApplicationResult? Applied, string? RosterRequiredDetail);
-
-    // One SaveChanges, so the audit record commits with the apply.
-    public async Task<ApplyOutcome> ApplyAsync(
+    // One SaveChanges, so the audit record commits with the apply. Null, having written nothing,
+    // when the carnival has no ages anywhere.
+    public async Task<ApplicationResult?> ApplyAsync(
         Carnival carnival, EventTemplate template, AuditActor actor, CancellationToken ct)
     {
         // Tracked: rows that do not read as a profile are replaced by the seed.
         var profileRows = await db.CarnivalDivisions.Where(d => d.CarnivalId == carnival.Id).ToListAsync(ct);
         var saved = DivisionProfile.FromRows(profileRows);
-        var ages = saved?.AgeGroups;
-        if (ages is null)
-        {
-            var roster = (await RosterAges.ReadAsync(db, ct)).AgeGroups;
-            ages = DivisionProfile.FromRoster(roster)?.AgeGroups;
-            if (ages is null)
-                return new(null, roster.Count == 0
-                    ? "Import the student list first: this carnival's ages come from it."
-                    : $"The student list has more than {DivisionProfile.MaxAgeGroups} ages, more than a " +
-                      "carnival can hold; check its birth dates.");
-        }
+        var ages = saved?.AgeGroups ?? CarnivalAges.Default((await school.GetAsync(ct)).Ages)?.AgeGroups;
+        if (ages is null) return null;
         var categories = saved?.Categories ?? template.Categories;
         var tiers = saved?.Tiers ?? template.Tiers;
         // A template's per-event tiers narrow the carnival's; they never add one it does not contest.
@@ -312,7 +302,7 @@ public partial class EventTemplateService(
                 carnival.Id.ToString(), newValues: result, ruleVersion: carnival.RuleVersion);
             await db.SaveChangesAsync(ct);
         }
-        return new(result, null);
+        return result;
     }
 
     private static bool SeededConcurrently(DbUpdateException ex) =>
@@ -351,7 +341,7 @@ public partial class EventTemplateService(
                 .DistinctBy(e => e.Id)
                 .ToList();
 
-        // The template's slot filters still name its own ages; the order is the carnival's.
+        // The template's slot filters name plain ages; the order is the carnival's.
         var ageRank = ages
             .OrderBy(AgeScope.Order)
             .ThenBy(age => age, StringComparer.Ordinal)

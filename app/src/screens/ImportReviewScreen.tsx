@@ -9,6 +9,7 @@ import { keys } from "../api/queryKeys";
 import {
   approveImport,
   getCarnival,
+  getCarnivalSettings,
   getImportDefaults,
   getImportReconciliation,
   getImportValidation,
@@ -16,8 +17,11 @@ import {
   promoteImport,
   stageImport,
 } from "../api/resources";
+import type { CarnivalSettings } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
+import { codesSummary } from "../features/events/ageCodes";
+import { extension, uncoveredStudents } from "../features/events/uncoveredAges";
 import { BatchList, StatusBadge, batchLabel, promotedResult } from "../features/imports/BatchList";
 import { agesAsAt } from "../features/imports/cutOff";
 import { ReconciliationSection } from "../features/imports/ReconciliationSection";
@@ -56,6 +60,12 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
   const carnival = useApiQuery(keys.carnival(carnivalId ?? ""), () => getCarnival(carnivalId!), {
     enabled: canManage && carnivalId !== null,
   });
+  // Read once the list is updated here: the new students are what it reports on.
+  const carnivalSettings = useApiQuery(
+    keys.carnivalSettings(carnivalId ?? ""),
+    () => getCarnivalSettings(carnivalId!),
+    { enabled: canManage && carnivalId !== null && promotedId !== null },
+  );
   // A failed carnival read falls back to the server's default rather than holding the form.
   const carnivalPending = carnivalId !== null && carnival.loading;
   const carnivalYear = carnival.data ? Number(carnival.data.date.slice(0, 4)) : undefined;
@@ -301,6 +311,13 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
                 {promotedResult(selected)}
               </p>
             )}
+            {canManage && justPromoted && carnivalId && carnivalSettings.data && (
+              <UncoveredAfterImport
+                carnivalId={carnivalId}
+                carnivalName={carnival.data?.name}
+                settings={carnivalSettings.data}
+              />
+            )}
             {canManage && justPromoted && carnivalId && (
               <div className="button-row">
                 <a className="button primary-link" href={href(`/carnivals/${carnivalId}/manage`)}>
@@ -358,6 +375,33 @@ export default function ImportReviewScreen({ carnivalId }: { carnivalId: string 
         </>
       )}
     </>
+  );
+}
+
+/** "14 students are aged 11, which Athletics 2027's ages (12 to 18+) don't cover." */
+function UncoveredAfterImport({
+  carnivalId,
+  carnivalName,
+  settings,
+}: {
+  carnivalId: string;
+  carnivalName: string | undefined;
+  settings: CarnivalSettings;
+}) {
+  const uncovered = settings.uncoveredAges;
+  if (uncovered.length === 0) return null;
+  const profile = settings.divisions ?? settings.divisionsDefault;
+  const ages = codesSummary(profile?.ageGroups ?? [], " to ");
+  const whose = carnivalName ? `${carnivalName}’s ages` : "this carnival’s ages";
+  const offer = extension(uncovered, profile);
+  return (
+    <div className="alert warn" role="status">
+      {uncoveredStudents(uncovered)}, which {whose}
+      {ages === "" ? "" : ` (${ages})`} don’t cover.{" "}
+      <a href={href(`/carnivals/${carnivalId}/setup/events`)}>
+        {offer ? `${offer.label} in Event setup` : "Event setup"}
+      </a>
+    </div>
   );
 }
 

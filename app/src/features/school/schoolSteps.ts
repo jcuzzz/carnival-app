@@ -17,11 +17,17 @@ export interface SchoolFacts {
 }
 
 export function schoolSteps(facts: SchoolFacts): SetupStep[] {
-  return [settingsStep(facts.settings), staffStep(facts), carnivalStep(facts.carnivals)];
+  return [
+    settingsStep(facts.settings),
+    staffStep(facts),
+    carnivalStep(facts.carnivals),
+  ];
 }
 
 /** Done once an administrator has saved School settings; a seeded name does not count. */
-export function schoolSetUp(settings: SchoolSettings | null | undefined): boolean | null {
+export function schoolSetUp(
+  settings: SchoolSettings | null | undefined,
+): boolean | null {
   return settings == null ? null : settings.setupConfirmed;
 }
 
@@ -29,15 +35,22 @@ function settingsStep(settings: SchoolSettings | null | undefined): SetupStep {
   const done = schoolSetUp(settings);
   return {
     id: "settings",
-    title: "School name, colours and houses",
+    title: "School name, colours, houses and ages",
     action: "Open School settings",
     done,
     optional: false,
     path: "/school/settings",
     detail:
       done && settings
-        ? `${settings.name.trim()} · ${counted(settings.houses.length, "house")}`
-        : "The name and colour every screen shows, and the houses students belong to",
+        ? [
+            settings.name.trim(),
+            counted(settings.houses.length, "house"),
+            ...(settings.ages
+              ? [`ages ${settings.ages.youngest} to ${settings.ages.oldest}+`]
+              : []),
+          ].join(" · ")
+        : "The name and colour every screen shows, the houses students belong to, and the " +
+          "ages carnivals run",
   };
 }
 
@@ -64,12 +77,16 @@ function peopleGranted(
 ): number | null {
   if (assignments == null) return null;
   const people = assignments
-    .filter((row) => row.revokedAtUtc === null && row.assignedBySubject === subject)
+    .filter(
+      (row) => row.revokedAtUtc === null && row.assignedBySubject === subject,
+    )
     .map((row) => row.upn.toLowerCase());
   return new Set(people).size;
 }
 
-function carnivalStep(carnivals: readonly Carnival[] | null | undefined): SetupStep {
+function carnivalStep(
+  carnivals: readonly Carnival[] | null | undefined,
+): SetupStep {
   const count = carnivals?.length;
   return {
     id: "carnival",

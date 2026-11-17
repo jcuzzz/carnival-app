@@ -1,10 +1,10 @@
 {
-  "$comment": "Athletics carnival event template. School configuration data, applied to a carnival via POST /api/v1/carnivals/{id}/apply-template. A division is an age x category x tier. The age codes must match the codes the roster import derives (age as at 31 December of the competition year), or entries will not match events. Track events are Time in seconds, throws and horizontal jumps are Distance in metres to the centimetre, high jump is Height in metres. No hurdles, and no novelty-race definition: the sack, cone-ball and three-legged races are house-point adjustments in the Track stream.",
+  "$comment": "Athletics carnival event template. School configuration data, applied to a carnival via POST /api/v1/carnivals/{id}/apply-template. A division is an age x category x tier. An age code is the age the roster import derives (age as at 31 December of the competition year), or N+ for that age and everyone older. Track events are Time in seconds, throws and horizontal jumps are Distance in metres to the centimetre, high jump is Height in metres. No hurdles, and no novelty-race definition: the sack, cone-ball and three-legged races are house-point adjustments in the Track stream.",
   "template": "athletics",
   "name": "Athletics carnival",
   "divisions": {
-    "$comment": "One division per age: each age is its own event with its own placings and house points. The ages a carnival gets are its own (its saved ages, else the student list's); these 12 to 18 name the school-record categories and the ages the field-station filters use, so an age outside them is scheduled but in no station slot. Combined running of several ages is a schedule slot holding several instances, which the field-station slots express through their division filters. Categories M/F and tiers Competitive (C) and Social (S) apply when the carnival has none saved.",
-    "ageGroups": ["12", "13", "14", "15", "16", "17", "18"],
+    "$comment": "One division per age: each age is its own event with its own placings and house points. The ages a carnival gets are its own (its saved ages, else the school's range); these 12 to 18+ name the school-record categories. Field-station filters name plain ages, and a filter age at or above the carnival's oldest selects its N+ division; an age no filter selects is scheduled but in no station slot. Combined running of several ages is a schedule slot holding several instances, which the field-station slots express through their division filters. Categories M/F and tiers Competitive (C) and Social (S) apply when the carnival has none saved.",
+    "ageGroups": ["12", "13", "14", "15", "16", "17", "18+"],
     "categories": ["M", "F"],
     "tiers": ["Competitive", "Social"]
   },

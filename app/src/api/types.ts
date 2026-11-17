@@ -106,6 +106,8 @@ export type ScoringRules = Schemas["ScoringRulesDto"];
 export type CarnivalSettings = Schemas["CarnivalSettingsDto"];
 
 export type DivisionProfile = Schemas["DivisionProfileDto"];
+export type UncoveredAge = Schemas["UncoveredAgeDto"];
+export type ExtendAgesResult = Schemas["ExtendAgesResponse"];
 export type HousePointsAdjustment = Schemas["AdjustmentDto"];
 
 // ---- Request bodies ---------------------------------------------------
@@ -161,6 +163,7 @@ export type SchoolSettings = Schemas["SchoolSettingsResponse"];
 /** Not `Omittable`: a full replacement, so an omitted `houses` would read as "no houses". */
 export type SchoolSettingsRequest = Schemas["SchoolSettingsRequest"];
 export type HouseSettingRequest = Schemas["HouseSettingRequest"];
+export type SchoolAges = Schemas["SchoolAges"];
 
 // ---- In-app role assignment -------------------------------------------
 

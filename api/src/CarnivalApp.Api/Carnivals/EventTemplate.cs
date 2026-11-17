@@ -5,8 +5,7 @@ using CarnivalApp.Api.Data.Entities;
 
 namespace CarnivalApp.Api.Carnivals;
 
-// Age codes must match the roster import's derived codes exactly: eligibility compares them by
-// string equality.
+// Age codes are the roster import's derived codes, plus "N+" for the oldest age and everyone older.
 public sealed class EventTemplate
 {
     public required string Key { get; init; }
@@ -274,11 +273,12 @@ public sealed class EventTemplate
         IReadOnlyList<string>? scopedAges = null;
         if (ages is not null)
             scopedAges = ages
-                .Select(a => ageGroups.FirstOrDefault(g =>
-                        string.Equals(g, AgeScope.Normalise(a), StringComparison.Ordinal))
-                    ?? throw new InvalidDataException(Where(
-                        $"scopes '{code}' to age '{a}', which divisions.ageGroups does not " +
-                        $"declare (declared: {string.Join(", ", ageGroups)}).")))
+                .Select(a => AgeScope.Normalise(a) is var filter
+                             && ageGroups.Any(g => AgeScope.FilterSelects(filter, g))
+                    ? filter
+                    : throw new InvalidDataException(Where(
+                        $"scopes '{code}' to age '{a}', which selects none of divisions.ageGroups " +
+                        $"(declared: {string.Join(", ", ageGroups)}).")))
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
 
@@ -369,6 +369,8 @@ public sealed class EventTemplate
             throw new InvalidDataException($"Event template '{sourceName}' defines no age groups.");
         if (ages.Distinct(StringComparer.Ordinal).Count() != ages.Count)
             throw new InvalidDataException($"Event template '{sourceName}' names the same age twice.");
+        if (DivisionProfile.AndOverRefusal(ages) is { } andOver)
+            throw new InvalidDataException($"Event template '{sourceName}': {andOver}");
         return ages;
     }
 
@@ -523,7 +525,7 @@ public sealed record EventTemplateSlotPlacement(
     public bool Filtered => Ages is not null || Tiers is not null || Categories is not null;
 
     public bool Matches(string ageGroup, EventTier tier, CompetitionCategory? category) =>
-        (Ages is null || Ages.Contains(ageGroup, StringComparer.Ordinal))
+        (Ages is null || Ages.Any(age => AgeScope.FilterSelects(age, ageGroup)))
         && (Tiers is null || Tiers.Contains(tier))
         && (Categories is null || (category is { } c && Categories.Contains(c)));
 }

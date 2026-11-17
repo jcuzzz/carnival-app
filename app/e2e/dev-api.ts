@@ -369,17 +369,17 @@ export async function seedAthleticsCarnival(
     date: new Date().toISOString().slice(0, 10),
     venue: "E2E Athletics Track",
   });
-  // ADR-0067 §4–5: the apply generates the roster's ages, and is refused with no roster at all.
-  const { rosterAgeGroups } = await call<{ rosterAgeGroups: string[] }>(
-    api,
-    "get",
-    `/carnivals/${carnival.id}/settings`,
-  );
-  if (!rosterAgeGroups.includes(division!.ageGroup))
+  // The apply generates the carnival's ages, which start as the school's.
+  const settings = await call<{
+    divisions: { ageGroups: string[] | null } | null;
+    divisionsDefault: { ageGroups: string[] | null } | null;
+  }>(api, "get", `/carnivals/${carnival.id}/settings`);
+  const ages = (settings.divisions ?? settings.divisionsDefault)?.ageGroups ?? [];
+  if (!ages.includes(division!.ageGroup))
     throw new Error(
-      `The dev roster's ages (${rosterAgeGroups.join(", ") || "none"}) lack ` +
-        `${division!.ageGroup}: the roster changed since the dev seed, and the template apply ` +
-        "schedules only the roster's ages. scripts/dev-reset.ps1 reseeds it.",
+      `The carnival's ages (${ages.join(", ") || "none"}) lack ${division!.ageGroup}: the ` +
+        "template apply schedules only the carnival's ages, which start as the school's " +
+        "(School settings). scripts/dev-reset.ps1 reseeds them.",
     );
   await call(api, "post", `/carnivals/${carnival.id}/apply-template`, { template: "athletics" });
 

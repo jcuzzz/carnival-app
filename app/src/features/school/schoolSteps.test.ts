@@ -1,18 +1,38 @@
 import { describe, expect, it } from "vitest";
 import type { Carnival, RoleAssignment, SchoolSettings } from "../../api/types";
 import { firstUndoneStep } from "../carnivals/setupSteps";
-import { UNCONFIGURED_SCHOOL_NAME, schoolSteps, type SchoolFacts } from "./schoolSteps";
+import {
+  UNCONFIGURED_SCHOOL_NAME,
+  schoolSteps,
+  type SchoolFacts,
+} from "./schoolSteps";
 
 const settings = (name: string, setupConfirmed = false): SchoolSettings =>
-  ({ name, setupConfirmed, houses: [{ code: "BANKSIA" }, { code: "WATTLE" }] }) as SchoolSettings;
+  ({
+    name,
+    setupConfirmed,
+    houses: [{ code: "BANKSIA" }, { code: "WATTLE" }],
+  }) as SchoolSettings;
 
-const assignment = (upn: string, extra: Partial<RoleAssignment> = {}): RoleAssignment =>
-  ({ upn, bootstrap: false, revokedAtUtc: null, role: "Recorder", ...extra }) as RoleAssignment;
+const assignment = (
+  upn: string,
+  extra: Partial<RoleAssignment> = {},
+): RoleAssignment =>
+  ({
+    upn,
+    bootstrap: false,
+    revokedAtUtc: null,
+    role: "Recorder",
+    ...extra,
+  }) as RoleAssignment;
 
 const fresh: SchoolFacts = {
   settings: settings(UNCONFIGURED_SCHOOL_NAME),
   assignments: [
-    assignment("backup-admin", { role: "SystemAdministrator", assignedBySubject: "host" }),
+    assignment("backup-admin", {
+      role: "SystemAdministrator",
+      assignedBySubject: "host",
+    }),
   ],
   subject: "local:1",
   carnivals: [],
@@ -35,24 +55,46 @@ describe("schoolSteps", () => {
   });
 
   it("points staff at Roles where the build has no People screen", () => {
-    expect(step({ ...fresh, localAccounts: false }, "staff").path).toBe("/school/roles");
+    expect(step({ ...fresh, localAccounts: false }, "staff").path).toBe(
+      "/school/roles",
+    );
   });
 });
 
-describe("schoolSteps — school name, colours and houses", () => {
+describe("schoolSteps — school name, colours, houses and ages", () => {
   it("is undone until an administrator saves, even with a name seeded from .env", () => {
     expect(step(fresh, "settings").done).toBe(false);
-    const seeded = step({ ...fresh, settings: settings("Riverbend College") }, "settings");
+    const seeded = step(
+      { ...fresh, settings: settings("Riverbend College") },
+      "settings",
+    );
     expect(seeded.done).toBe(false);
     expect(seeded.detail).toBe(
-      "The name and colour every screen shows, and the houses students belong to",
+      "The name and colour every screen shows, the houses students belong to, and the ages " +
+        "carnivals run",
     );
   });
 
   it("is done once School settings have been saved", () => {
-    const saved = step({ ...fresh, settings: settings("Riverbend College", true) }, "settings");
+    const saved = step(
+      { ...fresh, settings: settings("Riverbend College", true) },
+      "settings",
+    );
     expect(saved.done).toBe(true);
     expect(saved.detail).toBe("Riverbend College · 2 houses");
+    const withAges = step(
+      {
+        ...fresh,
+        settings: {
+          ...settings("Riverbend College", true),
+          ages: { youngest: 12, oldest: 18 },
+        },
+      },
+      "settings",
+    );
+    expect(withAges.detail).toBe(
+      "Riverbend College · 2 houses · ages 12 to 18+",
+    );
   });
 
   it("is unknown when the settings read failed or has not landed", () => {
@@ -88,7 +130,11 @@ describe("schoolSteps — staff accounts", () => {
       subject: oid,
       localAccounts: false,
       assignments: [
-        assignment("it@school.example", { bootstrap: true, id: null, assignedBySubject: null }),
+        assignment("it@school.example", {
+          bootstrap: true,
+          id: null,
+          assignedBySubject: null,
+        }),
       ],
     };
     expect(step(facts, "staff").done).toBe(false);
@@ -128,13 +174,18 @@ describe("schoolSteps — staff accounts", () => {
 describe("schoolSteps — your first carnival", () => {
   it("is undone with no carnival and done with one", () => {
     expect(step(fresh, "carnival").done).toBe(false);
-    const one = step({ ...fresh, carnivals: [{ id: "c-1" } as Carnival] }, "carnival");
+    const one = step(
+      { ...fresh, carnivals: [{ id: "c-1" } as Carnival] },
+      "carnival",
+    );
     expect(one.done).toBe(true);
     expect(one.detail).toBe("1 carnival");
   });
 
   it("is unknown when the carnival list failed or has not landed", () => {
     expect(step({ ...fresh, carnivals: null }, "carnival").done).toBeNull();
-    expect(step({ ...fresh, carnivals: undefined }, "carnival").done).toBeNull();
+    expect(
+      step({ ...fresh, carnivals: undefined }, "carnival").done,
+    ).toBeNull();
   });
 });

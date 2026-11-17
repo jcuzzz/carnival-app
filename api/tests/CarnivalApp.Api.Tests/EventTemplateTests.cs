@@ -25,9 +25,9 @@ namespace CarnivalApp.Api.Tests;
 /// one), so the expectation moves with the document. The one intentional pin on
 /// today's catalogue lives in
 /// <see cref="SwimmingTemplateDocumentTests.CANARY_current_swimming_catalogue_and_totals"/>.
-/// The arithmetic holds for a carnival with no saved profile whose roster
-/// derives exactly the template's ages (<see cref="TemplateRoster"/>), since an
-/// apply takes its ages from the carnival (ADR-0067 §4).
+/// The arithmetic holds for a carnival whose ages are exactly the template's
+/// (<see cref="TemplateAges"/>), since an apply takes its ages from the carnival
+/// (ADR-0067 §4).
 /// </summary>
 internal static class TemplateExpectation
 {
@@ -59,60 +59,19 @@ internal static class TemplateExpectation
 }
 
 /// <summary>
-/// A promoted, current roster with one active student per age, which is where
-/// a template apply takes its ages from until the carnival saves its own
-/// (ADR-0067 §2). The roster is school-wide, so a factory shared by a test
-/// class shares it too.
+/// Where a template apply takes its ages from until the carnival saves its own: the school's
+/// range (ADR-0067 §3). The shipped templates' 12 to 18+ is the range 12 to 18.
 /// </summary>
-internal static class TemplateRoster
+internal static class TemplateAges
 {
     public static IReadOnlyList<string> SwimmingAges => TemplateExpectation.Load().AgeGroups;
 
-    public static Task SeedAsync(
-        ApiTestFactory factory, IEnumerable<string> ages, bool active = true, bool current = true) =>
-        CarnivalSeed.MutateAsync(factory, db => Add(db, ages, active, current));
+    public static Task SchoolAsync(ApiTestFactory factory) => CarnivalSeed.SetSchoolAgesAsync(factory, 12, 18);
 
-    public static void Add(
-        CarnivalAppDbContext db, IEnumerable<string> ages, bool active = true, bool current = true)
-    {
-        var batch = new ImportBatch
-        {
-            Id = Guid.CreateVersion7(),
-            SourceFileName = "template-roster.csv",
-            SourceFileHash = $"template-roster-{Guid.CreateVersion7():N}",
-            MappingVersion = "test",
-            ImportedBySubject = "seeder",
-            ImportedAtUtc = DateTimeOffset.UtcNow,
-            Status = ImportBatchStatus.Promoted,
-        };
-        db.ImportBatches.Add(batch);
-        foreach (var age in ages)
-        {
-            var student = new Student
-            {
-                Id = Guid.CreateVersion7(),
-                ExternalStudentId = $"TR-{Guid.CreateVersion7():N}",
-                Surname = "Synthetic",
-                FirstName = $"Age{age}",
-                IsActive = active,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            };
-            db.Students.Add(student);
-            db.RosterSnapshots.Add(new RosterSnapshot
-            {
-                Id = Guid.CreateVersion7(),
-                StudentId = student.Id,
-                SchoolYear = 2027,
-                YearLevel = 7,
-                HouseCode = "BANKSIA",
-                CompetitionAgeGroup = age,
-                CompetitionCategory = CompetitionCategory.M,
-                ImportBatchId = batch.Id,
-                EffectiveDate = new DateOnly(2027, 1, 30),
-                IsCurrent = current,
-            });
-        }
-    }
+    /// <summary>For a template whose ages are no school range: the carnival saves them itself.</summary>
+    public static void SaveProfile(CarnivalAppDbContext db, Guid carnivalId, EventTemplate template) =>
+        db.CarnivalDivisions.AddRange(
+            DivisionProfile.ForTemplateApply(template.AgeGroups, template).ToRows(carnivalId));
 }
 
 /// <summary>
@@ -238,8 +197,9 @@ public class SwimmingTemplateDocumentTests
         // prints one line for a stroke it in fact splits M/F. Ages that run
         // together when participation is low are a slot holding several
         // instances (ADR-0014 §4), never one merged event.
+        // The oldest age takes everyone older (ADR-0067 §2).
         var template = Load();
-        var ages = new[] { "12", "13", "14", "15", "16", "17", "18" };
+        var ages = new[] { "12", "13", "14", "15", "16", "17", "18+" };
         Assert.Equal(ages, template.AgeGroups);
         Assert.Equal([CompetitionCategory.M, CompetitionCategory.F], template.Categories);
         Assert.Equal([EventTier.Competitive, EventTier.Social], template.Tiers);
@@ -266,28 +226,26 @@ public class SwimmingTemplateDocumentTests
     }
 
     [Fact]
-    public void Template_age_groups_agree_exactly_with_import_derivation_labels()
+    public void Every_derived_age_from_12_up_has_exactly_one_template_age()
     {
         // Age as at 31 Dec of the competition year (SSV convention). The
-        // derivation emits the plain age as the label ("12".."18"); the
-        // template must use those exact strings.
+        // derivation emits the plain age ("12".."20"); 18 and older all land in 18+.
         var rule = new AgeGroupRule { CutOffMonth = 12, CutOffDay = 31 };
-        var derived = Enumerable.Range(12, 7) // ages 12..18
-            .Select(age => rule.DeriveAgeGroup(
-                new DateOnly(Fixtures.CompetitionYear - age, 6, 15), Fixtures.CompetitionYear))
-            .ToList();
-        Assert.Equal(Load().AgeGroups, derived);
+        foreach (var age in Enumerable.Range(12, 9))
+        {
+            var label = rule.DeriveAgeGroup(
+                new DateOnly(Fixtures.CompetitionYear - age, 6, 15), Fixtures.CompetitionYear);
+            Assert.Single(Load().AgeGroups, code => AgeScope.Admits(code, label));
+        }
     }
 
-    [Theory]
-    [InlineData(11)]
-    [InlineData(19)]
-    public void Out_of_range_ages_simply_have_no_matching_division(int age)
+    [Fact]
+    public void A_younger_age_has_no_matching_division()
     {
         var rule = new AgeGroupRule { CutOffMonth = 12, CutOffDay = 31 };
         var label = rule.DeriveAgeGroup(
-            new DateOnly(Fixtures.CompetitionYear - age, 6, 15), Fixtures.CompetitionYear);
-        Assert.DoesNotContain(label, Load().AgeGroups);
+            new DateOnly(Fixtures.CompetitionYear - 11, 6, 15), Fixtures.CompetitionYear);
+        Assert.DoesNotContain(Load().AgeGroups, code => AgeScope.Admits(code, label));
     }
 }
 
@@ -314,7 +272,7 @@ public sealed class ApplyTemplateEndpointTests : IDisposable
 
     private async Task<Guid> CreateCarnivalAsync()
     {
-        await TemplateRoster.SeedAsync(_factory, _template.AgeGroups);
+        await TemplateAges.SchoolAsync(_factory);
         var response = await _admin.PostAsJsonAsync("/api/v1/carnivals",
             new { name = "Swimming Carnival 2027", type = "Swimming", date = "2027-02-25" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -465,8 +423,9 @@ public sealed class ApplyTemplateEndpointTests : IDisposable
     [Fact]
     public async Task CANARY_shipped_swimming_divisions_and_record_categories_byte_for_byte()
     {
+        // The default encoder escapes "+".
         const string expected =
-            """{"ageGroups":["12","13","14","15","16","17","18"],"categories":["M","F"]}""";
+            """{"ageGroups":["12","13","14","15","16","17","18\u002B"],"categories":["M","F"]}""";
 
         var carnivalId = await CreateCarnivalAsync();
         Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(carnivalId)).StatusCode);
@@ -612,16 +571,22 @@ public sealed class ApplyTemplateEndpointTests : IDisposable
 }
 
 /// <summary>
-/// ADR-0067 §4–5: an apply generates divisions over the carnival's ages (the
-/// saved profile's, else the roster's) and the carnival's categories and tiers
-/// (else the template's). The template's own ages still name the record
-/// categories and the program's slot filters. With neither a profile nor a
-/// roster, the apply is refused before it writes anything.
+/// ADR-0067 §3-§4: an apply generates divisions over the carnival's ages (the
+/// saved profile's, else the school's range) and the carnival's categories and
+/// tiers (else the template's). No student list is needed. With no ages
+/// anywhere, the apply is refused before it writes anything.
 /// </summary>
 public sealed class ApplyTemplateAgesTests : IDisposable
 {
-    private const string TemplateRecordCategories =
-        """{"ageGroups":["12","13","14","15","16","17","18"],"categories":["M","F"]}""";
+    private static readonly string[] TemplateRecordAges = ["12", "13", "14", "15", "16", "17", "18+"];
+
+    // The blob is compared by meaning: the serialiser escapes "+".
+    private static void AssertTemplateRecordCategories(string? json)
+    {
+        var blob = JsonDocument.Parse(json!).RootElement;
+        Assert.Equal(TemplateRecordAges, Strings(blob.GetProperty("ageGroups")));
+        Assert.Equal(["M", "F"], Strings(blob.GetProperty("categories")));
+    }
 
     private readonly ApiTestFactory _factory = new();
     private readonly HttpClient _admin;
@@ -659,41 +624,41 @@ public sealed class ApplyTemplateAgesTests : IDisposable
         [.. Enumerable.Range(from, to - from + 1).Select(age => age.ToString())];
 
     [Fact]
-    public async Task A_roster_of_12_to_17_and_SNR_gets_divisions_for_exactly_those_ages_and_seeds_them()
+    public async Task With_no_student_list_the_schools_range_gives_the_ages_and_is_seeded()
     {
-        string[] roster = [.. Ages(12, 17), "SNR"];
-        await TemplateRoster.SeedAsync(_factory, roster);
+        await CarnivalSeed.SetSchoolAgesAsync(_factory, 11, 16);
+        string[] ages = [.. Ages(11, 15), "16+"];
         var carnivalId = await CarnivalAsync();
 
         var applied = await ApplyAsync(carnivalId);
         Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
         var body = await applied.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(roster, Strings(body.GetProperty("ageGroups")));
+        Assert.Equal(ages, Strings(body.GetProperty("ageGroups")));
         Assert.Equal(["M", "F"], Strings(body.GetProperty("categories")));
         Assert.Equal(["Competitive", "Social"], Strings(body.GetProperty("tiers")));
         Assert.True(body.GetProperty("divisionProfileSeeded").GetBoolean());
 
         var events = await EventsAsync(carnivalId);
-        Assert.Equal(roster, events.Select(e => e.AgeGroup).Where(a => a != AgeScope.OpenKey)
+        Assert.Equal(ages, events.Select(e => e.AgeGroup).Where(a => a != AgeScope.OpenKey)
             .Distinct().OrderBy(AgeScope.Order));
 
-        // The seed is the roster's ages with the template's categories and tiers.
+        // The seed is the school's ages with the template's categories and tiers.
         var profile = (await _admin.GetFromJsonAsync<JsonElement>($"/api/v1/carnivals/{carnivalId}/settings"))
             .GetProperty("divisions");
-        Assert.Equal(roster, Strings(profile.GetProperty("ageGroups")));
+        Assert.Equal(ages, Strings(profile.GetProperty("ageGroups")));
         Assert.Equal(["M", "F"], Strings(profile.GetProperty("categories")));
         Assert.Equal(["Competitive", "Social"], Strings(profile.GetProperty("tiers")));
 
-        // The record categories are still the template's ages, SNR or not.
+        // The record categories are the template's own ages.
         var freestyle = await CarnivalSeed.QueryAsync(_factory,
             db => db.EventDefinitions.SingleAsync(d => d.Code == "SW-50-FREE"));
-        Assert.Equal(TemplateRecordCategories, freestyle.RecordCategoriesJson);
+        AssertTemplateRecordCategories(freestyle.RecordCategoriesJson);
 
-        // The unfiltered freestyle block takes SNR too, after the numbered ages.
+        // The unfiltered freestyle block takes every age, youngest first.
         var block = await CarnivalSeed.QueryAsync(_factory, db => db.ScheduleSlots
             .Include(s => s.Events)
             .SingleAsync(s => s.Stream.CarnivalId == carnivalId && s.Label == "FREESTYLE EVENTS"));
-        Assert.Equal(roster, block.Events.OrderBy(e => e.SlotOrder).Select(e => e.AgeGroup).Distinct());
+        Assert.Equal(ages, block.Events.OrderBy(e => e.SlotOrder).Select(e => e.AgeGroup).Distinct());
 
         var reapplied = await (await ApplyAsync(carnivalId)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(0, reapplied.GetProperty("eventsCreated").GetInt32());
@@ -702,9 +667,9 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_saved_profile_wins_over_the_roster_and_competitive_only_creates_no_social_divisions()
+    public async Task A_saved_profile_wins_over_the_schools_range_and_competitive_only_creates_no_social_divisions()
     {
-        await TemplateRoster.SeedAsync(_factory, Ages(12, 18));
+        await TemplateAges.SchoolAsync(_factory);
         var carnivalId = await CarnivalAsync();
         await SaveProfileAsync(carnivalId, ["13", "14"], ["M"], ["Competitive"]);
 
@@ -730,7 +695,6 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     [Fact]
     public async Task A_template_events_own_tiers_are_intersected_with_the_carnivals()
     {
-        await TemplateRoster.SeedAsync(_factory, ["13"]);
         var carnivalId = await CarnivalAsync();
         await SaveProfileAsync(carnivalId, ["13"], ["M", "F"], ["Social"]);
 
@@ -753,7 +717,7 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     [InlineData(12, 18)]
     public async Task A_profile_saved_under_the_old_rules_keeps_its_ages(int from, int to)
     {
-        await TemplateRoster.SeedAsync(_factory, ["13", "14"]);
+        await TemplateAges.SchoolAsync(_factory);
         var carnivalId = await CarnivalAsync();
         await SaveProfileAsync(carnivalId, Ages(from, to), ["M", "F"], ["Competitive"]);
 
@@ -763,7 +727,7 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_saved_profile_is_enough_without_a_roster()
+    public async Task A_saved_profile_is_enough_without_the_schools_ages()
     {
         var carnivalId = await CarnivalAsync();
         await SaveProfileAsync(carnivalId, ["13"], ["F"], ["Competitive"]);
@@ -774,13 +738,16 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     }
 
     [Fact]
-    public async Task No_roster_and_no_profile_is_refused_and_nothing_is_written()
+    public async Task No_ages_anywhere_is_refused_and_nothing_is_written()
     {
+        // A student list is no source of ages.
+        await CarnivalSeed.SeedStudentAsync(_factory);
         var carnivalId = await CarnivalAsync();
 
         var refused = await ApplyAsync(carnivalId);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        await refused.AssertErrorAsync(ErrorCodes.RosterRequired);
+        await refused.AssertErrorAsync(ErrorCodes.AgesRequired);
+        Assert.Contains("School settings", await refused.ErrorDetailAsync());
 
         Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory, db => db.EventDefinitions.CountAsync()));
         Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory, db => db.CarnivalEvents.CountAsync()));
@@ -790,50 +757,9 @@ public sealed class ApplyTemplateAgesTests : IDisposable
             a.Action == AuditActions.CarnivalApplyTemplate || a.Action == AuditActions.EventDefinitionCreate)));
     }
 
-    /// <summary>A student list that derives no age a division could carry is no student list.</summary>
-    [Theory]
-    [InlineData("inactive")]
-    [InlineData("not-current")]
-    [InlineData("invalid-codes")]
-    public async Task A_student_list_with_no_usable_ages_is_refused(string kind)
-    {
-        await (kind switch
-        {
-            "inactive" => TemplateRoster.SeedAsync(_factory, ["13", "14"], active: false),
-            "not-current" => TemplateRoster.SeedAsync(_factory, ["13", "14"], current: false),
-            _ => TemplateRoster.SeedAsync(_factory, ["-9", "13-14"]),
-        });
-        var carnivalId = await CarnivalAsync();
-
-        var refused = await ApplyAsync(carnivalId);
-        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        await refused.AssertErrorAsync(ErrorCodes.RosterRequired);
-        Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory, db => db.CarnivalEvents.CountAsync()));
-    }
-
-    /// <summary>
-    /// More ages than a profile may hold cannot be seeded; the code is the same,
-    /// but the sentence must not tell a school that has imported to import.
-    /// </summary>
-    [Fact]
-    public async Task A_student_list_with_more_ages_than_a_carnival_holds_is_refused_with_its_own_detail()
-    {
-        var noRoster = await ApplyAsync(await CarnivalAsync());
-        await TemplateRoster.SeedAsync(_factory,
-            Enumerable.Range(1, DivisionProfile.MaxAgeGroups + 1).Select(n => $"A{n}"));
-        var carnivalId = await CarnivalAsync();
-
-        var refused = await ApplyAsync(carnivalId);
-        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        await refused.AssertErrorAsync(ErrorCodes.RosterRequired);
-        Assert.NotEqual(await noRoster.ErrorDetailAsync(), await refused.ErrorDetailAsync());
-        Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory, db => db.EventDefinitions.CountAsync()));
-        Assert.Equal(0, await CarnivalSeed.QueryAsync(_factory, db => db.CarnivalDivisions.CountAsync()));
-    }
-
     /// <summary>Rows that do not read as a profile are no saved ages, and a refusal leaves them.</summary>
     [Fact]
-    public async Task Unusable_profile_rows_and_no_roster_are_refused_and_the_rows_are_untouched()
+    public async Task Unusable_profile_rows_and_no_school_ages_are_refused_and_the_rows_are_untouched()
     {
         var carnivalId = await CarnivalAsync();
         var junk = new CarnivalDivision
@@ -850,7 +776,7 @@ public sealed class ApplyTemplateAgesTests : IDisposable
 
         var refused = await ApplyAsync(carnivalId);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        await refused.AssertErrorAsync(ErrorCodes.RosterRequired);
+        await refused.AssertErrorAsync(ErrorCodes.AgesRequired);
 
         var rows = await CarnivalSeed.QueryAsync(_factory, db => db.CarnivalDivisions.ToListAsync());
         var row = Assert.Single(rows);
@@ -859,7 +785,7 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     }
 
     [Fact]
-    public async Task The_state_and_template_refusals_come_before_the_roster_one()
+    public async Task The_state_and_template_refusals_come_before_the_ages_one()
     {
         var carnivalId = await CarnivalAsync();
 
@@ -874,15 +800,37 @@ public sealed class ApplyTemplateAgesTests : IDisposable
     }
 
     /// <summary>
-    /// The athletics stations filter on the template's 12–18, so a roster age
-    /// outside them gets its divisions but no slot; an unfiltered track block
-    /// takes every age, youngest first.
+    /// The athletics stations filter on plain ages 15 to 18, and the filter age 18
+    /// selects the carnival's 18+ division: everyone 18 and older throws at that station.
     /// </summary>
     [Fact]
-    public async Task A_roster_age_outside_the_slot_filters_is_scheduled_but_left_out_of_the_program()
+    public async Task A_filter_age_at_or_above_the_oldest_selects_the_and_over_division()
     {
-        await TemplateRoster.SeedAsync(_factory, ["11", "13", "SNR"]);
+        await TemplateAges.SchoolAsync(_factory);
         var carnivalId = await CarnivalAsync("Athletics");
+        Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(carnivalId, "athletics")).StatusCode);
+
+        var slots = await CarnivalSeed.QueryAsync(_factory, db => db.ScheduleSlots
+            .Where(s => s.Stream.CarnivalId == carnivalId)
+            .ToDictionaryAsync(s => s.Id, s => s.Label));
+        var shotPut = (await EventsAsync(carnivalId))
+            .Where(e => e.EventDefinition.Code == "AT-SHOT-PUT" && e.Tier == EventTier.Competitive)
+            .ToList();
+        string? SlotOf(string age) => slots[shotPut.First(e => e.AgeGroup == age).ScheduleSlotId!.Value];
+        Assert.Equal("C 15/16/17", SlotOf("18+"));
+        Assert.Equal("C 15/16/17", SlotOf("15"));
+        Assert.Equal("C 13/14", SlotOf("12"));
+    }
+
+    /// <summary>
+    /// A carnival age no slot filter names gets its divisions but no station slot;
+    /// an unfiltered track block takes every age, youngest first.
+    /// </summary>
+    [Fact]
+    public async Task An_age_outside_the_slot_filters_is_scheduled_but_left_out_of_the_program()
+    {
+        var carnivalId = await CarnivalAsync("Athletics");
+        await SaveProfileAsync(carnivalId, ["11", "13", "SNR"], ["M", "F"], ["Competitive", "Social"]);
         Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(carnivalId, "athletics")).StatusCode);
 
         var shotPut = (await EventsAsync(carnivalId)).Where(e => e.EventDefinition.Code == "AT-SHOT-PUT").ToList();
@@ -897,7 +845,7 @@ public sealed class ApplyTemplateAgesTests : IDisposable
 
         var sprint = await CarnivalSeed.QueryAsync(_factory,
             db => db.EventDefinitions.SingleAsync(d => d.Code == "AT-100"));
-        Assert.Equal(TemplateRecordCategories, sprint.RecordCategoriesJson);
+        AssertTemplateRecordCategories(sprint.RecordCategoriesJson);
     }
 }
 
@@ -930,7 +878,7 @@ public sealed class TemplateScheduleSeedingTests : IDisposable
 
     private async Task<Guid> CarnivalAsync()
     {
-        await TemplateRoster.SeedAsync(_factory, _template.AgeGroups);
+        await TemplateAges.SchoolAsync(_factory);
         var response = await _admin.PostAsJsonAsync("/api/v1/carnivals",
             new { name = "Program Carnival", type = "Swimming", date = "2027-02-25" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -1145,11 +1093,11 @@ public sealed class TemplateScheduleSeedingTests : IDisposable
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         db.Carnivals.Add(carnival);
-        TemplateRoster.Add(db, template.AgeGroups);
+        TemplateAges.SaveProfile(db, carnival.Id, template);
         await db.SaveChangesAsync();
 
         var applied = (await scope.ServiceProvider.GetRequiredService<EventTemplateService>()
-            .ApplyAsync(carnival, template, new AuditActor("program-test", "CarnivalAdministrator"), default)).Applied!;
+            .ApplyAsync(carnival, template, new AuditActor("program-test", "CarnivalAdministrator"), default))!;
         Assert.Equal(1, applied.EventsCreated);
         Assert.Equal(0, applied.StreamsCreated);
         Assert.Equal(0, applied.SlotsCreated);
@@ -1309,12 +1257,12 @@ public sealed class TemplateExpectationTests : IDisposable
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         db.Carnivals.Add(carnival);
-        TemplateRoster.Add(db, template.AgeGroups);
+        TemplateAges.SaveProfile(db, carnival.Id, template);
         await db.SaveChangesAsync();
 
         var service = scope.ServiceProvider.GetRequiredService<EventTemplateService>();
         var applied = (await service.ApplyAsync(
-            carnival, template, new AuditActor("template-expectation", "CarnivalAdministrator"), default)).Applied!;
+            carnival, template, new AuditActor("template-expectation", "CarnivalAdministrator"), default))!;
 
         Assert.Equal(TemplateExpectation.CataloguedDefinitions(template), applied.DefinitionsCreated);
         Assert.Equal(TemplateExpectation.ScheduledEvents(template), applied.EventsCreated);
@@ -1476,11 +1424,11 @@ public sealed class TemplateDivisionsTests : IDisposable
         var carnival = await CarnivalAsync(db, template);
         var actor = new AuditActor("divisions-test", "CarnivalAdministrator");
 
-        var first = (await service.ApplyAsync(carnival, template, actor, default)).Applied!;
+        var first = (await service.ApplyAsync(carnival, template, actor, default))!;
         Assert.Equal(8, first.EventsCreated); // 2 ages × 2 categories × 2 tiers
         Assert.Equal(0, first.EventsAlreadyScheduled);
 
-        var second = (await service.ApplyAsync(carnival, template, actor, default)).Applied!;
+        var second = (await service.ApplyAsync(carnival, template, actor, default))!;
         Assert.Equal(0, second.EventsCreated);
         Assert.Equal(8, second.EventsAlreadyScheduled);
         Assert.Equal(0, second.DefinitionsCreated);
@@ -1612,7 +1560,7 @@ public sealed class TemplateDivisionsTests : IDisposable
         var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         var carnival = await CarnivalAsync(db, template);
         Assert.NotNull((await scope.ServiceProvider.GetRequiredService<EventTemplateService>().ApplyAsync(
-            carnival, template, new AuditActor("divisions-test", "CarnivalAdministrator"), default)).Applied);
+            carnival, template, new AuditActor("divisions-test", "CarnivalAdministrator"), default)));
         return (
             await db.EventDefinitions.ToDictionaryAsync(d => d.Code),
             await db.CarnivalEvents
@@ -1636,7 +1584,7 @@ public sealed class TemplateDivisionsTests : IDisposable
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         db.Carnivals.Add(carnival);
-        TemplateRoster.Add(db, template.AgeGroups);
+        TemplateAges.SaveProfile(db, carnival.Id, template);
         await db.SaveChangesAsync();
         return carnival;
     }
@@ -1707,7 +1655,7 @@ public sealed class TemplateSlotDivisionFilterTests
     }
 
     [Theory]
-    [InlineData("""[{ "code": "TT-A", "ages": ["14"] }]""", "divisions.ageGroups does not declare")]
+    [InlineData("""[{ "code": "TT-A", "ages": ["14"] }]""", "selects none of divisions.ageGroups")]
     [InlineData("""[{ "code": "TT-A", "tiers": ["Recreational"] }]""", "the template does not contest")]
     [InlineData("""[{ "code": "TT-A", "categories": ["S"] }]""", "the template does not contest")]
     [InlineData("""[{ "code": "TT-A", "ages": [] }]""", "empty 'ages'")]
@@ -1740,7 +1688,7 @@ public sealed class AthleticsTemplateTests : IDisposable
 
     private async Task<Guid> CarnivalAsync()
     {
-        await TemplateRoster.SeedAsync(_factory, _template.AgeGroups);
+        await TemplateAges.SchoolAsync(_factory);
         var response = await _admin.PostAsJsonAsync("/api/v1/carnivals",
             new { name = "Athletics Carnival 2027", type = "Athletics", date = "2027-04-22" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -1880,7 +1828,7 @@ public sealed class AthleticsTemplateTests : IDisposable
     [Fact]
     public void Divisions_are_single_ages_12_to_18_by_boys_and_girls_at_both_tiers()
     {
-        var ages = new[] { "12", "13", "14", "15", "16", "17", "18" };
+        var ages = new[] { "12", "13", "14", "15", "16", "17", "18+" };
         Assert.Equal(ages, _template.AgeGroups);
         Assert.Equal([CompetitionCategory.M, CompetitionCategory.F], _template.Categories);
         Assert.Equal([EventTier.Competitive, EventTier.Social], _template.Tiers);
@@ -1908,8 +1856,8 @@ public sealed class AthleticsTemplateTests : IDisposable
     {
         // The program's own running order: "SHOT PUT 10:00-11:00 C 15/16/17" is
         // one slot, "S 13/14" another, and the SAME definition sits in four slots
-        // of the one stream (ADR-0052 §7). Ages 12 and 18 ride with the 13/14 and
-        // 15/16/17 sessions respectively.
+        // of the one stream (ADR-0052 §7). Ages 12 and 18+ ride with the 13/14 and
+        // 15/16/17 sessions respectively: the filter's plain 18 selects 18+.
         var carnivalId = await CarnivalAsync();
         Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(carnivalId)).StatusCode);
 
@@ -1923,7 +1871,7 @@ public sealed class AthleticsTemplateTests : IDisposable
         var senior = slots[0];
         Assert.Equal(
             ["15/M/Competitive", "15/F/Competitive", "16/M/Competitive", "16/F/Competitive",
-             "17/M/Competitive", "17/F/Competitive", "18/M/Competitive", "18/F/Competitive"],
+             "17/M/Competitive", "17/F/Competitive", "18+/M/Competitive", "18+/F/Competitive"],
             senior.Events.OrderBy(e => e.SlotOrder)
                 .Select(e => $"{e.AgeGroup}/{e.Category}/{e.Tier}"));
         Assert.All(senior.Events, e => Assert.Equal("AT-SHOT-PUT", e.EventDefinition.Code));
@@ -1945,7 +1893,7 @@ public sealed class AthleticsTemplateTests : IDisposable
     [Fact]
     public async Task Only_what_the_program_itself_omits_is_left_unscheduled()
     {
-        // The 2026 discus column stops at "S 13/14/15/16", so Social 17 and 18
+        // The 2026 discus column stops at "S 13/14/15/16", so Social 17 and 18+
         // discus are the only instances in no slot — an ordinary, usable state.
         var carnivalId = await CarnivalAsync();
         Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(carnivalId)).StatusCode);
@@ -1956,7 +1904,7 @@ public sealed class AthleticsTemplateTests : IDisposable
             .ToListAsync());
         Assert.Equal(
             ["AT-DISCUS/17/F/Social", "AT-DISCUS/17/M/Social",
-             "AT-DISCUS/18/F/Social", "AT-DISCUS/18/M/Social"],
+             "AT-DISCUS/18+/F/Social", "AT-DISCUS/18+/M/Social"],
             unscheduled
                 .Select(e => $"{e.EventDefinition.Code}/{e.AgeGroup}/{e.Category}/{e.Tier}")
                 .Order());

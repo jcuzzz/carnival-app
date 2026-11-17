@@ -27,7 +27,8 @@ const ready: ReadinessFacts = {
   carnival: { date: "2027-03-06" },
   students: 412,
   events: [division("e-1", "12", "sl-1"), division("e-2", "13", "sl-1", "def-2")],
-  rosterAgeGroups: ["12", "13"],
+  uncoveredAges: [],
+  agesWithoutStudents: [],
   rosterYear: 2027,
   schedule: program,
 };
@@ -55,46 +56,57 @@ describe("readiness", () => {
     expect(readiness({ ...ready, rosterYear: undefined }).warnings).toEqual([]);
   });
 
-  it("counts divisions whose age no current student has, naming the ages", () => {
-    const facts = {
-      ...ready,
-      events: [
-        ...ready.events!,
-        division("e-3", "11", "sl-1"),
-        division("e-4", "19", "sl-1"),
-        division("e-5", "SNR", "sl-1"),
-        division("e-6", "11", "sl-1"),
-      ],
-    };
+  it("names students no carnival age covers, with a link to Event setup", () => {
+    const facts = { ...ready, uncoveredAges: [{ ageGroup: "11", students: 14 }] };
     expect(readiness(facts).warnings).toEqual([
       {
-        id: "unmatchedAges",
-        text: "4 divisions have an age no current student has (ages 11, 19, SNR).",
+        id: "uncoveredAges",
+        text: "14 students are aged 11, and no event has age 11.",
+        action: "Event setup",
       },
     ]);
   });
 
-  it("never counts the all-ages division as unmatched", () => {
-    const facts = { ...ready, events: [...ready.events!, division("e-3", "OPEN", "sl-1")] };
-    expect(readiness(facts).warnings).toEqual([]);
+  it("names several uncovered ages together", () => {
+    const facts = {
+      ...ready,
+      uncoveredAges: [
+        { ageGroup: "10", students: 1 },
+        { ageGroup: "11", students: 13 },
+      ],
+    };
+    expect(texts(facts)).toEqual(["14 students are aged 10 or 11, and no event has those ages."]);
   });
 
-  it("names a single unmatched age in the singular", () => {
-    const facts = { ...ready, events: [...ready.events!, division("e-3", "14", "sl-1")] };
-    expect(texts(facts)).toEqual(["1 division has an age no current student has (age 14)."]);
+  it("notes an age with no students, counting the divisions that will be empty", () => {
+    const facts = {
+      ...ready,
+      events: [...ready.events!, division("e-3", "18+", "sl-1"), division("e-4", "18+", "sl-1")],
+      agesWithoutStudents: ["18+"],
+    };
+    expect(readiness(facts).warnings).toEqual([
+      { id: "emptyAges", text: "Age 18+ has no students: 2 divisions will be empty." },
+    ]);
+  });
+
+  it("names several empty ages, and drops the count when no division has them", () => {
+    expect(texts({ ...ready, agesWithoutStudents: ["18+", "17"] })).toEqual([
+      "Ages 17 and 18+ have no students.",
+    ]);
   });
 
   it("leaves the ages to the Students step when there is no roster", () => {
-    const facts = { ...ready, rosterAgeGroups: [], rosterYear: null };
+    const facts = {
+      ...ready,
+      rosterYear: null,
+      uncoveredAges: [{ ageGroup: "11", students: 14 }],
+      agesWithoutStudents: ["12"],
+    };
     expect(readiness(facts).warnings).toEqual([]);
   });
 
-  it("skips the age check while the settings are unread", () => {
-    const facts = {
-      ...ready,
-      rosterAgeGroups: undefined,
-      events: [...ready.events!, division("e-3", "14", "sl-1")],
-    };
+  it("skips the age checks while the settings are unread", () => {
+    const facts = { ...ready, uncoveredAges: undefined, agesWithoutStudents: undefined };
     expect(readiness(facts).warnings).toEqual([]);
   });
 
@@ -161,11 +173,14 @@ describe("readiness", () => {
       ...ready,
       rosterYear: 2026,
       events: [...ready.events!, division("e-3", "19")],
+      uncoveredAges: [{ ageGroup: "11", students: 1 }],
+      agesWithoutStudents: ["13"],
     };
     const result = readiness(facts);
     expect(result.warnings.map((w) => w.id)).toEqual([
       "rosterYear",
-      "unmatchedAges",
+      "uncoveredAges",
+      "emptyAges",
       "outsideProgram",
     ]);
     expect(result.missing).toBeNull();

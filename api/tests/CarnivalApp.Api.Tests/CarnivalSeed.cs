@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using CarnivalApp.Api.Data;
 using CarnivalApp.Api.Data.Entities;
+using CarnivalApp.Api.School;
 
 namespace CarnivalApp.Api.Tests;
 
@@ -307,5 +308,16 @@ public static class CarnivalSeed
         var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
         mutate(db);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Sets the school's age range, as a School settings save would.</summary>
+    public static async Task SetSchoolAgesAsync(ApiTestFactory factory, int youngest, int oldest)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CarnivalAppDbContext>();
+        var school = await db.SchoolConfigurations.TheSchool().FirstAsync();
+        school.SettingsJson = SchoolSettings.SerialiseAges(new SchoolAges(youngest, oldest), school.SettingsJson);
+        await db.SaveChangesAsync();
+        factory.Services.GetRequiredService<SchoolSettingsProvider>().Invalidate();
     }
 }

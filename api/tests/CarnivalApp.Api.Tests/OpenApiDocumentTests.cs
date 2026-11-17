@@ -140,9 +140,17 @@ public sealed class OpenApiDocumentTests(ApiTestFactory factory) : IClassFixture
     [InlineData("CarnivalSettingsDto", "adjustmentCategories")]
     // ADR-0038 §1: the Manage editor renders the checkbox from this.
     [InlineData("CarnivalSettingsDto", "autoFillLanes")]
-    // ADR-0057: the age pickers and the roster-default line are generated from these.
+    // ADR-0067: the ages line, its warning and Ready to open's note are generated from these.
     [InlineData("CarnivalSettingsDto", "rosterAgeGroups")]
     [InlineData("CarnivalSettingsDto", "divisionsDefault")]
+    [InlineData("CarnivalSettingsDto", "uncoveredAges")]
+    [InlineData("CarnivalSettingsDto", "agesWithoutStudents")]
+    [InlineData("UncoveredAgeDto", "students")]
+    [InlineData("SchoolSettingsResponse", "ages")]
+    [InlineData("SchoolSettingsRequest", "ages")]
+    [InlineData("SchoolAges", "youngest")]
+    [InlineData("ExtendAgesRequest", "youngest")]
+    [InlineData("ExtendAgesResponse", "divisionsAdded")]
     // ADR-0060: the checklist's year warning, the upload form's year and the review's cut-off.
     [InlineData("CarnivalSettingsDto", "rosterYear")]
     [InlineData("ImportDefaults", "competitionYear")]
@@ -323,17 +331,20 @@ public sealed class OpenApiDocumentTests(ApiTestFactory factory) : IClassFixture
     }
 
     /// <summary>
-    /// ADR-0057: the roster codes are a fact the client renders unconditionally,
-    /// so the document must say they are always there and never null; the default
-    /// profile is the one that is sometimes absent, exactly as `divisions` is.
+    /// The roster codes and the coverage lists are facts the client renders
+    /// unconditionally, so the document must say they are always there and never
+    /// null; the default profile is the one that is sometimes absent, exactly as
+    /// `divisions` is.
     /// </summary>
     [Fact]
     public async Task Roster_age_groups_are_required_and_the_default_profile_is_nullable()
     {
         var settings = (await DocumentAsync()).GetProperty("components").GetProperty("schemas")
             .GetProperty("CarnivalSettingsDto");
-        Assert.Contains("rosterAgeGroups",
-            settings.GetProperty("required").EnumerateArray().Select(v => v.GetString()));
+        var required = settings.GetProperty("required").EnumerateArray().Select(v => v.GetString()).ToList();
+        Assert.Contains("rosterAgeGroups", required);
+        Assert.Contains("uncoveredAges", required);
+        Assert.Contains("agesWithoutStudents", required);
 
         var roster = settings.GetProperty("properties").GetProperty("rosterAgeGroups");
         Assert.Equal("array", roster.GetProperty("type").GetString());

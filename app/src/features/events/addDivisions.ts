@@ -14,7 +14,7 @@ export type EnsureProfileResult =
   | { kind: "failed"; text: string };
 
 /**
- * The roster default becomes the carnival's profile before generation. Settings are re-read: a
+ * The school's ages become the carnival's profile before generation. Settings are re-read: a
  * profile saved elsewhere would be overwritten by ages nobody saw (equal ages are our own save).
  */
 export async function ensureProfile(
@@ -66,10 +66,10 @@ function sameList<T>(a: readonly T[] | null, b: readonly T[] | null): boolean {
   return left.length === right.length && left.every((item, i) => item === right[i]);
 }
 
-/** Non-null only while the roster default is what the divisions come from. */
-export function rosterDefaultToSave(
+/** Non-null only while the school's ages are what the divisions come from. */
+export function schoolDefaultToSave(
   profile: DivisionProfile | null | undefined,
-  rosterDefault: DivisionProfile | null | undefined,
+  schoolDefault: DivisionProfile | null | undefined,
 ): DivisionProfile | null {
-  return profile == null ? (rosterDefault ?? null) : null;
+  return profile == null ? (schoolDefault ?? null) : null;
 }

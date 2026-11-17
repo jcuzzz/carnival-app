@@ -40,7 +40,7 @@ public static class RecordDetection
 
         var eligible = contested
             .Where(d => blobs[d.EventDefinitionId] is { } categories
-                        && categories.Contains((d.AgeGroup, d.Category!.Value))
+                        && RecordCategories.Covers(categories, d.AgeGroup, d.Category!.Value)
                         && d.Standings.Count > 0)
             .ToList();
         if (eligible.Count == 0) return 0;

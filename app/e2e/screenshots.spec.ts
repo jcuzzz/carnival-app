@@ -181,14 +181,22 @@ async function captureRegion(
   });
 }
 
+/** A secondary school's ages, as a new install offers them. */
+const SCHOOL_AGES = ["12", "13", "14", "15", "16", "17", "18+"];
+
+interface PinnedAges {
+  /** The school's ages the carnival defaults to; null = the school has none. */
+  school: string[] | null;
+  uncoveredAges?: { ageGroup: string; students: number }[];
+  agesWithoutStudents?: string[];
+}
+
 /**
- * Pin ADR-0057 §1/§2's read-only fields on one carnival's settings read. The
- * roster's codes are whatever the synthetic snapshot derives, so a capture of
- * the roster default is only the same shot run to run if the codes are stated
- * here — and `codes: []` is a state no seed can produce at all, because the
- * promoted roster is school-wide.
+ * Pin one carnival's settings read: the default the school's ages give it, and what the student
+ * list says about its ages. Both depend on seeded school-wide state, so a capture is only the
+ * same shot run to run if they are stated here.
  */
-async function pinRosterAges(page: Page, carnivalId: string, codes: string[]): Promise<void> {
+async function pinAges(page: Page, carnivalId: string, ages: PinnedAges): Promise<void> {
   await page.route(`**/api/v1/carnivals/${carnivalId}/settings`, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     const response = await route.fetch();
@@ -196,15 +204,12 @@ async function pinRosterAges(page: Page, carnivalId: string, codes: string[]): P
     await route.fulfill({
       json: {
         ...body,
-        rosterAgeGroups: codes,
         divisionsDefault:
-          body.divisions !== null || codes.length === 0
+          body.divisions !== null || ages.school === null
             ? null
-            : {
-                ageGroups: codes,
-                categories: ["M", "F"],
-                tiers: ["Competitive"],
-              },
+            : { ageGroups: ages.school, categories: ["M", "F"], tiers: ["Competitive"] },
+        uncoveredAges: ages.uncoveredAges ?? [],
+        agesWithoutStudents: ages.agesWithoutStudents ?? [],
       },
     });
   });
@@ -372,11 +377,11 @@ test("the dashboard, the manage page and the carnival switcher (ADR-0024)", asyn
 });
 
 /**
- * ADR-0066 §4 and ADR-0067 §5: a carnival created before any student list is imported. The
- * roster is school-wide and seeded, so its ages and its student count are answered empty here.
+ * ADR-0066 §4: a carnival created before any student list is imported. The roster is
+ * school-wide and seeded, so its student count is answered empty here.
  */
-async function pinNoStudents(page: Page, carnivalId: string): Promise<void> {
-  await pinRosterAges(page, carnivalId, []);
+async function pinNoStudents(page: Page, carnivalId: string, school: string[] | null) {
+  await pinAges(page, carnivalId, { school });
   await page.route(`**/api/v1/carnivals/${carnivalId}/progress`, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     const response = await route.fetch();
@@ -392,23 +397,19 @@ async function pinNoStudents(page: Page, carnivalId: string): Promise<void> {
 
 /**
  * The moment after a carnival is created, with no student list: Students is the step pointed
- * at, and Event setup, New event and the ages editor all point at the import instead.
+ * at, and events can still be added over the school's ages.
  */
-test("a fresh carnival with no student list: the checklist, the blocked setup screens", async ({
+test("a fresh carnival with no student list: the checklist, events over the school's ages", async ({
   page,
 }) => {
   await signIn(page);
-  await pinNoStudents(page, fresh.carnivalId);
-  const notice = page.getByText(
-    "Import the student list first: this carnival's ages come from it.",
-  );
+  await pinNoStudents(page, fresh.carnivalId, SCHOOL_AGES);
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${fresh.carnivalId}/manage`);
     await settled(page.getByRole("heading", { name: "Manage carnival", level: 1 }));
     // Only one step is ever pointed at.
     await expect(page.locator("li.awaiting .row-title")).toHaveText(/1\. Students/);
     await expect(page.getByText("Do this next")).toHaveCount(1);
-    await expect(page.getByText("Import the students first")).toBeVisible();
     await capture(page, "manage-checklist", width);
 
     // ADR-0066 §5: both opens shown, greyed, with what they wait on.
@@ -421,30 +422,44 @@ test("a fresh carnival with no student list: the checklist, the blocked setup sc
     await captureRegion(page, openStep, "manage-open-not-ready", width);
 
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
-    await settled(notice);
-    await expect(page.getByRole("link", { name: "Import the students" })).toBeVisible();
+    await settled(page.getByText("12 to 18+ · Boys, Girls · Competitive"));
     await expect(
-      page.getByRole("heading", { name: "Start from the standard events" }),
-    ).toHaveCount(0);
-    await capture(page, "event-setup-no-roster", width);
+      page.getByRole("button", { name: "Add the standard swimming events" }),
+    ).toBeEnabled();
+    await capture(page, "event-setup-no-students", width);
 
     await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events/new`);
-    await settled(notice);
-    await expect(
-      page.getByRole("button", { name: "Import the student list first" }),
-    ).toBeDisabled();
-    await capture(page, "event-new-blocked", width);
-
-    // No fallback range (ADR-0067 §5): with nothing to narrow, there is no form.
-    await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/divisions`);
-    await settled(notice);
-    await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
-    await capture(page, "ages-no-roster", width);
+    await settled(page.getByText("The school’s ages: 12 to 18+", { exact: false }));
+    await expect(page.getByRole("button", { name: /^Create \d+ division/ })).toBeVisible();
+    await capture(page, "event-new-no-students", width);
 
     // ADR-0066 §7: the Deck teaches no setup; a manager gets the one way to Manage.
     await page.goto(`/#/carnivals/${fresh.carnivalId}`);
     await settled(page.getByRole("link", { name: "Set the carnival up" }));
     await capture(page, "deck-not-set-up", width);
+  }
+});
+
+/** With no ages anywhere, adding events points at School settings. */
+test("a carnival with no ages: event setup and new event point at School settings", async ({
+  page,
+}) => {
+  await signIn(page);
+  await pinNoStudents(page, fresh.carnivalId, null);
+  const notice = page.getByText("This carnival has no ages yet", { exact: false });
+  for (const width of WIDTHS) {
+    await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events`);
+    await settled(notice);
+    await expect(page.getByText(/the school's ages in School settings/)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Start from the standard events" }),
+    ).toHaveCount(0);
+    await capture(page, "event-setup-no-ages", width);
+
+    await page.goto(`/#/carnivals/${fresh.carnivalId}/setup/events/new`);
+    await settled(notice);
+    await expect(page.getByRole("button", { name: "Set the school's ages first" })).toBeDisabled();
+    await capture(page, "event-new-blocked", width);
   }
 });
 
@@ -468,18 +483,13 @@ test("event setup with an empty catalogue", async ({ page }) => {
 });
 
 /**
- * ADR-0067 §1–2 and ADR-0058 §4: a carnival whose student list is in. Event setup states the
- * ages it will use and offers the standard events as its primary, "New event" draws its grid
- * from the ages, and the editor is a From/To pair over the student list's own ages.
+ * A carnival on the school's ages. Event setup states the ages it will use and offers the
+ * standard events as its primary, "New event" draws its grid from the ages, and the editor is a
+ * From/To pair whose To takes every student that age or older.
  */
-test("ages from the student list: event setup, the add-event grid, the editor", async ({
-  page,
-}) => {
-  // SNR is in the roster and no From/To range can reach it — the one code that
-  // proves the checkbox keeps it and that a left-out age is called out.
-  const roster = ["12", "13", "14", "15", "16", "17", "18", "SNR"];
+test("the school's ages: event setup, the add-event grid, the editor", async ({ page }) => {
   await signIn(page);
-  await pinRosterAges(page, rostered.carnivalId, roster);
+  await pinAges(page, rostered.carnivalId, { school: SCHOOL_AGES });
 
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${rostered.carnivalId}/manage`);
@@ -489,9 +499,7 @@ test("ages from the student list: event setup, the add-event grid, the editor", 
 
     // An empty carnival: the standard events are the screen's primary.
     await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/events`);
-    await settled(
-      page.getByText("Ages 12–18, SNR from the student list · Boys, Girls · Competitive"),
-    );
+    await settled(page.getByText("12 to 18+ · Boys, Girls · Competitive"));
     await expect(page.getByLabel("Carnival template")).toHaveValue("swimming");
     await expect(
       page.getByRole("button", { name: "Add the standard swimming events" }),
@@ -499,74 +507,45 @@ test("ages from the student list: event setup, the add-event grid, the editor", 
     await capture(page, "event-setup-standard-events", width);
 
     await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/events/new`);
-    await settled(page.getByText("Ages from the student list: 12–18, SNR", { exact: false }));
-    // Not blocked: the student list's ages are enough to schedule from.
+    await settled(page.getByText("The school’s ages: 12 to 18+", { exact: false }));
     await expect(page.getByRole("button", { name: /^Create \d+ division/ })).toBeVisible();
     await capture(page, "event-new-roster-default", width);
 
-    // Pre-filled from the student list: the screen an organiser lands on before
-    // anything is saved.
+    // Pre-filled from the school's ages: the screen an organiser lands on before anything is saved.
     await page.goto(`/#/carnivals/${rostered.carnivalId}/setup/divisions`);
     await settled(page.getByRole("heading", { name: "Ages and categories", level: 1 }));
     await expect(page.getByLabel(/^From/)).toHaveValue("12");
     await capture(page, "divisions-roster-default", width);
 
-    // A narrowed range with the seniors unticked: the ages left out are named
-    // rather than silently dropped.
     await page.getByLabel(/^To/).selectOption("16");
-    await page.getByRole("checkbox", { name: "SNR" }).uncheck();
-    await settled(
-      page.getByText("Ages on the student list left out: 17, 18, SNR", { exact: false }),
-    );
+    await settled(page.getByText("12 to 16+: one age per division", { exact: false }));
     await capture(page, "divisions-narrowed", width);
   }
 });
 
 /**
- * ADR-0067 §6: saved ages against a student list that has since changed. The `stale` carnival
- * saves 12–14; each case pins the student list's ages to say something different about them.
+ * Students no carnival age covers, after an import. The `stale` carnival saves 12–14 with a
+ * plain oldest age, as a profile saved before open-ended ages does.
  */
-test("saved ages against the student list: stale, left out, and no list at all", async ({
+test("students no age covers: the Event setup warning, and a legacy oldest age", async ({
   page,
 }) => {
   await signIn(page);
-  const editor = `/#/carnivals/${stale.carnivalId}/setup/divisions`;
-  const setup = `/#/carnivals/${stale.carnivalId}/setup/events`;
-
-  // 14 is saved and no current student has it: a warning and one press that removes it.
-  await pinRosterAges(page, stale.carnivalId, ["12", "13"]);
+  await pinAges(page, stale.carnivalId, {
+    school: SCHOOL_AGES,
+    uncoveredAges: [{ ageGroup: "11", students: 14 }],
+  });
   for (const width of WIDTHS) {
-    await page.goto(setup);
-    await settled(page.getByText("This carnival has ages no student has: 14.", { exact: false }));
-    await expect(page.getByRole("button", { name: "Remove those ages" })).toBeEnabled();
-    await capture(page, "event-setup-ages-stale", width);
+    await page.goto(`/#/carnivals/${stale.carnivalId}/setup/events`);
+    await settled(
+      page.getByText("14 students are aged 11, and this carnival has no events for age 11."),
+    );
+    await expect(page.getByRole("button", { name: "Add age 11" })).toBeEnabled();
+    await capture(page, "event-setup-ages-uncovered", width);
 
-    await page.goto(editor);
-    await settled(page.getByText("Saved ages no current student has: 14", { exact: false }));
-    await capture(page, "divisions-stale-age", width);
-  }
-
-  // 15 and 16 are on the student list and not saved: a deliberate narrowing, noted quietly.
-  await page.unroute(`**/api/v1/carnivals/${stale.carnivalId}/settings`);
-  await pinRosterAges(page, stale.carnivalId, ["12", "13", "14", "15", "16"]);
-  // A reload, not a hash change: the settings read is cached for longer than this test runs.
-  await page.reload();
-  for (const width of WIDTHS) {
-    await page.goto(setup);
-    await settled(page.getByText("Left out of this carnival: 15, 16.", { exact: false }));
-    await expect(page.getByRole("button", { name: "Remove those ages" })).toHaveCount(0);
-    await capture(page, "event-setup-ages-left-out", width);
-  }
-
-  // Saved ages and no student list: the ages are read-only, categories and tiers still change.
-  await page.unroute(`**/api/v1/carnivals/${stale.carnivalId}/settings`);
-  await pinRosterAges(page, stale.carnivalId, []);
-  await page.reload();
-  for (const width of WIDTHS) {
-    await page.goto(editor);
-    await settled(page.getByText("No student list is imported yet", { exact: false }));
-    await expect(page.getByLabel(/^From/)).toHaveCount(0);
-    await capture(page, "ages-saved-no-roster", width);
+    await page.goto(`/#/carnivals/${stale.carnivalId}/setup/divisions`);
+    await settled(page.getByText("Saving replaces them with 12 to 14+.", { exact: false }));
+    await capture(page, "divisions-legacy-oldest", width);
   }
 });
 
@@ -745,15 +724,15 @@ test("event setup: the catalogue and its ages line, an event, a new event, the a
   await api.dispose();
 
   await signIn(page);
-  // The saved ages, matched by the student list, so the line stands alone (ADR-0067 §1).
-  await pinRosterAges(page, seed.carnivalId, ["12", "13", "14"]);
+  // Nothing about the student list, so the ages line stands alone.
+  await pinAges(page, seed.carnivalId, { school: SCHOOL_AGES });
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${seed.carnivalId}/setup/events`);
     await settled(page.getByRole("heading", { name: "Event setup", level: 1 }));
     const line = page.locator(".button-row").filter({
-      has: page.getByRole("link", { name: "Ages and categories" }),
+      has: page.getByRole("link", { name: "Change ages and categories" }),
     });
-    await settled(line.getByText("Ages 12–14 · Boys, Girls · Competitive, Social"));
+    await settled(line.getByText("12 to 14 · Boys, Girls · Competitive, Social"));
     await capture(page, "event-setup", width);
     await captureRegion(page, line, "event-setup-ages-line", width);
 
@@ -840,8 +819,8 @@ test("event setup: adding a catalogue event in one press (ADR-0059)", async ({ p
 });
 
 /**
- * ADR-0066 §5–6: Ready to open over the divisions the one-press add just wrote (ages 12–14),
- * against a roster pinned to 12 and 13 and to last year, so two warnings have something to say.
+ * ADR-0066 §5–6: Ready to open over the divisions the one-press add just wrote, against a
+ * student list pinned to last year, with students no age covers and an age with none.
  */
 test("Manage's Ready to open, warning before the open", async ({ page }) => {
   const rosterYear = (FIXED ? 2026 : new Date().getFullYear()) - 1;
@@ -850,7 +829,12 @@ test("Manage's Ready to open, warning before the open", async ({ page }) => {
     if (route.request().method() !== "GET") return route.fallback();
     const response = await route.fetch();
     await route.fulfill({
-      json: { ...(await response.json()), rosterAgeGroups: ["12", "13"], rosterYear },
+      json: {
+        ...(await response.json()),
+        rosterYear,
+        uncoveredAges: [{ ageGroup: "11", students: 14 }],
+        agesWithoutStudents: ["14"],
+      },
     });
   });
   // While Draft, the checklist's Open step holds the check and both opens.
@@ -859,7 +843,8 @@ test("Manage's Ready to open, warning before the open", async ({ page }) => {
   });
   for (const width of WIDTHS) {
     await page.goto(`/#/carnivals/${adding.carnivalId}/manage`);
-    await settled(openStep.getByText("an age no current student has", { exact: false }));
+    await settled(openStep.getByText("14 students are aged 11, and no event has age 11."));
+    await expect(openStep.getByText("Age 14 has no students", { exact: false })).toBeVisible();
     await expect(openStep.getByText(`ages are for ${rosterYear}`, { exact: false })).toBeVisible();
     await expect(openStep.getByRole("button", { name: "Open the carnival only" })).toBeVisible();
     await captureRegion(page, openStep, "manage-ready-to-open", width);

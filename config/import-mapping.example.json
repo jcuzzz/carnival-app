@@ -68,7 +68,6 @@
   },
   "ageGroupRule": {
     "cutOff": "12-31",
-    "$comment": "Age as at 31 December of the competition year, per School Sport Victoria convention. Confirmed by project owner 2026-07-24. MM-DD only: the year is not configured here - each roster import names its competition year (defaulting to the year of the next carnival), so this file needs no yearly edit. A legacy cutOffDate (YYYY-MM-DD) is still read for its month and day; its year is ignored.",
-    "$openBandComment": "OPTIONAL senior band. Set openFromAge to collapse every student at or above that age into one band, and openLabel to name it (default 'SNR'). NOT set here: this school competes by plain age. 'OPEN' is REFUSED as openLabel - that token is reserved for an event scoped OPEN ACROSS the age axis (every age eligible), so a band of that name could never be scheduled as a division of its own (ADR-0014 Review notes 1). A purely numeric label is refused for the same class of reason: it would be indistinguishable from the plain age the derivation already produces. Example: \"openFromAge\": 17, \"openLabel\": \"SNR\"."
+    "$comment": "Age as at 31 December of the competition year, per School Sport Victoria convention. Confirmed by project owner 2026-07-24. MM-DD only: the year is not configured here - each roster import names its competition year (defaulting to the year of the next carnival), so this file needs no yearly edit. A legacy cutOffDate (YYYY-MM-DD) is still read for its month and day; its year is ignored."
   }
 }

@@ -190,7 +190,7 @@ public static class EntryEndpoints
         var query = db.RosterSnapshots.AsNoTracking()
             .Where(s => s.IsCurrent && s.Student.IsActive);
 
-        query = EligibilityService.WhereDivisionMatches(query, carnivalEvent);
+        query = await EligibilityService.WhereDivisionMatchesAsync(query, carnivalEvent, ct);
 
         if (!string.IsNullOrWhiteSpace(house))
             query = query.WhereHouseMatches(db, house.Trim());

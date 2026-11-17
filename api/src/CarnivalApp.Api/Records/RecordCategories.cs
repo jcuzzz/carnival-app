@@ -41,6 +41,13 @@ public static class RecordCategories
         return pairs.Count == 0 ? null : pairs;
     }
 
+    // A division's own age, its "N+" age when the blob names any age of at least N, or any age of
+    // at least N when the blob names "N+"; the record is kept under the division's age.
+    public static bool Covers(
+        IReadOnlySet<(string AgeGroup, CompetitionCategory Category)> categories,
+        string divisionAge, CompetitionCategory category) =>
+        categories.Any(c => c.Category == category && AgeScope.FilterSelects(c.AgeGroup, divisionAge));
+
     // An Open division produces no school record, so the blob may not name it as an age.
     public static string? OpenAgeRefusal(string? json)
     {

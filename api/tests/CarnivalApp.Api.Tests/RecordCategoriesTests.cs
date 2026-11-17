@@ -15,6 +15,18 @@ public sealed class RecordCategoriesTests
             pairs);
     }
 
+    [Theory]
+    [InlineData("18", true)]
+    [InlineData("19+", true)]
+    [InlineData("17+", true)]
+    [InlineData("17", false)]
+    public void A_blobs_and_over_age_covers_every_division_from_that_age(string divisionAge, bool covered)
+    {
+        // A school whose oldest age is above the template's still keeps records for 18 and up.
+        var pairs = RecordCategories.Parse("""{"ageGroups":["18+"],"categories":["M"]}""")!;
+        Assert.Equal(covered, RecordCategories.Covers(pairs, divisionAge, CompetitionCategory.M));
+    }
+
     [Fact]
     public void A_stored_blob_naming_open_still_reads_its_other_ages_and_is_refused_on_write()
     {

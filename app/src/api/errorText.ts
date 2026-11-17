@@ -10,9 +10,9 @@ export const DIRECT_WRITE_NETWORK_ERROR_TEXT =
 /** The editor and the server both say this, so the sentence lives here. */
 export const AUTO_FILL_NEEDS_LANE_COUNT_TEXT = "Set the lane count first.";
 
-/** Event setup says it before the press, the server after it (ADR-0067 §5). */
-export const ROSTER_REQUIRED_TEXT =
-  "Import the student list first: this carnival's ages come from it.";
+/** Event setup says it before the press, the server after it. */
+export const AGES_REQUIRED_TEXT =
+  "This carnival has no ages yet: a system administrator sets the school's ages in School settings.";
 
 /** Manage greys Open out first; this is for a fact the screen had not read yet (ADR-0066 §5). */
 export const CARNIVAL_NOT_READY_TEXT =
@@ -64,7 +64,11 @@ const CODE_TEXT: Readonly<Record<string, string>> = {
     "The import mapping can't be read on the server. Ask whoever runs the server to check its import settings.",
   IMPORT_COMPETITION_YEAR_INVALID:
     "That competition year can't be used. Reload the page and choose a year from the list.",
-  ROSTER_REQUIRED: ROSTER_REQUIRED_TEXT,
+  AGES_REQUIRED: AGES_REQUIRED_TEXT,
+  AGE_ALREADY_COVERED:
+    "This carnival already has that age, perhaps added in another tab. Reload to see its ages.",
+  SCHOOL_AGES_INVALID:
+    "Ages are whole numbers from 1 to 25, and the youngest can't be older than the oldest.",
   CARNIVAL_NOT_READY: CARNIVAL_NOT_READY_TEXT,
   // Not HOUSES_REQUIRED: that is School settings' field refusal, whose detail names the field.
   SCHOOL_HOUSES_REQUIRED: HOUSES_REQUIRED_TEXT,

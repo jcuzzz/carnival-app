@@ -464,4 +464,51 @@ public sealed class RecordDetectionTests(ApiTestFactory factory) : IClassFixture
             .ToListAsync());
         Assert.Empty(mints);
     }
+
+    // ---- The oldest age takes everyone older (ADR-0067 §2) ------------------
+
+    [Fact]
+    public async Task An_and_over_division_below_the_templates_oldest_sets_its_own_record()
+    {
+        // A 12-to-16 school against the shipped 12..17, 18+ categories.
+        var seeded = await new RecordsSeed()
+            .Definition("FREE-16", BoysAndGirls("12", "13", "14", "15", "16", "17", "18+"))
+            .Division("FREE-16", "16+", CompetitionCategory.M,
+                new RecordsSeed.Swim("Aiden Brook", "BANKSIA", 31.2m))
+            .BuildAsync(_factory);
+
+        Assert.Equal(HttpStatusCode.OK, (await RecordsSeed.FinaliseAsync(_factory, seeded.CarnivalId)).StatusCode);
+
+        var record = Assert.Single(await RecordsAsync(seeded.DefinitionIds["FREE-16"]));
+        Assert.Equal(("16+", CompetitionCategory.M), (record.AgeGroup, record.Category));
+    }
+
+    [Fact]
+    public async Task A_definition_naming_a_plain_oldest_age_sets_the_and_over_record()
+    {
+        var seeded = await new RecordsSeed()
+            .Definition("FREE-18", BoysAndGirls("17", "18"))
+            .Division("FREE-18", "18+", CompetitionCategory.F,
+                new RecordsSeed.Swim("Cora Diaz", "WATTLE", 30.1m))
+            .BuildAsync(_factory);
+
+        Assert.Equal(HttpStatusCode.OK, (await RecordsSeed.FinaliseAsync(_factory, seeded.CarnivalId)).StatusCode);
+
+        var record = Assert.Single(await RecordsAsync(seeded.DefinitionIds["FREE-18"]));
+        Assert.Equal(("18+", CompetitionCategory.F), (record.AgeGroup, record.Category));
+    }
+
+    [Fact]
+    public async Task A_younger_category_never_sets_an_and_over_record()
+    {
+        var seeded = await new RecordsSeed()
+            .Definition("FREE-15", BoysAndGirls("14", "15"))
+            .Division("FREE-15", "16+", CompetitionCategory.M,
+                new RecordsSeed.Swim("Blake Chen", "WATTLE", 29.9m))
+            .BuildAsync(_factory);
+
+        Assert.Equal(HttpStatusCode.OK, (await RecordsSeed.FinaliseAsync(_factory, seeded.CarnivalId)).StatusCode);
+
+        Assert.Empty(await RecordsAsync(seeded.DefinitionIds["FREE-15"]));
+    }
 }

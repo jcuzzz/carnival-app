@@ -9,6 +9,16 @@ using CarnivalApp.Api.Demo;
 
 namespace CarnivalApp.Api.School;
 
+/// <summary>The school's age range; the oldest age takes everyone older.</summary>
+public sealed record SchoolAges(int Youngest, int Oldest)
+{
+    public const int Minimum = 1;
+    public const int Maximum = 25;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsValid => Minimum <= Youngest && Youngest <= Oldest && Oldest <= Maximum;
+}
+
 public sealed record SchoolSettings(
     string Name,
     string? BrandColour,
@@ -16,9 +26,11 @@ public sealed record SchoolSettings(
     bool RequireAuthenticator,
     LocalAccountAccess LocalAccounts,
     DateTimeOffset? UpdatedAtUtc,
-    bool SetupConfirmed)
+    bool SetupConfirmed,
+    SchoolAges? Ages)
 {
     private const string SetupConfirmedKey = "setupConfirmedAtUtc";
+    private const string AgesKey = "ages";
 
     public static SchoolSettings From(SchoolConfiguration row, ILogger logger)
     {
@@ -30,7 +42,8 @@ public sealed record SchoolSettings(
             signIn.RequireAuthenticator,
             signIn.LocalAccounts,
             row.UpdatedAtUtc,
-            ReadSetupConfirmed(row.SettingsJson) is not null);
+            ReadSetupConfirmed(row.SettingsJson) is not null,
+            ReadAges(row.SettingsJson));
     }
 
     // Merges rather than replaces: unknown keys belong to whoever wrote them.
@@ -57,6 +70,15 @@ public sealed record SchoolSettings(
         var blob = ParseObject(existingJson);
         if (ReadSetupConfirmed(existingJson) is null)
             blob[SetupConfirmedKey] = at.ToString("O", CultureInfo.InvariantCulture);
+        return blob.ToJsonString();
+    }
+
+    public static string SerialiseAges(SchoolAges? ages, string? existingJson)
+    {
+        var blob = ParseObject(existingJson);
+        blob[AgesKey] = ages is null
+            ? null
+            : new JsonObject { ["youngest"] = ages.Youngest, ["oldest"] = ages.Oldest };
         return blob.ToJsonString();
     }
 
@@ -103,6 +125,15 @@ public sealed record SchoolSettings(
         && value.TryGetValue<string>(out var text)
         && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
             ? at
+            : null;
+
+    // An unreadable or out-of-range value reads as no ages: the form then offers its default.
+    private static SchoolAges? ReadAges(string? json) =>
+        ParseObject(json)[AgesKey] is JsonObject ages
+        && ages["youngest"] is JsonValue youngest && youngest.TryGetValue<int>(out var from)
+        && ages["oldest"] is JsonValue oldest && oldest.TryGetValue<int>(out var to)
+        && new SchoolAges(from, to) is { IsValid: true } read
+            ? read
             : null;
 
     private static JsonObject ParseObject(string? json)

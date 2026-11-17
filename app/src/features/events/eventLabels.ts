@@ -1,4 +1,5 @@
 import type { CarnivalEvent, CarnivalType, MeasureType } from "../../api/types";
+import { ageCodeOrder } from "./ageCodes";
 
 /** For display only; the wire value stays `CrossCountry`. */
 export function carnivalTypeLabel(type: CarnivalType): string {
@@ -61,11 +62,9 @@ export function categoryValueLabel(category: string | null): string {
   return category === null ? "No category" : categoryLabel(category);
 }
 
-/** Sort key for an age: open first, then by value, then any other code last. */
+/** Sort key for an age: open first, then by value ("18+" after "18"), then any other code last. */
 export function ageScopeOrder(ageGroup: string): number {
-  if (ageGroup === "OPEN") return -1;
-  const age = Number.parseInt(ageGroup, 10);
-  return Number.isNaN(age) ? Number.MAX_SAFE_INTEGER : age;
+  return ageGroup === "OPEN" ? -1 : ageCodeOrder(ageGroup);
 }
 
 /** `Count` is legacy and never offered. */

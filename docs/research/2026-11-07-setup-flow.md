@@ -86,7 +86,7 @@ The app has no copy: `POST /carnivals` takes only details. Templates rebuild eve
 
 ## 6. Changes, in phases
 
-[ADR-0066](../adr/0066-the-setup-flow.md) records the order and the placement; [ADR-0067](../adr/0067-divisions-come-from-the-student-list.md) records Option B. Both were accepted on 2026-11-07. Every change updates `docs/architecture/app-navigation.md` (whose Deck sentence is already stale, see the report) and `docs/guide/`, and runs `npm run screenshots`.
+[ADR-0066](../adr/0066-the-setup-flow.md) records the order and the placement; [ADR-0067](../adr/0067-ages-come-from-the-schools-range.md) records Option B. Both were accepted on 2026-11-07. Every change updates `docs/architecture/app-navigation.md` (whose Deck sentence is already stale, see the report) and `docs/guide/`, and runs `npm run screenshots`.
 
 ### Phase 1: quick wins (app only, ADR-0066)
 

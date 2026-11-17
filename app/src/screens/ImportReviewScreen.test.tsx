@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { _resetReachabilityForTests } from "../api/reachability";
 import type {
   Carnival,
+  CarnivalSettings,
   ImportBatchSummary,
   ReconciliationReport,
   ValidationDocument,
@@ -16,6 +17,7 @@ import { renderWithQuery } from "../test/queryWrapper";
 
 vi.mock("../api/resources", () => ({
   getCarnival: vi.fn(),
+  getCarnivalSettings: vi.fn(),
   listImportBatches: vi.fn(),
   getImportDefaults: vi.fn(),
   getImportValidation: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("../api/resources", () => ({
 import {
   approveImport,
   getCarnival,
+  getCarnivalSettings,
   getImportDefaults,
   getImportReconciliation,
   getImportValidation,
@@ -51,6 +54,26 @@ function carnival(date = "2026-02-20"): Carnival {
     type: "Swimming",
     venue: null,
     version: 1,
+  };
+}
+
+function carnivalSettings(overrides: Partial<CarnivalSettings> = {}): CarnivalSettings {
+  return {
+    divisions: null,
+    divisionsDefault: {
+      ageGroups: ["12", "13", "14", "15", "16", "17", "18+"],
+      categories: ["M", "F"],
+      tiers: ["Competitive"],
+    },
+    rosterAgeGroups: [],
+    rosterYear: 2027,
+    uncoveredAges: [],
+    agesWithoutStudents: [],
+    scoring: {} as CarnivalSettings["scoring"],
+    adjustmentCategories: [],
+    laneCount: null,
+    autoFillLanes: false,
+    ...overrides,
   };
 }
 
@@ -127,6 +150,7 @@ beforeEach(() => {
     cutOff: "12-31",
   });
   vi.mocked(getCarnival).mockReset().mockResolvedValue(carnival());
+  vi.mocked(getCarnivalSettings).mockReset().mockResolvedValue(carnivalSettings());
   vi.mocked(approveImport).mockReset().mockResolvedValue(undefined as never);
   vi.mocked(promoteImport).mockReset().mockResolvedValue(undefined as never);
   vi.mocked(stageImport).mockReset().mockResolvedValue({
@@ -573,6 +597,30 @@ describe("ImportReviewScreen", () => {
     expect(vi.mocked(approveImport).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(promoteImport).mock.invocationCallOrder[0]!,
     );
+    await waitFor(() => expect(getCarnivalSettings).toHaveBeenCalledWith(CARNIVAL));
+    expect(screen.queryByText(/don’t cover/)).toBeNull();
+  });
+
+  it("names the students the carnival's ages don't cover once the list is updated", async () => {
+    vi.mocked(getCarnivalSettings).mockResolvedValue(
+      carnivalSettings({ uncoveredAges: [{ ageGroup: "11", students: 14 }] }),
+    );
+    localStorage.setItem("carnival.lastImportBatchId", BATCH);
+    renderWithQuery(<ImportReviewScreen carnivalId={CARNIVAL} />);
+    const press = await screen.findByRole("button", { name: "Approve and update the student list" });
+    await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false));
+    // Not before the update: the new students are what it reports on.
+    expect(getCarnivalSettings).not.toHaveBeenCalled();
+    fireEvent.click(press);
+
+    const link = await screen.findByRole("link", { name: "Add age 11 in Event setup" });
+    expect(link.getAttribute("href")).toBe(`#/carnivals/${CARNIVAL}/setup/events`);
+    const warning = link.closest(".alert")!;
+    expect(warning.className).toBe("alert warn");
+    expect(warning.textContent).toBe(
+      "14 students are aged 11, which Swimming Carnival’s ages (12 to 18+) don’t cover. " +
+        "Add age 11 in Event setup",
+    );
   });
 
   it("offers no way back to a carnival when not launched from one", async () => {
@@ -588,6 +636,7 @@ describe("ImportReviewScreen", () => {
     );
     expect(screen.queryByRole("link", { name: /^Back to/ })).toBeNull();
     expect(getCarnival).not.toHaveBeenCalled();
+    expect(getCarnivalSettings).not.toHaveBeenCalled();
   });
 
   it("leaves an approved batch with Promote on offer when the promote fails", async () => {

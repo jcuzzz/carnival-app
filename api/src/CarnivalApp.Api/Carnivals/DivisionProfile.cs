@@ -45,6 +45,8 @@ public sealed class DivisionProfile
                 return (ErrorCodes.ValidationFailed,
                     "Two ages in divisions.ageGroups are the same; each must be distinct.");
         }
+        if (AndOverRefusal(seen) is { } andOver)
+            return (ErrorCodes.AgeScopeInvalid, andOver);
 
         if (requested.Categories is not { Count: > 0 })
             return (ErrorCodes.ValidationFailed, "divisions.categories must name at least one category.");
@@ -61,7 +63,7 @@ public sealed class DivisionProfile
         Tiers = (requested.Tiers ?? []).Distinct().ToList(),
     };
 
-    // The carnival's ages with the template's categories and tiers (ADR-0067 §4).
+    // The carnival's ages with the template's categories and tiers.
     public static DivisionProfile ForTemplateApply(IReadOnlyList<string> ages, EventTemplate template) => new()
     {
         AgeGroups = [.. ages],
@@ -69,19 +71,37 @@ public sealed class DivisionProfile
         Tiers = [.. template.Tiers],
     };
 
-    // Computed, never stored; the caller supplies codes in display order. An unusable code
-    // (an implausible birthdate derives "-9") is skipped rather than refusing the whole default.
-    public static DivisionProfile? FromRoster(IEnumerable<string?> ageGroups)
+    // Computed, never stored: the school's range with its oldest age taking everyone older.
+    public static DivisionProfile FromSchoolAges(int youngest, int oldest) => new()
     {
-        var requested = new DivisionProfileDto(
-            Clean(ageGroups)
-                .Select(AgeScope.Normalise)
-                .Where(code => AgeScope.Validate(code) is null && code != AgeScope.OpenKey)
-                .Distinct(StringComparer.Ordinal)
-                .ToList(),
-            [CompetitionCategory.M, CompetitionCategory.F],
-            [EventTier.Competitive]);
-        return Validate(requested) is null ? From(requested) : null;
+        AgeGroups = [.. AgesFrom(youngest, oldest - 1), AgeScope.AndOver(oldest)],
+        Categories = [CompetitionCategory.M, CompetitionCategory.F],
+        Tiers = [EventTier.Competitive],
+    };
+
+    public static IEnumerable<string> AgesFrom(int youngest, int oldest) =>
+        Enumerable.Range(youngest, Math.Max(0, oldest - youngest + 1))
+            .Select(age => age.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    // The youngest numeric age, "N+" counting as N; null when no age is a number.
+    public int? YoungestAge() =>
+        AgeGroups.Select(code => AgeScope.TryLowerBound(code, out var age) ? age : (int?)null)
+            .Where(age => age is not null)
+            .Min();
+
+    public bool Covers(string studentAge) => AgeGroups.Any(age => AgeScope.Admits(age, studentAge));
+
+    // "N+" takes everyone older, so a plain age at or above N would split its students.
+    public static string? AndOverRefusal(IReadOnlyCollection<string> codes)
+    {
+        var andOver = codes.Where(code => AgeScope.TryAndOver(code, out _)).ToList();
+        if (andOver.Count == 0) return null;
+        if (andOver.Count > 1)
+            return $"Only one age may take everyone older; {string.Join(" and ", andOver)} both do.";
+        AgeScope.TryAndOver(andOver[0], out var from);
+        return codes.Any(code => AgeScope.TryAge(code, out var age) && age >= from)
+            ? $"'{andOver[0]}' takes everyone aged {from} and older, so it must be the oldest age."
+            : null;
     }
 
     public DivisionProfileDto ToDto() => new(AgeGroups, Categories, Tiers);

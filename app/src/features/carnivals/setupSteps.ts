@@ -42,7 +42,7 @@ export interface SetupFacts {
   /** ISO date; its year is what the roster's should match. */
   carnivalDate?: string;
   profile: DivisionProfile | null | undefined;
-  /** The roster default, used only where nothing is saved. */
+  /** The school's ages, used only where nothing is saved. */
   profileDefault?: DivisionProfile | null | undefined;
   events: readonly CarnivalEvent[] | undefined;
   /** The catalogue, for what is left to add; undefined = unread. */
@@ -118,7 +118,7 @@ function eventsStep(facts: SetupFacts, path: string): SetupStep {
     facts.definitions === undefined || events === undefined
       ? null
       : splitSetupRows(buildEventSetupRows(facts.definitions, events), facts.sport ?? "");
-  // ADR-0067 §5: with no ages saved and none to default from, nothing can be added yet.
+  // No ages saved and none from the school, so nothing can be added yet.
   const noAges = facts.profile === null && facts.profileDefault === null && events?.length === 0;
   return {
     id: "events",
@@ -128,7 +128,7 @@ function eventsStep(facts: SetupFacts, path: string): SetupStep {
     optional: false,
     path,
     detail: noAges
-      ? "Import the students first"
+      ? "Needs the school's ages from School settings"
       : lists !== null
         ? `${lists.inCarnival.length} in this carnival · ` +
           `${lists.available.length} available to add`

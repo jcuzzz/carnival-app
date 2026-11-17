@@ -75,7 +75,8 @@ Once results exist, the measure type, units and attempt count are frozen (`MEASU
 
 `CarnivalEvent` is one definition contested at one carnival for one **age × category × tier**.
 
-- **Age** is one age code (`"13"`, `"SNR"`) or `OPEN`: letters and digits only, at most 16 characters. Ranges such as `13-14` are refused, because eligibility matches by string equality ([ADR-0058](../adr/0058-one-age-per-division.md)).
+- **Age** is one age code, at most 16 characters: a plain age (`"13"`), `N+` (`"18+"`, that age and everyone older), a legacy code of letters and digits (`"SNR"`), or `OPEN` (every age). Ranges such as `13-14` are refused ([ADR-0058](../adr/0058-one-age-per-division.md), [ADR-0067](../adr/0067-ages-come-from-the-schools-range.md) §2). Ages sort `OPEN` first, then by number with `N+` just after `N`, then the rest; `18+` is shown as "18+".
+- **Eligibility** on the age axis: an `N+` division takes a student whose `CompetitionAgeGroup` is a whole number of at least N, `OPEN` takes everyone, and any other division matches its age exactly. The single-student check (entries, overrides, relay legs) and the eligible-student search apply the same rule; for an `N+` division the search first reads the distinct current age codes and filters on the ones admitted, so the database never compares ages as strings.
 - **Category** is `M`, `F`, `S` or null (all categories).
 - **Tier** is `Competitive` or `Social`. Both score house points; only Competitive divisions set school records.
 - **Scoring**: `ScoringMode` null means the tier decides (`Places` for Competitive, `Social` for Social). `ScoresPoints = false` keeps a division out of the standings entirely.
@@ -90,10 +91,13 @@ Once results exist, the measure type, units and attempt count are frozen (`MEASU
 
 `CarnivalDivision` rows are the carnival's division profile: the full cross product of the ages, categories and tiers it contests, in age → category → tier order. They are the menu the division generator offers, not the divisions themselves; no `CarnivalEvent` points at them.
 
-- Unique per (carnival, age, category, tier); the age is never `OPEN`; at most 32 ages.
-- No rows means "not configured". The settings read then offers a default computed from the current roster's age groups (M and F, Competitive), which is not stored until saved.
-- A settings save replaces the rows wholesale. Applying a template seeds them only when no usable profile exists, from the current roster's age groups with the template's categories and tiers ([ADR-0067](../adr/0067-divisions-come-from-the-student-list.md)).
-- Ages come from the saved profile, else the roster. With neither, a template apply is refused with `409 ROSTER_REQUIRED` before it writes anything. A re-import never rewrites saved ages, and nothing migrates a profile saved under the old rules (a template's 12–18, or 5–21). Event setup shows the profile as one line, warns when a saved age is one no current student has (one press removes those ages), and notes student-list ages left out; Ages and categories edits it.
+- Unique per (carnival, age, category, tier); the age is never `OPEN`; at most 32 ages. At most one age is `N+`, and it must be the oldest numeric age (`400 AGE_SCOPE_INVALID` otherwise).
+- No rows means "not configured". The carnival's ages are then the school's range ([School configuration](#school-configuration)): youngest to oldest with the oldest as `N+` (12 to 18 gives `12` … `17`, `18+`; a one-age range gives just `N+`), categories M and F, tier Competitive. The settings read returns that as `divisionsDefault`; it is not stored until saved. With no school ages either, there is no default.
+- A settings save replaces the rows wholesale. Applying a template seeds them only when no usable profile exists, with the school's range and the template's categories and tiers. With neither a saved profile nor school ages, a template apply is refused with `409 AGES_REQUIRED` before it writes anything. No student list is needed.
+- A template's slot filters name plain ages; a filter age selects the carnival's age equal to it, or its `N+` age when the filter age is at least N; a filter `N+` selects every carnival age from N up. Its `divisions.ageGroups` (`12` … `17`, `18+` in the shipped templates) names the record categories of the definitions it creates.
+- **Coverage** (derived, never stored): the settings read returns `uncoveredAges`, the current, active students no age of the carnival's ages (saved, else the default) takes, counted per age, youngest first: those younger than the youngest age, those older than a saved profile whose oldest age is plain (not `N+`), and any legacy non-numeric code the profile does not name; and `agesWithoutStudents`, the carnival's ages no such student matches. Both are empty with no ages.
+- **Add a younger age**: `POST /carnivals/{id}/divisions/extend-ages` with `{ "youngest": 11 }` prepends the ages from 11 up to the old youngest, saves the profile, and generates those ages' divisions for every (definition, category, tier) that has a division at the old youngest age, skipping inactive definitions; each new division copies the scoring mode, house points and program slot (and slot order) of the division it extends. An event that starts at an older age (15 to 18+) is left alone. One write, one `carnival.extend-ages` audit row; it answers `{ addedAges, divisionsAdded }`. An age the carnival already covers is `409 AGE_ALREADY_COVERED`, no ages anywhere `409 AGES_REQUIRED`; a Closed or Finalised carnival is refused as for generation. It changes only this carnival, never the school's range.
+- A re-import never rewrites saved ages, and nothing migrates a profile saved under older rules (a plain oldest age, a template's 12–18, or 5–21).
 
 ## Students and the roster
 
@@ -107,7 +111,7 @@ The school's student system is the system of record. The platform holds a minima
 |---|---|
 | `SchoolYear` | The competition year chosen at import. |
 | `YearLevel`, `HouseCode`, `HomeGroup` | From the import. |
-| `CompetitionAgeGroup` | Age at the cut-off, or a configured senior band. Derived at import; never `OPEN`. |
+| `CompetitionAgeGroup` | Age at the cut-off as a plain number. Derived at import; never `OPEN` or `N+`. |
 | `CompetitionCategory` | `M`/`F` from the import's gender column, anything else `S`. Used only for server-side eligibility and never sent to a client. |
 | `IsCurrent` | Marks the snapshot entries are taken from; promotion keeps one per student. |
 
@@ -208,7 +212,7 @@ A `SchoolRecord` is one record for one (event definition, age group, category).
 
 ## School configuration
 
-`SchoolConfiguration` is one row per deployment (the first by id is the school): an identifier (unique), name, IANA timezone, `HousesJson` (an array of `{code, name, colour}`), `BrandingJson` (brand colour) and `SettingsJson`. `SettingsJson` holds the local-account sign-in settings (`requireAuthenticator`, `localAccounts`) and `setupConfirmedAtUtc`, written by the first save of School settings and never moved, which marks the school as set up ([ADR-0066](../adr/0066-the-setup-flow.md) §2). `UpdatedAtUtc` is the concurrency token, so two saves from one rendering of the settings form cannot both land. Houses, events and scoring are data, never code.
+`SchoolConfiguration` is one row per deployment (the first by id is the school): an identifier (unique), name, IANA timezone, `HousesJson` (an array of `{code, name, colour}`), `BrandingJson` (brand colour) and `SettingsJson`. `SettingsJson` holds the local-account sign-in settings (`requireAuthenticator`, `localAccounts`), the school's age range (`ages: { youngest, oldest }`, 1 ≤ youngest ≤ oldest ≤ 25; absent on a new install, and an unreadable value reads as absent) and `setupConfirmedAtUtc`, written by the first save of School settings and never moved, which marks the school as set up ([ADR-0066](../adr/0066-the-setup-flow.md) §2). `UpdatedAtUtc` is the concurrency token, so two saves from one rendering of the settings form cannot both land. Houses, events and scoring are data, never code.
 
 ## Role assignments
 

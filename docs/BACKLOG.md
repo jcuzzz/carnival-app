@@ -39,6 +39,7 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P2]** Dead model surface: `Result.Place` is never written; `ImportBatchStatus.Staged` is never persisted; audit actions `ResultVerify`, `ResultReturnToProvisional` and `CarnivalEventFinalise` have no writer; error codes `EVENT_FINALISED`, `EVENT_NOT_CLOSED`, `EVENT_FINALISE_VIA_GATE` and `FINALISATION_BLOCKED` have no emitter; `ResultEndpoints.TransitionRequest` is unused.
 - **[P3]** Remove the retired role-name aliases in `Identity/PlatformRoles.cs` once no deployment relies on them (alias hits are logged).
 - **[P3]** Drop the frozen legacy `Divisions` key from `Carnival.SettingsJson` (a data migration); it is carried through writes and never read.
+- **[P3]** Students imported under the old senior band keep the age group `SNR`, so the uncovered-ages warning reads "aged SNR" until the student list is re-imported.
 - **[P3]** Serialisable isolation only guards the definition editor against the reconciler; a result capture runs Read Committed, so editor-versus-first-result is a narrow window, not a closed one.
 - **[P3]** The unkeyed (online) entry create is three commits (entry, race mint, placement), not one transaction.
 - **[P3]** A forged `/signin-oidc` answers 500 (no `OnRemoteFailure` handler); an anonymous `/api` 401 on an OIDC host still sets nonce and correlation cookies.
@@ -81,6 +82,10 @@ Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [au
 - **[P3]** Phone deck header: at 390px the pickers wrap to two lines and "Next event" to a third (~190px before the first swimmer).
 - **[P3]** Dashboard copy: "0 of 0 entered" for a house with no roster rows; stream labels show in their stored upper case.
 - **[P3]** The Ages and categories editor cannot express a profile of only non-numeric ages.
+- **[P3]** Ready to open warns on every new carnival that the template's deliberately unscheduled Novelty Race divisions are outside the program.
+- **[P3]** After applying a template, the toast repeats Event setup's inline "applied" notice and overlaps it.
+- **[P3]** Event setup shows the no-ages notice for a legacy carnival that has events but no saved or school ages, while the setup checklist shows its counts.
+- **[P3]** Ready to open says "no event has age 11" where Event setup says "this carnival has no events for age 11"; pick one wording.
 
 ### Tests, tooling and deployment
 
@@ -91,6 +96,7 @@ Accepted risks of [ADR-0065](adr/0065-built-in-local-accounts.md), listed in [au
 - **[P3]** `environmentMatchGlobs` (`app/vite.config.ts` ~164) is deprecated; move to `test.projects` at the next Vitest major.
 - **[P3]** Screenshot coverage gaps: the idle privacy overlay, the records-today strip (the seed has no finalised carnival or standing record) and the deck-progress wrap on a phone. The no-clipping sweep runs only in the screenshot pass, not the e2e gate.
 - **[P3]** Floating async after `signOut()` (a deliberately un-awaited cache clear) makes some app tests intermittently report teardown errors.
+- **[P3]** Flaky app test: `EventResultsScreen.test.tsx` "offers the minted heat's lanes on a row of the heat it is leaving" failed once in a full run and passed on rerun.
 - **[P3]** The dev database accumulates carnivals and events from every e2e and screenshot run (`scripts/dev-reset.ps1` clears it); `DevelopmentSeeder` creates Boys and Girls divisions only, so an Open division cannot be exercised by hand.
 - **[P3]** An image built on the host with `LOCAL_BUILD` is an index with attestations and is not digest-comparable to a CI-built image.
 - **[P3]** With `ApplyMigrationsOnStartup=false` and an unmigrated database the API refuses to start (the settings bootstrap reads its row); document this in the upgrade procedure.

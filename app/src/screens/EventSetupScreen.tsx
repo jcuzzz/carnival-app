@@ -2,27 +2,39 @@ import { useEffect, useRef, useState } from "react";
 import { DIRECT_WRITE_NETWORK_ERROR_TEXT, errorText } from "../api/errorText";
 import { keys } from "../api/queryKeys";
 import {
+  extendCarnivalAges,
   generateDivisions,
   getCarnival,
   getCarnivalSettings,
   listCarnivalEvents,
   listEventDefinitions,
-  updateCarnivalSettings,
 } from "../api/resources";
-import type { CarnivalSettings, DivisionProfile, GenerateDivisionRequest } from "../api/types";
+import type {
+  DivisionProfile,
+  GenerateDivisionRequest,
+  UncoveredAge,
+} from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
+import { AgesRequiredNotice } from "../features/carnivals/AgesRequiredNotice";
 import { ApplyTemplateSection } from "../features/carnivals/ApplyTemplateSection";
-import { RosterRequiredNotice } from "../features/carnivals/RosterRequiredNotice";
 import {
   ensureProfile,
   fullMatrixSpecs,
-  rosterDefaultToSave,
+  schoolDefaultToSave,
 } from "../features/events/addDivisions";
-import { agesLine, leftOutText, staleText } from "../features/events/agesLine";
+import { agesLine } from "../features/events/agesLine";
 import { counted } from "../features/events/counted";
 import { carnivalSport } from "../features/events/eventLabels";
-import { buildProfileReview, outstandingSummary } from "../features/events/profileReview";
+import {
+  buildProfileReview,
+  outstandingSummary,
+} from "../features/events/profileReview";
+import {
+  extendedText,
+  extension,
+  uncoveredText,
+} from "../features/events/uncoveredAges";
 import {
   buildEventSetupRows,
   setupRowSummary,
@@ -37,7 +49,7 @@ import { useConnectivity } from "../shell/useOnline";
 
 interface AddPress {
   specs: readonly GenerateDivisionRequest[];
-  /** The roster default to save first, or null where a profile is stored. */
+  /** The school's ages to save first, or null where a profile is stored. */
   defaultProfile: DivisionProfile | null;
   disabled: boolean;
   onAdded: (definitionId: string) => void;
@@ -45,17 +57,32 @@ interface AddPress {
 
 // A retired definition this carnival contests stays listed, badged, not vanishing from the list
 // that sent you to the editor. One with no division is on neither; the catalogue is the way back.
-export default function EventSetupScreen({ carnivalId }: { carnivalId: string }) {
+export default function EventSetupScreen({
+  carnivalId,
+}: {
+  carnivalId: string;
+}) {
   const session = useSession();
   const [showOtherSports, setShowOtherSports] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
+  const [extended, setExtended] = useState<string | null>(null);
   const inCarnivalHeading = useRef<HTMLHeadingElement>(null);
-  const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
-  const canImport = hasRole(session, "SystemAdministrator");
+  const canManage = hasRole(
+    session,
+    "CarnivalAdministrator",
+    "SystemAdministrator",
+  );
+  const canSetAges = hasRole(session, "SystemAdministrator");
   const connectivity = useConnectivity();
-  const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
-  const definitions = useApiQuery(keys.eventDefinitions(true), () => listEventDefinitions(true));
-  const events = useApiQuery(keys.carnivalEvents(carnivalId), () => listCarnivalEvents(carnivalId));
+  const carnival = useApiQuery(keys.carnival(carnivalId), () =>
+    getCarnival(carnivalId),
+  );
+  const definitions = useApiQuery(keys.eventDefinitions(true), () =>
+    listEventDefinitions(true),
+  );
+  const events = useApiQuery(keys.carnivalEvents(carnivalId), () =>
+    listCarnivalEvents(carnivalId),
+  );
   const settings = useApiQuery(keys.carnivalSettings(carnivalId), () =>
     getCarnivalSettings(carnivalId),
   );
@@ -65,32 +92,30 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
   const divisionsKnown = events.data !== undefined;
   const rows = buildEventSetupRows(definitions.data ?? [], events.data ?? []);
   const loadError = carnival.error ?? definitions.error ?? events.error;
-  const outstanding = divisionsKnown ? buildProfileReview(settings.data?.divisions, rows) : [];
-  const locked = carnival.data?.status === "Closed" || carnival.data?.status === "Finalised";
+  const outstanding = divisionsKnown
+    ? buildProfileReview(settings.data?.divisions, rows)
+    : [];
+  const locked =
+    carnival.data?.status === "Closed" || carnival.data?.status === "Finalised";
   // Same caution as the row summary: an unread event list cannot say a
   // definition is absent from this carnival, so nothing folds until it lands.
   const sport = divisionsKnown ? carnivalSport(carnival.data?.type) : "";
   const { inCarnival, available, otherSports } = splitSetupRows(rows, sport);
 
-  const specs = fullMatrixSpecs(settings.data?.divisions ?? settings.data?.divisionsDefault);
+  const profile = settings.data?.divisions ?? settings.data?.divisionsDefault;
+  const specs = fullMatrixSpecs(profile);
   const line = agesLine(
     settings.data?.divisions,
     settings.data?.divisionsDefault,
-    settings.data?.rosterAgeGroups,
   );
-  // ADR-0067 §5: nothing saved and no roster to default from, so no event can be added yet.
-  // As the checklist's Events step: a carnival with events was set up some other way.
-  const noRoster =
-    settings.data !== undefined &&
-    settings.data.divisions == null &&
-    settings.data.divisionsDefault == null &&
-    events.data?.length === 0;
+  // Nothing saved and no school ages, so no event can be added yet.
+  const noAges = settings.data !== undefined && profile == null;
   const setupOpen = canManage && !locked;
   // Someone who cannot manage this carnival gets no Add, as New event… is withheld.
   const add: AddPress | undefined = canManage
     ? {
         specs,
-        defaultProfile: rosterDefaultToSave(
+        defaultProfile: schoolDefaultToSave(
           settings.data?.divisions,
           settings.data?.divisionsDefault,
         ),
@@ -101,7 +126,9 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
 
   // The added row leaves the list the press was in, taking the keyboard's place
   // with it: land on the list it moved into, once the refetches have settled.
-  const added = justAdded !== null && inCarnival.some((row) => row.definition.id === justAdded);
+  const added =
+    justAdded !== null &&
+    inCarnival.some((row) => row.definition.id === justAdded);
   useEffect(() => {
     if (!added) return;
     inCarnivalHeading.current?.focus();
@@ -124,21 +151,39 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
         </p>
       )}
       <p className="row-sub">
-        What this carnival runs, and what the catalogue has left to add — editing an event
-        changes it for every carnival that runs it.
+        What this carnival runs, and what the catalogue has left to add —
+        editing an event changes it for every carnival that runs it.
       </p>
+      {setupOpen && settings.data && settings.data.uncoveredAges.length > 0 && (
+        <UncoveredAgesNotice
+          carnivalId={carnivalId}
+          uncovered={settings.data.uncoveredAges}
+          profile={profile}
+          online={connectivity === "connected"}
+          onExtended={setExtended}
+        />
+      )}
+      {extended !== null && (
+        <div className="alert success" role="status">
+          {extended}
+        </div>
+      )}
       {line && (
         <div className="button-row">
-          <span className="row-sub">{line.text}</span>
+          <span>
+            <strong>Ages and categories</strong>{" "}
+            <span className="row-sub">{line}</span>
+          </span>
           {canManage && (
-            <a className="button" href={href(`/carnivals/${carnivalId}/setup/divisions`)}>
-              Ages and categories
+            <a
+              className="button"
+              aria-label="Change ages and categories"
+              href={href(`/carnivals/${carnivalId}/setup/divisions`)}
+            >
+              Change
             </a>
           )}
         </div>
-      )}
-      {line && line.leftOut.length > 0 && (
-        <p className="row-sub">{leftOutText(line.leftOut)}</p>
       )}
       {settings.error && (
         <div className="alert error" role="alert">
@@ -148,17 +193,7 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
           )}
         </div>
       )}
-      {setupOpen && line && line.stale.length > 0 && settings.data && (
-        <StaleAgesNotice
-          carnivalId={carnivalId}
-          settings={settings.data}
-          stale={line.stale}
-          online={connectivity === "connected"}
-        />
-      )}
-      {setupOpen && noRoster && (
-        <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
-      )}
+      {setupOpen && noAges && <AgesRequiredNotice canSetAges={canSetAges} />}
       {loadError && (
         <div className="alert error" role="alert">
           {loadError.message}
@@ -167,13 +202,18 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
       {outstanding.length > 0 && (
         <div className="alert notice" role="status">
           <p className="flush-top">
-            This carnival's ages include some these events don't run. Changing the ages adds no
-            divisions — tick the new boxes on each event that should run them.
+            This carnival's ages include some these events don't run. Changing
+            the ages adds no divisions — tick the new boxes on each event that
+            should run them.
           </p>
           <ul className="row-list">
             {outstanding.map((item) => (
               <li key={item.definition.id}>
-                <a href={href(`/carnivals/${carnivalId}/setup/events/${item.definition.id}`)}>
+                <a
+                  href={href(
+                    `/carnivals/${carnivalId}/setup/events/${item.definition.id}`,
+                  )}
+                >
                   {item.definition.name} — {outstandingSummary(item)}
                 </a>
               </li>
@@ -186,19 +226,26 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
       {!definitions.loading && !divisionsKnown && !events.error && (
         <p>Counting this carnival's divisions…</p>
       )}
-      {definitions.data && rows.length === 0 && <p>The event catalogue is empty.</p>}
-      {setupOpen && !noRoster && events.data && carnival.data && (
+      {definitions.data && rows.length === 0 && (
+        <p>The event catalogue is empty.</p>
+      )}
+      {setupOpen && !noAges && events.data && carnival.data && (
         <ApplyTemplateSection
           carnivalId={carnivalId}
           carnivalType={carnival.data.type}
           empty={events.data.length === 0}
-          canImport={canImport}
+          canSetAges={canSetAges}
         />
       )}
       {!divisionsKnown && rows.length > 0 && (
         <ul className="row-list card">
           {rows.map((row) => (
-            <SetupRow key={row.definition.id} carnivalId={carnivalId} row={row} known={false} />
+            <SetupRow
+              key={row.definition.id}
+              carnivalId={carnivalId}
+              row={row}
+              known={false}
+            />
           ))}
         </ul>
       )}
@@ -212,7 +259,12 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
             {inCarnival.length > 0 ? (
               <ul className="row-list card">
                 {inCarnival.map((row) => (
-                  <SetupRow key={row.definition.id} carnivalId={carnivalId} row={row} known />
+                  <SetupRow
+                    key={row.definition.id}
+                    carnivalId={carnivalId}
+                    row={row}
+                    known
+                  />
                 ))}
               </ul>
             ) : (
@@ -244,7 +296,10 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
         <div className="button-row">
           {!locked &&
             (connectivity === "connected" ? (
-              <a className="button" href={href(`/carnivals/${carnivalId}/setup/events/new`)}>
+              <a
+                className="button"
+                href={href(`/carnivals/${carnivalId}/setup/events/new`)}
+              >
                 New event…
               </a>
             ) : (
@@ -262,14 +317,21 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
             aria-expanded={showOtherSports}
             onClick={() => setShowOtherSports((open) => !open)}
           >
-            {showOtherSports ? "Hide" : "Show"} {otherSports.length} from other sports
+            {showOtherSports ? "Hide" : "Show"} {otherSports.length} from other
+            sports
           </button>
         </div>
       )}
       {showOtherSports && otherSports.length > 0 && (
         <ul className="row-list card">
           {otherSports.map((row) => (
-            <SetupRow key={row.definition.id} carnivalId={carnivalId} row={row} known add={add} />
+            <SetupRow
+              key={row.definition.id}
+              carnivalId={carnivalId}
+              row={row}
+              known
+              add={add}
+            />
           ))}
         </ul>
       )}
@@ -277,40 +339,36 @@ export default function EventSetupScreen({ carnivalId }: { carnivalId: string })
   );
 }
 
-// ADR-0067 §6: a re-import never rewrites saved ages. Removing the stale ones keeps any
-// deliberate narrowing; with nothing left, the student list's ages are what remains to use.
-function StaleAgesNotice({
+// Only this carnival changes, never the school's range.
+function UncoveredAgesNotice({
   carnivalId,
-  settings,
-  stale,
+  uncovered,
+  profile,
   online,
+  onExtended,
 }: {
   carnivalId: string;
-  settings: CarnivalSettings;
-  stale: readonly string[];
+  uncovered: readonly UncoveredAge[];
+  profile: DivisionProfile | null | undefined;
   online: boolean;
+  /** The notice goes once the age is covered, so the screen keeps the outcome. */
+  onExtended: (text: string) => void;
 }) {
   const invalidate = useInvalidate();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const offer = extension(uncovered, profile);
 
-  async function adopt(): Promise<void> {
+  async function extend(youngest: number): Promise<void> {
     setSaving(true);
     setError(null);
-    const kept = (settings.divisions?.ageGroups ?? []).filter((code) => !stale.includes(code));
     try {
-      await updateCarnivalSettings(carnivalId, {
-        divisions: {
-          ageGroups: kept.length > 0 ? kept : [...settings.rosterAgeGroups],
-          categories: settings.divisions?.categories ?? null,
-          tiers: settings.divisions?.tiers ?? null,
-        },
-      });
-      invalidate(keys.carnivalSettings(carnivalId));
-      showToast(
-        kept.length > 0
-          ? `${stale.join(", ")} removed from this carnival’s ages.`
-          : "This carnival now uses the student list’s ages.",
+      const result = await extendCarnivalAges(carnivalId, youngest);
+      onExtended(extendedText(result.addedAges, result.divisionsAdded));
+      invalidate(
+        keys.carnivalSettings(carnivalId),
+        keys.carnivalEvents(carnivalId),
+        keys.eventDefinitions(true),
       );
     } catch (err) {
       setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
@@ -322,13 +380,25 @@ function StaleAgesNotice({
   return (
     <>
       <div className="alert warn" role="status">
-        <p className="flush-top">{staleText(stale)}</p>
+        <p className="flush-top">
+          <strong>{uncoveredText(uncovered)}</strong> They can’t be entered in
+          anything except all-ages events.
+        </p>
         <div className="button-row">
-          <button type="button" disabled={saving || !online} onClick={() => void adopt()}>
-            {saving ? "Saving…" : "Remove those ages"}
-          </button>
-          {!online && <span>Can’t reach the server, so the ages can’t be changed right now.</span>}
+          {offer && (
+            <button
+              type="button"
+              disabled={saving || !online}
+              onClick={() => void extend(offer.youngest)}
+            >
+              {saving ? "Adding…" : offer.label}
+            </button>
+          )}
+          <span className="row-sub">Leave it if they won’t compete.</span>
         </div>
+        {offer && !online && (
+          <p>Can’t reach the server, so the ages can’t be changed right now.</p>
+        )}
       </div>
       {error !== null && (
         <div className="alert error" role="alert">
@@ -386,8 +456,13 @@ function SetupRow({
         eventDefinitionId: row.definition.id,
         divisions: [...add.specs],
       });
-      invalidate(keys.carnivalEvents(carnivalId), keys.carnivalSettings(carnivalId));
-      showToast(`${row.definition.name} — ${counted(generated.created, "division")} added.`);
+      invalidate(
+        keys.carnivalEvents(carnivalId),
+        keys.carnivalSettings(carnivalId),
+      );
+      showToast(
+        `${row.definition.name} — ${counted(generated.created, "division")} added.`,
+      );
       add.onAdded(row.definition.id);
     } catch (err) {
       setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
@@ -401,15 +476,21 @@ function SetupRow({
       <div className="entry-row">
         <a
           className="row-link row-grow"
-          href={href(`/carnivals/${carnivalId}/setup/events/${row.definition.id}`)}
+          href={href(
+            `/carnivals/${carnivalId}/setup/events/${row.definition.id}`,
+          )}
         >
           <span className="row-main">
             <span className="row-title">{row.definition.name}</span>
             <span className="row-sub">{setupRowSummary(row, known)}</span>
-            <span className="row-sub">{usageSummary(row.definition.usage)}</span>
+            <span className="row-sub">
+              {usageSummary(row.definition.usage)}
+            </span>
           </span>
         </a>
-        {!row.definition.isActive && <span className="badge muted">Retired</span>}
+        {!row.definition.isActive && (
+          <span className="badge muted">Retired</span>
+        )}
         {add && (
           <button
             type="button"
@@ -429,8 +510,8 @@ function SetupRow({
       )}
       {raced && (
         <div className="alert warn" role="status">
-          The ages were set elsewhere since this screen loaded — nothing was added; press Add
-          again to use them.
+          The ages were set elsewhere since this screen loaded — nothing was
+          added; press Add again to use them.
         </div>
       )}
     </li>

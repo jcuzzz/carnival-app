@@ -42,15 +42,15 @@ describe("setupSteps — the Open row", () => {
   });
 });
 
-/** ADR-0067 §1, §5: the ages are no step of their own; without them no event can be added. */
+/** The ages are no step of their own; without them no event can be added. */
 describe("setupSteps — no Divisions step", () => {
   it("orders the steps Students, Events, Program, Open", () => {
     expect(setupSteps(known).map((s) => s.id)).toEqual(["roster", "events", "program", "open"]);
   });
 
-  it("sends the Events step back to the import with neither saved ages nor a roster", () => {
+  it("sends the Events step to School settings with neither saved ages nor the school's", () => {
     const facts: SetupFacts = { ...known, profile: null, profileDefault: null, events: [] };
-    expect(step(facts, "events").detail).toBe("Import the students first");
+    expect(step(facts, "events").detail).toBe("Needs the school's ages from School settings");
     expect(step(facts, "events").done).toBe(false);
   });
 
@@ -65,7 +65,7 @@ describe("setupSteps — no Divisions step", () => {
       "The event catalogue and which divisions of it run here",
     );
     expect(step({ ...onDefault, profileDefault: undefined }, "events").detail).not.toBe(
-      "Import the students first",
+      "Needs the school's ages from School settings",
     );
   });
 });
@@ -98,7 +98,9 @@ describe("setupSteps — the Events row", () => {
   }
 
   const catalogue = [definition("def-1"), definition("def-2"), definition("def-3", "Athletics")];
-  const here = [{ id: "e-1", eventDefinitionId: "def-1", status: "Open" } as CarnivalEvent];
+  const here = [
+    { id: "e-1", eventDefinitionId: "def-1", ageGroup: "12", status: "Open" } as CarnivalEvent,
+  ];
 
   it("reads what is in this carnival against what is left to add", () => {
     const facts: SetupFacts = {

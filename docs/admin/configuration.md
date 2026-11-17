@@ -152,7 +152,7 @@ Keys the compose file sets for you, or that you set through the override file or
 | `School:Houses` | Array of house codes (first start only). Absent or blank entries seed no house. |
 | `School:HouseColours:<CODE>` | Colour per house code, matched ignoring case (first start only). An unparseable value, or one repeating another house's colour, leaves that house text-only with a warning; it never stops the API. Any colour is allowed. |
 | `School:Identifier` | Internal identifier stored on the school row at first start. Default `SCHOOL`; leave unset. |
-| `Imports:MappingPath` | Set from `IMPORT_MAPPING_PATH`. Read on every upload and on the import screen's defaults; missing, naming no file, unreadable, not valid JSON or not a valid mapping, those requests answer `500 IMPORT_MAPPING_UNAVAILABLE` with the reason in `detail`. |
+| `Imports:MappingPath` | Set from `IMPORT_MAPPING_PATH`. Read on every upload and on the import screen's defaults; missing, naming no file, unreadable, not valid JSON or not a valid mapping, those requests answer `500 IMPORT_MAPPING_UNAVAILABLE` with the reason in `detail`. Also read at startup, which fails if the file sets the removed `ageGroupRule.openFromAge` or `openLabel`. |
 | `EventTemplates:Path` | Directory of event template files; compose sets `/config/event-templates`. |
 | `RateLimiting:BulkDataPerMinute` | Per-user limit on roster uploads, import review reads and CSV exports. Default `10`; refusals are `429` with `Retry-After`. |
 | `Identity:DevAuth:Enabled` | Set from `DEV_AUTH`; honoured only in `Development`. |
@@ -239,7 +239,7 @@ The School hub holds what belongs to the school rather than to one carnival. Set
 
 ### School settings
 
-One form: school name, brand colour, the houses (code, display name, colour) and the [sign-in settings](#sign-in-settings). A save replaces the whole record and is audited. Two administrators cannot overwrite each other: a save based on an older copy is refused and the screen asks for a reload.
+One form: school name, brand colour, the houses (code, display name, colour), the school's ages and the [sign-in settings](#sign-in-settings). A save replaces the whole record and is audited. Two administrators cannot overwrite each other: a save based on an older copy is refused and the screen asks for a reload.
 
 | Field | Rule |
 |---|---|
@@ -250,6 +250,7 @@ One form: school name, brand colour, the houses (code, display name, colour) and
 | House display name | At most 60 characters; defaults to the code. |
 | House colour | Optional. `#rrggbb` or `#rgb`, different from every other house's colour. No contrast minimum: every swatch has a border. |
 | Removing or renaming a house | Refused while any roster snapshot, entry, relay leg or house-points adjustment uses its code. The screen disables Remove for such houses. Adding houses is always allowed. |
+| Ages | A youngest and an oldest age, 1 ≤ youngest ≤ oldest ≤ 25 (`422 SCHOOL_AGES_INVALID` otherwise). None on a new install. A save that sends no `ages` keeps the stored ones. The oldest age takes everyone older (shown "18+"). Every carnival starts with these ages until it saves its own. |
 
 House codes are what roster imports validate against (ignoring case), so set them to match the export before the first import.
 
@@ -365,13 +366,15 @@ A minimal template:
 A Carnival administrator applies a template from **Event setup** (the **Add the standard … events** button) while the carnival is neither Closed nor Finalised. One apply, in one transaction with its audit record:
 
 1. **Catalogue:** creates each definition whose code the school's catalogue does not have. Existing definitions are never changed, even if the template now says something different.
-2. **Events:** for each active definition, creates one event per age × category × tier (plus `OPEN` where `openDivision` is set), skipping any that already exist. The ages are the carnival's: its saved ages, else the current roster's age groups. The categories and tiers are the carnival's saved ones, else the template's; a definition's own `tiers` narrow them.
-3. **Program:** creates missing streams (matched by name) and slots (matched by label), and places only events that are not yet in a slot. Existing streams and slots are left alone, so a re-apply cannot undo an organiser's edits; a slot renamed or deleted in the app comes back on a re-apply. Slot filters name the template's ages, so a division whose age they do not name (an `11`, or `SNR`) is created but left out of the slots that filter on age; an unfiltered slot takes every age.
-4. **Ages and categories:** if the carnival has none saved (no usable division profile), saves the roster's age groups with the template's categories and tiers.
+2. **Events:** for each active definition, creates one event per age × category × tier (plus `OPEN` where `openDivision` is set), skipping any that already exist. The ages are the carnival's: its saved ages, else the school's range (12 to 18 gives `12` … `17`, `18+`). No student list is needed. The categories and tiers are the carnival's saved ones, else the template's; a definition's own `tiers` narrow them.
+3. **Program:** creates missing streams (matched by name) and slots (matched by label), and places only events that are not yet in a slot. Existing streams and slots are left alone, so a re-apply cannot undo an organiser's edits; a slot renamed or deleted in the app comes back on a re-apply. Slot filters name plain ages: a filter age selects the carnival's age equal to it, or the carnival's oldest age `N+` when the filter age is at least N (a station filtered to `15`–`18` takes `18+`). A division no filter selects (an `11`, or a legacy `SNR`) is created but left out of the slots that filter on age; an unfiltered slot takes every age.
+4. **Ages and categories:** if the carnival has none saved (no usable division profile), saves the school's range with the template's categories and tiers.
 
-**No student list yet:** a carnival with no saved profile and no promoted roster cannot take a template. The apply is refused with `409 ROSTER_REQUIRED` ("Import the student list first: this carnival's ages come from it.") and writes nothing, the catalogue included. A student list with more than 32 ages, more than a profile can hold, is refused with the same code and a sentence asking to check its birth dates. A Closed or Finalised carnival (`409 CARNIVAL_NOT_EDITABLE`) and an unknown template (`400 TEMPLATE_INVALID`) are refused first.
+**No ages yet:** a carnival with no saved profile, at a school with no ages in School settings, cannot take a template. The apply is refused with `409 AGES_REQUIRED` (its detail says to set the school's ages in School settings) and writes nothing, the catalogue included. A Closed or Finalised carnival (`409 CARNIVAL_NOT_EDITABLE`) and an unknown template (`400 TEMPLATE_INVALID`) are refused first.
 
-Applying again is safe: it only adds what is missing. It uses the saved ages, so a carnival saved under the old rules (a template's 12–18, or 5–21) keeps generating those until its ages are saved again. Event setup warns when saved ages include one no current student has, and its **Remove those ages** press saves the rest.
+Applying again is safe: it only adds what is missing. It uses the saved ages, so a carnival saved under older rules (a plain oldest age, a template's 12–18, or 5–21) keeps generating those until its ages are saved again.
+
+A template's `divisions.ageGroups` names the record categories of the definitions it creates; the shipped templates name `12` … `17`, `18+`. An `N+` age must be the template's oldest, and a slot filter age must select one of its ages.
 
 The response names the axes used (`ageGroups`, `categories`, and the `tiers` actually reached), the counts created and skipped, and `divisionProfileSeeded`.
 
@@ -397,7 +400,7 @@ Changes to a definition apply to every carnival that uses it, which is why recon
 
 ## Import mapping
 
-`config/import-mapping.example.json` (selected by `IMPORT_MAPPING_PATH`) tells the roster import which columns of the student export to read and what each becomes: student ID, names, house (validated against the school's houses), enrolment status, year level, home group, and the competition category. The birth date is used only to derive the competition age group and is never stored; columns not listed are ignored and never stored. `ageGroupRule.cutOff` is the day (`MM-DD`) at which age is measured; the year comes from the import, which names its competition year. The file is read on every import. Full detail: [roster import](../architecture/imports.md).
+`config/import-mapping.example.json` (selected by `IMPORT_MAPPING_PATH`) tells the roster import which columns of the student export to read and what each becomes: student ID, names, house (validated against the school's houses), enrolment status, year level, home group, and the competition category. The birth date is used only to derive the competition age group and is never stored; columns not listed are ignored and never stored. `ageGroupRule.cutOff` is the day (`MM-DD`) at which age is measured; the year comes from the import, which names its competition year. The file is read on every import. The senior band keys `ageGroupRule.openFromAge` and `ageGroupRule.openLabel` are gone: a mapping that sets either stops the API at startup with a message naming the key, because the oldest age of the school's range (School settings → Ages) now takes everyone older. Delete the key and restart. Full detail: [roster import](../architecture/imports.md).
 
 ## Carnival settings
 
@@ -412,9 +415,17 @@ Each carnival has its own settings, edited by a Carnival administrator on **Mana
 | Adjustment categories | Novelty 1–3, Best Dressed House, Loudest House | The house-points adjustments the carnival offers. |
 | Lane count | none | 1–64. Cannot drop below a lane already assigned. |
 | Auto-fill lanes | off | Needs a lane count. The New carnival form pre-fills 8 lanes with auto-fill ticked; "none" and "off" apply only when a create sends no value. |
-| Ages and categories (the division profile) | none | The ages, categories and tiers the carnival contests. Saved the first time divisions are generated (the standard events, Add or New event), with the student list's ages. |
+| Ages and categories (the division profile) | none | The ages, categories and tiers the carnival contests. Until saved, the school's range with Boys and Girls, Competitive. Saved the first time divisions are generated (the standard events, Add or New event). |
 
-The settings read also returns three values that are derived, never stored: `rosterAgeGroups` (the distinct age groups on the current roster), `rosterYear` (the competition year most of the roster carries; null with no promoted roster) and `divisionsDefault` (a profile built from those ages, `M` and `F`, Competitive, offered only while the carnival has no profile). Adding events against `divisionsDefault` first saves it as the carnival's profile, then generates the divisions; if a profile was saved elsewhere meanwhile, nothing is written.
+The settings read also returns values that are derived, never stored, and that the PUT ignores:
+
+- `rosterAgeGroups`: the distinct age groups on the current roster.
+- `rosterYear`: the competition year most of the roster carries; null with no promoted roster.
+- `divisionsDefault`: the school's range as a profile (`12` … `17`, `18+` for 12 to 18; just `N+` for a one-age range), `M` and `F`, Competitive, offered only while the carnival has no profile and the school has ages. Adding events against it first saves it as the carnival's profile, then generates the divisions; if a profile was saved elsewhere meanwhile, nothing is written.
+- `uncoveredAges`: `{ ageGroup, students }` for each age of current, active students that none of the carnival's ages (saved, else `divisionsDefault`) takes, youngest first.
+- `agesWithoutStudents`: the carnival's ages no current, active student matches, in age order.
+
+Both lists are empty while the carnival has no ages. `POST /api/v1/carnivals/{id}/divisions/extend-ages` with `{ "youngest": 11 }` adds the ages from 11 up to the carnival's youngest, and their divisions to every event that has a division at the carnival's youngest age; see [data model](../architecture/data-model.md#division-profile).
 
 The screens write them through `PUT /api/v1/carnivals/{id}/settings`. Every field is optional; an absent field keeps its stored value:
 
@@ -444,7 +455,7 @@ How these rules turn results into standings, with a worked example: [scoring and
 
 ### Divisions
 
-A division is one age × category × tier instance of a catalogue definition. The carnival's **ages and categories** (its division profile) name what the carnival contests; its ages are the student list's, which can be narrowed but never extended. With no student list and no saved ages, no events can be added. Saving the profile creates and removes no divisions.
+A division is one age × category × tier instance of a catalogue definition. The carnival's **ages and categories** (its division profile) name what the carnival contests; its ages start as the school's range. With no saved ages and no school ages, no events can be added. Saving the profile creates and removes no divisions.
 
 - **Event setup** lists the catalogue as *In this carnival* and *Available to add*. **Add** generates every division the profile contests for that definition, first saving `divisionsDefault` as the profile if none is stored.
 - Each event's **division grid** has one tick box per age row × category/tier column: ticking generates that division, unticking removes it. A division with entries or results cannot be removed (`409 EVENT_HAS_ENTRIES`); close it instead. Divisions outside the profile still show, marked *no longer listed*.

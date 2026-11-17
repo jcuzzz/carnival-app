@@ -44,36 +44,6 @@ public class AgeGroupTests
     public void Age_as_at_31_december_of_competition_year(int y, int m, int d, string expected)
         => Assert.Equal(expected, Rule.DeriveAgeGroup(new DateOnly(y, m, d), Fixtures.CompetitionYear));
 
-    [Fact]
-    public void The_senior_band_applies_when_configured_and_is_not_called_open()
-    {
-        // "OPEN" is reserved for the event age scope (AgeScope.OpenKey = open
-        // ACROSS the age axis), so the derived senior band defaults to "SNR" —
-        // a band a school can actually schedule as a division of its own.
-        var rule = new AgeGroupRule { CutOffMonth = 12, CutOffDay = 31, OpenFromAge = 17 };
-        string Born(int year) => rule.DeriveAgeGroup(new DateOnly(year, 1, 1), Fixtures.CompetitionYear);
-        Assert.Equal(AgeGroupRule.DefaultOpenLabel, Born(2009)); // 17
-        Assert.Equal("SNR", Born(2009));
-        Assert.NotEqual(AgeScope.OpenKey, Born(2009));
-        Assert.Equal("16", Born(2010));
-    }
-
-    [Fact]
-    public void A_school_may_name_its_own_senior_band()
-    {
-        // The band is a school's vocabulary (hard rule: school-specific naming is
-        // configuration, never a code fork) — anything but the reserved token.
-        var rule = new AgeGroupRule
-        {
-            CutOffMonth = 12,
-            CutOffDay = 31,
-            OpenFromAge = 17,
-            OpenLabel = "SENIOR",
-        };
-        Assert.Equal("SENIOR", rule.DeriveAgeGroup(new DateOnly(2009, 1, 1), Fixtures.CompetitionYear));
-        Assert.Equal("16", rule.DeriveAgeGroup(new DateOnly(2010, 1, 1), Fixtures.CompetitionYear));
-    }
-
     [Theory]
     [InlineData(2026, "13")]
     [InlineData(2027, "14")]
@@ -104,9 +74,8 @@ public class AgeGroupTests
 
 /// <summary>
 /// Loading the import mapping DOCUMENT (config/import-mapping.example.json's
-/// shape). The age-group rule is the part with a reserved word in it, so it is
-/// validated at load for the usual reason: a bad value here is silent until
-/// deck day, when it shows as entries admitted from every year level.
+/// shape). The age-group rule is validated at load: a bad value here is silent
+/// until deck day, when it shows as entries admitted from the wrong ages.
 /// </summary>
 public class ImportMappingDocumentTests
 {
@@ -140,7 +109,6 @@ public class ImportMappingDocumentTests
     [InlineData("""{ "cutOff": "31-12" }""")]
     [InlineData("""{ "cutOff": "2026-12-31" }""")]
     [InlineData("""{ "cutOffDate": "31/12/2026" }""")]
-    [InlineData("""{ "openFromAge": 17 }""")]
     public void A_missing_or_malformed_cut_off_is_refused_at_load(string ageGroupRule)
     {
         var error = Assert.Throws<InvalidDataException>(() => Load(ageGroupRule));
@@ -152,87 +120,48 @@ public class ImportMappingDocumentTests
     public void The_shipped_mapping_configures_the_cut_off_without_a_year()
         => Assert.Equal("12-31", Fixtures.Mapping().AgeGroupRule.CutOff);
 
-    [Fact]
-    public void The_senior_band_defaults_to_snr_when_the_document_names_none()
-    {
-        var mapping = Load("""{ "cutOff": "12-31", "openFromAge": 17 }""");
-        Assert.Equal(17, mapping.AgeGroupRule.OpenFromAge);
-        Assert.Equal("SNR", mapping.AgeGroupRule.OpenLabel);
-        Assert.Equal("SNR",
-            mapping.AgeGroupRule.DeriveAgeGroup(new DateOnly(2009, 1, 1), Fixtures.CompetitionYear));
-    }
-
-    [Fact]
-    public void A_declared_senior_label_is_normalised_like_any_age_code()
-    {
-        // Eligibility matches a student's derived age to a division's by exact
-        // string equality, and the normaliser uppercases — so "snr" in the
-        // document must not become an age no division can name.
-        var mapping = Load("""{ "cutOff": "12-31", "openFromAge": 17, "openLabel": " snr " }""");
-        Assert.Equal("SNR", mapping.AgeGroupRule.OpenLabel);
-        Assert.Equal(AgeScope.Normalise(" snr "), mapping.AgeGroupRule.OpenLabel);
-    }
-
     [Theory]
-    [InlineData("OPEN")]
-    [InlineData("open")]
-    [InlineData("Open")]
-    [InlineData("  open  ")]
-    public void A_senior_band_called_open_is_refused_because_the_token_is_reserved(string label)
+    [InlineData("""{ "cutOff": "12-31", "openFromAge": 17 }""", "openFromAge")]
+    [InlineData("""{ "cutOff": "12-31", "openLabel": "SNR" }""", "openLabel")]
+    [InlineData("""{ "cutOff": "12-31", "openFromAge": 17, "openLabel": "SNR" }""", "openFromAge")]
+    public void The_removed_senior_band_is_refused_at_load(string ageGroupRule, string key)
     {
-        // The two vocabularies would collide: an event scoped to {"OPEN"} means
-        // open across the age axis, so the band could never be its own division.
-        var error = Assert.Throws<InvalidDataException>(() =>
-            Load($$"""{ "cutOff": "12-31", "openFromAge": 17, "openLabel": "{{label}}" }"""));
+        var error = Assert.Throws<InvalidDataException>(() => Load(ageGroupRule));
         Assert.Contains("mapping-test.json", error.Message);
-        Assert.Contains("openLabel", error.Message);
-        Assert.Contains("reserved", error.Message);
-        Assert.Contains("SNR", error.Message); // says what to use instead
+        Assert.Contains(key, error.Message);
+        Assert.Contains("School settings", error.Message);
     }
 
     [Fact]
-    public void A_senior_band_that_is_not_a_usable_age_group_code_is_refused()
+    public void A_mapping_file_with_the_senior_band_fails_startup()
     {
-        // Eligibility matches a derived code to a division's by equality, so a code
-        // no division may carry matches nobody (ADR-0058 §1).
-        var error = Assert.Throws<InvalidDataException>(() =>
-            Load("""{ "cutOff": "12-31", "openFromAge": 17, "openLabel": "16-PLUS" }"""));
-        Assert.Contains("openLabel", error.Message);
-        Assert.Contains("only letters and digits", error.Message);
-    }
-
-    [Theory]
-    [InlineData("12")]
-    [InlineData("16")]
-    [InlineData("18")]
-    public void A_purely_numeric_senior_band_is_refused_because_it_shadows_a_real_age(string label)
-    {
-        // A paste error, or a school meaning "12+". The derivation produces bare
-        // numbers for everyone below the cut-off, so this band would be
-        // indistinguishable from that age group: every senior would show up in
-        // the 12 divisions' eligible search while the senior events matched
-        // nobody — discovered on deck day, not at load.
-        var error = Assert.Throws<InvalidDataException>(() =>
-            Load($$$"""{ "cutOff": "12-31", "openFromAge": 17, "openLabel": "{{{label}}}" }"""));
-        Assert.Contains("openLabel", error.Message);
-        Assert.Contains("SNR", error.Message); // says what to use instead
+        var path = Path.Combine(Path.GetTempPath(), $"mapping-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """
+            { "columns": { "STKEY": {} }, "ageGroupRule": { "cutOff": "12-31", "openFromAge": 17 } }
+            """);
+        try
+        {
+            using var factory = new ApiTestFactory().With("Imports:MappingPath", path);
+            var error = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+            var refusal = error as InvalidOperationException ?? error.InnerException;
+            Assert.Contains("openFromAge", refusal?.Message ?? error.ToString());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]
-    public void The_shipped_mapping_configures_no_senior_band_at_all()
+    public void Every_student_derives_a_plain_age()
     {
-        // config/import-mapping.example.json sets no openFromAge, so every
-        // student derives a plain age and the senior band never appears —
-        // the OPEN collision was, and stays, unreachable in shipped config.
         var mapping = Fixtures.Mapping();
-        Assert.Null(mapping.AgeGroupRule.OpenFromAge);
         var derived = Enumerable.Range(11, 9) // ages 11..19
             .Select(age => mapping.AgeGroupRule.DeriveAgeGroup(
                 new DateOnly(Fixtures.CompetitionYear - age, 6, 15), Fixtures.CompetitionYear))
             .ToList();
         Assert.Equal(["11", "12", "13", "14", "15", "16", "17", "18", "19"], derived);
         Assert.DoesNotContain(AgeScope.OpenKey, derived);
-        Assert.DoesNotContain(AgeGroupRule.DefaultOpenLabel, derived);
     }
 }
 

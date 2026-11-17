@@ -676,4 +676,55 @@ public sealed class SchoolSettingsEndpointTests : IDisposable
             new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // ---- Ages (ADR-0067 §1) ------------------------------------------------
+
+    private Task<HttpResponseMessage> PutAgesAsync(object? ages, DateTimeOffset? stamp) =>
+        _admin.PutAsJsonAsync(Path, new
+        {
+            name = "Test Synthetic College",
+            houses = new[] { House("BANKSIA"), House("WATTLE"), House("MOUNTAIN ASH"), House("GREVILLEA") },
+            updatedAtUtc = stamp,
+            ages,
+        });
+
+    [Fact]
+    public async Task A_new_install_has_no_ages()
+        => Assert.Equal(JsonValueKind.Null, (await GetAsync()).GetProperty("ages").ValueKind);
+
+    [Fact]
+    public async Task Ages_are_saved_kept_when_absent_and_audited()
+    {
+        var saved = await PutAgesAsync(new { youngest = 12, oldest = 18 }, await StampAsync());
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var ages = (await GetAsync()).GetProperty("ages");
+        Assert.Equal((12, 18), (ages.GetProperty("youngest").GetInt32(), ages.GetProperty("oldest").GetInt32()));
+
+        // Absent leaves them as they are.
+        Assert.Equal(HttpStatusCode.OK, (await _admin.PutAsJsonAsync(Path, Body(updatedAtUtc: await StampAsync()))).StatusCode);
+        Assert.Equal(12, (await GetAsync()).GetProperty("ages").GetProperty("youngest").GetInt32());
+
+        // Stored beside the sign-in settings, which survive.
+        var json = await CarnivalSeed.QueryAsync(_factory,
+            db => db.SchoolConfigurations.Select(c => c.SettingsJson).SingleAsync());
+        Assert.Contains("\"ages\"", json);
+        Assert.Contains("requireAuthenticator", json);
+
+        var audits = await CarnivalSeed.QueryAsync(_factory, db => db.AuditEvents
+            .Where(a => a.Action == AuditActions.SchoolSettings)
+            .Select(a => a.NewValuesJson).ToListAsync());
+        Assert.Contains(audits, values => values!.Contains("\"youngest\":12", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(0, 12)]
+    [InlineData(13, 12)]
+    [InlineData(12, 26)]
+    public async Task Ages_out_of_range_are_refused(int youngest, int oldest)
+    {
+        var refused = await PutAgesAsync(new { youngest, oldest }, await StampAsync());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+        await refused.AssertErrorAsync(ErrorCodes.SchoolAgesInvalid);
+        Assert.Equal(JsonValueKind.Null, (await GetAsync()).GetProperty("ages").ValueKind);
+    }
 }

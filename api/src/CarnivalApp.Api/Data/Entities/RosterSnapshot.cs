@@ -18,8 +18,8 @@ public class RosterSnapshot
     public required string HouseCode { get; set; }
 
     /// <summary>
-    /// The age at the cut-off ("12") or the configured senior band. Never "OPEN", which is reserved
-    /// for an event open across ages — a snapshot carrying it would match every open event.
+    /// The age at the cut-off as a plain number ("12"). Never "OPEN" or "N+": those name divisions,
+    /// not students.
     /// </summary>
     public required string CompetitionAgeGroup { get; set; }
 

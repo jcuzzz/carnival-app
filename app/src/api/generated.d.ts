@@ -3296,6 +3296,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/carnivals/{id}/divisions/extend-ages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExtendAgesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExtendAgesResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Unprocessable Entity */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorBody"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/carnivals/{id}/events": {
         parameters: {
             query?: never;
@@ -9910,6 +10014,7 @@ export interface components {
         };
         CarnivalSettingsDto: {
             adjustmentCategories: string[];
+            agesWithoutStudents: string[];
             autoFillLanes: boolean;
             divisions: null | components["schemas"]["DivisionProfileDto"];
             divisionsDefault: null | components["schemas"]["DivisionProfileDto"];
@@ -9919,6 +10024,7 @@ export interface components {
             /** Format: int32 */
             rosterYear: null | number;
             scoring: components["schemas"]["ScoringRulesDto"];
+            uncoveredAges: components["schemas"]["UncoveredAgeDto"][];
         };
         /** @enum {unknown} */
         CarnivalStatus: "Draft" | "Open" | "Closed" | "Finalised";
@@ -10110,6 +10216,15 @@ export interface components {
         EventScoringMode: "Places" | "Social";
         /** @enum {unknown} */
         EventTier: "Competitive" | "Social";
+        ExtendAgesRequest: {
+            /** Format: int32 */
+            youngest: null | number;
+        };
+        ExtendAgesResponse: {
+            addedAges: string[];
+            /** Format: int32 */
+            divisionsAdded: number;
+        };
         GenerateDivisionRequest: {
             ageGroup: null | string;
             category: null | components["schemas"]["CompetitionCategory"];
@@ -10593,6 +10708,12 @@ export interface components {
             /** Format: int32 */
             sortOrder: number;
         };
+        SchoolAges: {
+            /** Format: int32 */
+            oldest: number;
+            /** Format: int32 */
+            youngest: number;
+        };
         SchoolRecordDto: {
             ageGroup: string;
             carnivalName: null | string;
@@ -10618,6 +10739,7 @@ export interface components {
             voidReason: null | string;
         };
         SchoolSettingsRequest: {
+            ages?: null | components["schemas"]["SchoolAges"];
             brandColour: null | string;
             houses: null | components["schemas"]["HouseSettingRequest"][];
             localAccounts?: null | components["schemas"]["LocalAccountAccess"];
@@ -10627,6 +10749,7 @@ export interface components {
             updatedAtUtc: null | string;
         };
         SchoolSettingsResponse: {
+            ages: null | components["schemas"]["SchoolAges"];
             brandColour: null | string;
             houses: components["schemas"]["HouseSettingResponse"][];
             localAccounts: components["schemas"]["LocalAccountAccess"];
@@ -10848,6 +10971,11 @@ export interface components {
             name: null | string;
             readable: boolean;
             version: string;
+        };
+        UncoveredAgeDto: {
+            ageGroup: string;
+            /** Format: int32 */
+            students: number;
         };
         UnmatchedStudent: {
             externalStudentId: string;

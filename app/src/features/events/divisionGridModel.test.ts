@@ -75,6 +75,15 @@ describe("buildDivisionGrid", () => {
     expect(model.rows.map((r) => r.label)).toEqual(["12", "13", "11"]);
   });
 
+  it("names the open-ended oldest age as it is, and sorts extra ages around it", () => {
+    const model = buildDivisionGrid({ ...profile, ageGroups: ["12", "13+"] }, [
+      division("13", "M"),
+      division("11", "M"),
+    ]);
+    expect(model.rows.map((r) => r.label)).toEqual(["12", "13+", "11", "13"]);
+    expect(model.rows[1]!.cells[0]!.spec.ageGroup).toBe("13+");
+  });
+
   it("still shows a division whose category the profile no longer names", () => {
     const model = buildDivisionGrid(profile, [division("12", "S")]);
 

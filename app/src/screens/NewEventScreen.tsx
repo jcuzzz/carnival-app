@@ -11,14 +11,14 @@ import {
 import type { Carnival, DivisionProfile, EventDefinition } from "../api/types";
 import { useApiQuery, useInvalidate } from "../api/useApiQuery";
 import { hasRole, useSession } from "../auth/session";
-import { RosterRequiredNotice } from "../features/carnivals/RosterRequiredNotice";
-import { ensureProfile, rosterDefaultToSave } from "../features/events/addDivisions";
-import { codesSummary } from "../features/events/ageCodes";
+import { AgesRequiredNotice } from "../features/carnivals/AgesRequiredNotice";
+import { ensureProfile, schoolDefaultToSave } from "../features/events/addDivisions";
+import { agesLine } from "../features/events/agesLine";
 import { knownSports } from "../features/events/catalogueRows";
 import { DefinitionFields, useDefinitionFields } from "../features/events/definitionFields";
 import { DivisionGrid } from "../features/events/DivisionGrid";
 import { counted } from "../features/events/counted";
-import { carnivalSport, categoryLabel } from "../features/events/eventLabels";
+import { carnivalSport } from "../features/events/eventLabels";
 import { allCellKeys, buildDivisionGrid, tickedSpecs } from "../features/events/divisionGridModel";
 import { SignInOffer, useAccessGate } from "../features/ui/SignInOffer";
 import { href, navigate } from "../router";
@@ -29,7 +29,7 @@ import { useConnectivity } from "../shell/useOnline";
 export default function NewEventScreen({ carnivalId }: { carnivalId: string | null }) {
   const session = useSession();
   const canManage = hasRole(session, "CarnivalAdministrator", "SystemAdministrator");
-  const canImport = hasRole(session, "SystemAdministrator");
+  const canSetAges = hasRole(session, "SystemAdministrator");
   const connectivity = useConnectivity();
   const offline = connectivity !== "connected";
 
@@ -39,7 +39,7 @@ export default function NewEventScreen({ carnivalId }: { carnivalId: string | nu
     <NewCarnivalEvent
       carnivalId={carnivalId}
       canManage={canManage}
-      canImport={canImport}
+      canSetAges={canSetAges}
       offline={offline}
     />
   );
@@ -48,12 +48,12 @@ export default function NewEventScreen({ carnivalId }: { carnivalId: string | nu
 function NewCarnivalEvent({
   carnivalId,
   canManage,
-  canImport,
+  canSetAges,
   offline,
 }: {
   carnivalId: string;
   canManage: boolean;
-  canImport: boolean;
+  canSetAges: boolean;
   offline: boolean;
 }) {
   const carnival = useApiQuery(keys.carnival(carnivalId), () => getCarnival(carnivalId));
@@ -98,11 +98,10 @@ function NewCarnivalEvent({
           carnivalId={carnivalId}
           carnival={carnival.data}
           profile={settings.data?.divisions}
-          rosterDefault={settings.data?.divisionsDefault}
-          rosterCodes={settings.data?.rosterAgeGroups ?? []}
+          schoolDefault={settings.data?.divisionsDefault}
           profileKnown={settings.data !== undefined}
           canManage={canManage}
-          canImport={canImport}
+          canSetAges={canSetAges}
           offline={offline}
         />
       )}
@@ -114,28 +113,26 @@ function NewEventForm({
   carnivalId,
   carnival,
   profile,
-  rosterDefault,
-  rosterCodes,
+  schoolDefault,
   profileKnown,
   canManage,
-  canImport,
+  canSetAges,
   offline,
 }: {
   carnivalId: string;
   carnival: Carnival | undefined;
   profile: DivisionProfile | null | undefined;
   /** In use until the profile is saved. */
-  rosterDefault: DivisionProfile | null | undefined;
-  rosterCodes: readonly string[];
+  schoolDefault: DivisionProfile | null | undefined;
   /** The settings read landed, so an unconfigured profile is a fact. */
   profileKnown: boolean;
   canManage: boolean;
-  canImport: boolean;
+  canSetAges: boolean;
   offline: boolean;
 }) {
   const invalidate = useInvalidate();
-  const defaultProfile = rosterDefaultToSave(profile, rosterDefault);
-  const effective = profile ?? rosterDefault;
+  const defaultProfile = schoolDefaultToSave(profile, schoolDefault);
+  const effective = profile ?? schoolDefault;
   const model = buildDivisionGrid(effective, []);
   const cells = allCellKeys(model);
   const fields = useDefinitionFields();
@@ -154,15 +151,13 @@ function NewEventForm({
 
   const locked = carnival?.status === "Closed" || carnival?.status === "Finalised";
   const writable = canManage && !locked && !offline;
-  // Configured: a saved profile, or a roster to derive one from.
+  // Configured: a saved profile, or the school's ages.
   const blocked = !model.configured;
-  // ADR-0067 §5: with no saved ages and no roster, the student import comes first.
-  const needsStudents =
-    blocked && profileKnown && (profile?.ageGroups?.length ?? 0) === 0 && rosterCodes.length === 0;
+  const needsAges = blocked && profileKnown && effective == null;
   const blocker = !blocked
     ? null
-    : needsStudents
-      ? "Import the student list first"
+    : needsAges
+      ? "Set the school's ages first"
       : profileKnown
         ? "Set the ages and categories first"
         : "Can’t read the ages";
@@ -241,10 +236,10 @@ function NewEventForm({
           This carnival is {carnival?.status}, so no divisions can be added to it.
         </div>
       )}
-      {needsStudents && !locked && (
-        <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+      {needsAges && !locked && (
+        <AgesRequiredNotice canSetAges={canSetAges} />
       )}
-      {blocked && profileKnown && !needsStudents && !locked && (
+      {blocked && profileKnown && !needsAges && !locked && (
         <div className="alert notice" role="status">
           <p className="flush-top">Set this carnival’s ages and categories first.</p>
           <div className="button-row">
@@ -294,12 +289,12 @@ function NewEventForm({
           }
         />
 
-        {!needsStudents && (
+        {!needsAges && (
           <div className="form-divider">
             <h2 className="flush-top">Divisions</h2>
             {defaultProfile !== null && (
               <p className="row-sub">
-                Ages from the student list: {rosterSummary(defaultProfile)}.{" "}
+                The school’s ages: {agesLine(null, defaultProfile)}.{" "}
                 <a href={href(`/carnivals/${carnivalId}/setup/divisions`)}>Change</a>
               </p>
             )}
@@ -343,17 +338,6 @@ function NewEventForm({
       </form>
     </>
   );
-}
-
-/** "12–18, SNR · Boys, Girls · Competitive" — what the default contests, in one line. */
-function rosterSummary(profile: DivisionProfile): string {
-  return [
-    codesSummary(profile.ageGroups ?? []),
-    (profile.categories ?? []).map(categoryLabel).join(", "),
-    (profile.tiers ?? []).join(", "),
-  ]
-    .filter((part) => part !== "")
-    .join(" · ");
 }
 
 function submitLabel(

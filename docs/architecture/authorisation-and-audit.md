@@ -170,7 +170,7 @@ Built from the policy tables in `CarnivalAuthorization`, `ImportAuthorization`, 
 | `carnivals:marshal` | ✓ | ✓ | ✓ | | Eligible-student search, creating and removing entries and relay teams, materialising a division's race, heat and lane placement |
 | `results:submit` | ✓ | ✓ | ✓ | | Submitting results, attempts and high-jump marks; raising the bar; attempts per height |
 | `results:correct` | ✓ | ✓ | ✓ | | Correcting a result |
-| `carnivals:administer` | ✓ | ✓ | | | Creating and editing carnivals and their status, applying templates, scheduling and editing events, officials, event definitions, races, schedule streams and slots, carnival settings, adjustments, record administration, all reports and exports, the device list, listing event templates (`GET /admin/event-templates`) |
+| `carnivals:administer` | ✓ | ✓ | | | Creating and editing carnivals and their status, applying templates, adding a younger age to a carnival, scheduling and editing events, officials, event definitions, races, schedule streams and slots, carnival settings, adjustments, record administration, all reports and exports, the device list, listing event templates (`GET /admin/event-templates`) |
 | `school:administer` | ✓ | | | | School settings, including the two sign-in settings; previewing and applying a template reconcile (`GET` and `POST /admin/event-templates/{id}/reconcile`) |
 | `imports:view`, `imports:manage` | ✓ | | | | Every roster-import endpoint |
 | `roles:administer` | ✓ | | | | Role assignment |
@@ -308,7 +308,7 @@ See [ADR-0047](../adr/0047-the-database-stays-on-the-host.md) for the two databa
 
 | Area | Actions |
 |---|---|
-| Carnivals | `carnival.create`, `.update`, `.status`, `.settings`, `.apply-template` |
+| Carnivals | `carnival.create`, `.update`, `.status`, `.settings`, `.apply-template`, `.extend-ages` |
 | Event catalogue | `event-definition.create`, `.update`, `.deactivate`; `event-template.reconcile` |
 | Carnival events | `carnival-event.schedule`, `.update`, `.division-change`, `.unschedule`, `.status`, `.open-all`, `.assign-officials`, `.raise-bar`, `.attempts-per-height` (`.finalise` appears only on older rows) |
 | Schedule | `schedule-stream.*`, `schedule-slot.*` (create, update, delete, place-event, remove-event) |

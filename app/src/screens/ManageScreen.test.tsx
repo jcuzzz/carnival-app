@@ -88,6 +88,8 @@ function carnival(status: CarnivalStatus = "Open"): Carnival {
 const settings: CarnivalSettings = {
   divisionsDefault: null,
   rosterAgeGroups: [],
+  uncoveredAges: [],
+  agesWithoutStudents: [],
   rosterYear: null,
   scoring: {
     placePoints: [8, 6, 4, 2],
@@ -525,12 +527,13 @@ describe("ManageScreen", () => {
     vi.mocked(getCarnival).mockResolvedValue(carnival("Draft"));
     vi.mocked(getCarnivalSettings).mockResolvedValue({
       ...settings,
-      rosterAgeGroups: ["12", "13"],
+      uncoveredAges: [{ ageGroup: "11", students: 14 }],
+      agesWithoutStudents: ["18+"],
       rosterYear: 2026,
     });
     vi.mocked(listCarnivalEvents).mockResolvedValue([
       { ...division("e-1"), ageGroup: "12", scheduleSlotId: "sl-1" },
-      { ...division("e-2"), ageGroup: "19", scheduleSlotId: null },
+      { ...division("e-2"), ageGroup: "18+", scheduleSlotId: null },
     ]);
     vi.mocked(getCarnivalSchedule).mockResolvedValue({
       carnivalId: "c-1",
@@ -542,7 +545,8 @@ describe("ManageScreen", () => {
     await waitFor(() =>
       expect([...step.querySelectorAll(".alert.warn li")].map((li) => li.textContent)).toEqual([
         "The student list’s ages are for 2026, but this carnival is in 2027.",
-        "1 division has an age no current student has (age 19).",
+        "14 students are aged 11, and no event has age 11. Event setup",
+        "Age 18+ has no students: 1 division will be empty.",
         "1 division isn’t in the program, so it won’t appear on the printed running order. " +
           "Leave it if it runs separately. Add it to the program",
       ]),
@@ -552,6 +556,9 @@ describe("ManageScreen", () => {
         "href",
       ),
     ).toBe("#/carnivals/c-1/schedule");
+    expect(screen.getByRole("link", { name: "Event setup" }).getAttribute("href")).toBe(
+      "#/carnivals/c-1/setup/events",
+    );
     expect(step.textContent).toContain("1 event · 2 divisions");
     expect(
       (screen.getByRole("button", { name: "Open carnival" }) as HTMLButtonElement).disabled,

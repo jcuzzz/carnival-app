@@ -221,7 +221,7 @@ public sealed class EligibilityServiceTests
     [InlineData("13", null)]
     [InlineData(null, CompetitionCategory.M)]
     [InlineData(null, null)]
-    public void Search_filter_admits_exactly_the_snapshots_the_entry_check_accepts(
+    public async Task Search_filter_admits_exactly_the_snapshots_the_entry_check_accepts(
         string? ageGroup, CompetitionCategory? category)
     {
         var carnivalEvent = Event(ageGroup, category);
@@ -234,7 +234,8 @@ public sealed class EligibilityServiceTests
             Roster("OPEN", CompetitionCategory.S),
         };
 
-        var admitted = EligibilityService.WhereDivisionMatches(snapshots.AsQueryable(), carnivalEvent)
+        var admitted = (await EligibilityService.WhereDivisionMatchesAsync(
+                snapshots.AsQueryable(), carnivalEvent, default))
             .Select(s => s.Id)
             .ToHashSet();
         var eligible = snapshots
@@ -260,8 +261,7 @@ public sealed class EligibilityServiceTests
     [Fact]
     public void A_non_numeric_age_matches_by_the_same_equality()
     {
-        // The senior merge happens at roster import (ADR-0058 §"Context" 2), so
-        // SNR reaches eligibility as an ordinary age.
+        // A legacy code saved before ADR-0067 reaches eligibility as an ordinary age.
         var carnivalEvent = Event("SNR", CompetitionCategory.M);
         Assert.True(EligibilityService.CheckDivision(
             carnivalEvent, Roster("SNR", CompetitionCategory.M), null).IsEligible);
@@ -284,7 +284,7 @@ public sealed class EligibilityServiceTests
     }
 
     [Fact]
-    public void Search_filter_and_entry_check_agree_on_the_age()
+    public async Task Search_filter_and_entry_check_agree_on_the_age()
     {
         // The search and the per-entry check are the same rule in two forms.
         var carnivalEvent = Event("13", CompetitionCategory.M);
@@ -295,7 +295,8 @@ public sealed class EligibilityServiceTests
             Roster("13", CompetitionCategory.F),
         };
 
-        var admitted = EligibilityService.WhereDivisionMatches(snapshots.AsQueryable(), carnivalEvent)
+        var admitted = (await EligibilityService.WhereDivisionMatchesAsync(
+                snapshots.AsQueryable(), carnivalEvent, default))
             .Select(s => s.Id)
             .ToHashSet();
         var eligible = snapshots
@@ -305,6 +306,34 @@ public sealed class EligibilityServiceTests
 
         Assert.Single(admitted); // the 13/M
         Assert.Equal(eligible, admitted);
+    }
+
+    [Theory]
+    [InlineData("18", true)]
+    [InlineData("19", true)]
+    [InlineData("17", false)]
+    [InlineData("SNR", false)]
+    [InlineData("18+", false)] // a student's age is a plain number, never a range
+    public void An_and_over_division_admits_every_numeric_age_from_its_own(string age, bool admitted)
+    {
+        var verdict = EligibilityService.CheckDivision(
+            Event("18+", CompetitionCategory.M), Roster(age, CompetitionCategory.M), null);
+        Assert.Equal(admitted, verdict.IsEligible);
+        if (!admitted)
+        {
+            Assert.Equal(EligibilityAxis.AgeGroup, verdict.Axis);
+            Assert.Equal("18+", verdict.Required);
+        }
+    }
+
+    [Fact]
+    public void A_relay_leg_in_an_and_over_division_is_held_to_the_same_rule()
+    {
+        var carnivalEvent = Event("18+", CompetitionCategory.M);
+        Assert.True(EligibilityService.CheckLeg(
+            carnivalEvent, "BLU", Roster("19", CompetitionCategory.M)).IsEligible);
+        Assert.Equal(EligibilityAxis.AgeGroup, EligibilityService.CheckLeg(
+            carnivalEvent, "BLU", Roster("17", CompetitionCategory.M)).Axis);
     }
 
     [Fact]

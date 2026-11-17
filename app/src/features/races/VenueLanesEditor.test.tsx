@@ -21,6 +21,8 @@ vi.mock("../../api/resources", () => ({
 const settings: CarnivalSettings = {
   divisionsDefault: null,
   rosterAgeGroups: [],
+  uncoveredAges: [],
+  agesWithoutStudents: [],
   rosterYear: null,
   scoring: {} as CarnivalSettings["scoring"],
   adjustmentCategories: ["Novelty"],

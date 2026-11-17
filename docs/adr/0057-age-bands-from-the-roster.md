@@ -1,6 +1,6 @@
 # ADR-0057: Age bands come from the roster and are picked, not typed
 
-- **Status:** Accepted (2026-09). §3 (the band editor) superseded by [ADR-0058](0058-one-age-per-division.md) §4; §1 and §4 stand, in ADR-0058's one-age shape. Withdraws [ADR-0054](0054-setting-up-a-carnival.md)'s non-goal of deriving divisions from the roster. Partly superseded by [ADR-0067](0067-divisions-come-from-the-student-list.md): §2, a template uses the carnival's ages and no longer wins, there is no Divisions step or screen to pre-fill, and the no-roster block points at the student import.
+- **Status:** Accepted (2026-09). §3 (the band editor) superseded by [ADR-0058](0058-one-age-per-division.md) §4; §1 and §4 stand, in ADR-0058's one-age shape. Withdraws [ADR-0054](0054-setting-up-a-carnival.md)'s non-goal of deriving divisions from the roster. Partly superseded by [ADR-0067](0067-ages-come-from-the-schools-range.md): §2, a template uses the carnival's ages and no longer wins, there is no Divisions step or screen to pre-fill, and the no-roster block points at the student import.
 
 ## Context
 

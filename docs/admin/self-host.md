@@ -154,7 +154,7 @@ No release images are published yet, so `LOCAL_BUILD=1` builds them on the host 
 
 On a database the API has never migrated, the script reports a fresh database, skips the data gates and leaves the schema to the API's first start, which needs `APPLY_MIGRATIONS=true`; without it the script stops before changing anything. It also stops when the database has tables but no migration history, which usually means the wrong `POSTGRES_DB`.
 
-Then, in the browser: open the first-administrator link the script printed (§4). You land on School, whose "Set up your school" list leads the way: School settings (name, colours and houses, then Save) → Carnivals → New carnival, whose Manage checklist imports the roster (a CSV; see `config/`) and adds the standard events. The list disappears once the settings are saved and a carnival exists. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
+Then, in the browser: open the first-administrator link the script printed (§4). You land on School, whose "Set up your school" list leads the way: School settings (name, colours, houses and ages, then Save) → Carnivals → New carnival, whose Manage checklist imports the roster (a CSV; see `config/`) and adds the standard events. The list disappears once the settings are saved and a carnival exists. Set `APPLY_MIGRATIONS=false` again afterwards (§6).
 
 ## 6. Upgrades
 

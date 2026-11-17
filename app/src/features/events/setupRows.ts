@@ -1,7 +1,8 @@
 /** One row per event definition, with this carnival's divisions of it summarised. */
 
 import type { CarnivalEvent, CompetitionCategory, EventDefinition } from "../../api/types";
-import { ageScopeOrder, categoryLabel, eventTypeSummary } from "./eventLabels";
+import { codesSummary } from "./ageCodes";
+import { categoryLabel, eventTypeSummary } from "./eventLabels";
 
 export interface EventSetupRow {
   definition: EventDefinition;
@@ -99,36 +100,12 @@ function counted(n: number, singular: string, plural: string): string {
 
 const CATEGORY_ORDER: CompetitionCategory[] = ["M", "F", "S"];
 
-// A range over a gapped set claims ages nobody entered.
 function ageSummary(divisions: readonly CarnivalEvent[]): string | null {
-  const ages = new Set<string>();
-  let open = false;
-  for (const division of divisions) {
-    if (division.ageGroup === "OPEN") open = true;
-    else ages.add(division.ageGroup);
-  }
-  const sorted = [...ages].sort(
-    (a, b) => ageScopeOrder(a) - ageScopeOrder(b) || a.localeCompare(b),
-  );
+  const ages = divisions.map((d) => d.ageGroup).filter((age) => age !== "OPEN");
   const parts: string[] = [];
-  if (open) parts.push("All ages");
-  if (sorted.length === 1) parts.push(sorted[0]!);
-  else if (sorted.length > 1)
-    parts.push(
-      contiguous(sorted) ? `${sorted[0]}–${sorted[sorted.length - 1]}` : sorted.join(", "),
-    );
+  if (divisions.some((d) => d.ageGroup === "OPEN")) parts.push("All ages");
+  if (ages.length > 0) parts.push(codesSummary(ages));
   return parts.length === 0 ? null : parts.join(", ");
-}
-
-function contiguous(ages: readonly string[]): boolean {
-  let previous: number | null = null;
-  for (const age of ages) {
-    const n = Number.parseInt(age, 10);
-    if (Number.isNaN(n) || String(n) !== age) return false;
-    if (previous !== null && n !== previous + 1) return false;
-    previous = n;
-  }
-  return true;
 }
 
 function categorySummary(divisions: readonly CarnivalEvent[]): string | null {

@@ -256,7 +256,7 @@ public sealed class EventClassificationEndpointsTests : IDisposable
     [Theory]
     [InlineData("13-14")]   // a merged scope, which no division can represent
     [InlineData("15/16")]
-    [InlineData("13+")]     // a LABEL shape, not an age code
+    [InlineData("U13+")]    // "+" follows a number only
     public async Task An_age_that_is_not_a_plain_code_is_refused_on_the_write_path(string group)
     {
         // Left unguarded this schedules an event that looks like a merged

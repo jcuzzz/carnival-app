@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using CarnivalApp.Api.Auditing;
 using CarnivalApp.Api.Carnivals;
 using CarnivalApp.Api.Data.Entities;
@@ -27,13 +28,17 @@ public static class DevelopmentSeeder
     /// </summary>
     public const int SyntheticCompetitionYear = 2026;
 
+    public static readonly SchoolAges SyntheticAges = new(12, 18);
+
     public static async Task SeedAsync(IServiceProvider services, CancellationToken ct = default)
     {
         var db = services.GetRequiredService<CarnivalAppDbContext>();
-        // A seeded school is a set-up one, so School shows no setup list for it. Set before the
-        // early return: a database seeded before the marker existed must get it too.
+        // A seeded school is a set-up one, with ages, so School shows no setup list for it. Set
+        // before the early return: a database seeded before the marker existed must get it too.
         var school = await db.SchoolConfigurations.TheSchool().FirstAsync(ct);
         var confirmed = SchoolSettings.SerialiseSetupConfirmed(DateTimeOffset.UtcNow, school.SettingsJson);
+        if (SchoolSettings.From(school, NullLogger.Instance).Ages is null)
+            confirmed = SchoolSettings.SerialiseAges(SyntheticAges, confirmed);
         if (confirmed != school.SettingsJson)
         {
             school.SettingsJson = confirmed;

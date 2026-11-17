@@ -1,9 +1,10 @@
 // Pure. Only a missing student list or no events blocks the open (the server refuses it too,
 // CARNIVAL_NOT_READY); the rest warns: a school may open on last year's roster on purpose.
 
-import type { Carnival, CarnivalEvent, Schedule } from "../../api/types";
-import { codesSummary, orderCodes } from "../events/ageCodes";
+import type { Carnival, CarnivalEvent, Schedule, UncoveredAge } from "../../api/types";
+import { orderCodes } from "../events/ageCodes";
 import { counted } from "../events/counted";
+import { uncoveredWarning } from "../events/uncoveredAges";
 
 export interface ReadinessFacts {
   carnival: Pick<Carnival, "date">;
@@ -11,13 +12,16 @@ export interface ReadinessFacts {
   students: number | null | undefined;
   /** Undefined while unread: an unread list claims nothing. */
   events: readonly CarnivalEvent[] | undefined;
-  rosterAgeGroups: readonly string[] | undefined;
+  /** Students whose age no carnival age covers; undefined = unread. */
+  uncoveredAges: readonly UncoveredAge[] | undefined;
+  /** The carnival's ages no current student has; undefined = unread. */
+  agesWithoutStudents: readonly string[] | undefined;
   /** Null = no roster, undefined = unread. */
   rosterYear: number | null | undefined;
   schedule: Schedule | null | undefined;
 }
 
-export type ReadinessWarningId = "rosterYear" | "unmatchedAges" | "outsideProgram";
+export type ReadinessWarningId = "rosterYear" | "uncoveredAges" | "emptyAges" | "outsideProgram";
 
 export interface ReadinessWarning {
   id: ReadinessWarningId;
@@ -36,9 +40,6 @@ export interface Readiness {
    */
   missing: string | null;
 }
-
-/** The all-ages division, which no roster age has to match. */
-const ALL_AGES = "OPEN";
 
 export function rosterYearMismatch(
   rosterYear: number | null | undefined,
@@ -61,19 +62,15 @@ export function readiness(facts: ReadinessFacts): Readiness {
   if (years) warnings.push({ id: "rosterYear", text: years.text });
 
   // With no roster at all, the Students step already says so.
-  if (events !== undefined && facts.rosterAgeGroups !== undefined && facts.rosterYear !== null) {
-    const roster = new Set(facts.rosterAgeGroups);
-    const unmatched = events.filter((e) => e.ageGroup !== ALL_AGES && !roster.has(e.ageGroup));
-    if (unmatched.length > 0) {
-      const ages = orderCodes(unmatched.map((e) => e.ageGroup));
+  if (facts.rosterYear != null) {
+    if (facts.uncoveredAges && facts.uncoveredAges.length > 0)
       warnings.push({
-        id: "unmatchedAges",
-        text:
-          `${counted(unmatched.length, "division")} ${unmatched.length === 1 ? "has" : "have"} ` +
-          `an age no current student has (${ages.length === 1 ? "age" : "ages"} ` +
-          `${codesSummary(ages)}).`,
+        id: "uncoveredAges",
+        text: uncoveredWarning(facts.uncoveredAges),
+        action: "Event setup",
       });
-    }
+    if (facts.agesWithoutStudents && facts.agesWithoutStudents.length > 0)
+      warnings.push({ id: "emptyAges", text: emptyAgesText(facts.agesWithoutStudents, events) });
   }
 
   const slots = (facts.schedule?.streams ?? []).reduce(
@@ -113,4 +110,20 @@ export function readiness(facts: ReadinessFacts): Readiness {
             ? "Add events first."
             : null,
   };
+}
+
+/** "Age 18+ has no students: 26 divisions will be empty." */
+function emptyAgesText(
+  ages: readonly string[],
+  events: readonly CarnivalEvent[] | undefined,
+): string {
+  const ordered = orderCodes(ages);
+  const named =
+    ordered.length === 1
+      ? `Age ${ordered[0]} has`
+      : `Ages ${ordered.slice(0, -1).join(", ")} and ${ordered.at(-1)} have`;
+  const empty = (events ?? []).filter((e) => ordered.includes(e.ageGroup)).length;
+  const divisions =
+    empty === 0 ? "" : `: ${counted(empty, "division")} will be empty`;
+  return `${named} no students${divisions}.`;
 }

@@ -136,6 +136,9 @@ if (!app.Environment.IsDevelopment()
         "ConnectionStrings:CarnivalAppDb is not configured. Set it in appsettings.School.json or as "
         + "ConnectionStrings__CarnivalAppDb before starting the API.");
 
+if (app.Configuration["Imports:MappingPath"] is { Length: > 0 } mappingPath)
+    ImportMapping.RefuseRetiredKeys(mappingPath);
+
 var seedSynthetic = useSqlite && app.Environment.IsDevelopment()
     && app.Configuration.GetValue("Database:SeedSyntheticData", false);
 
@@ -276,6 +279,7 @@ apiV1.MapImportEndpoints();
 apiV1.MapEventDefinitionEndpoints();
 apiV1.MapCarnivalEndpoints();
 apiV1.MapCarnivalEventEndpoints();
+apiV1.MapCarnivalAgesEndpoints();
 apiV1.MapDeviceEndpoints();
 apiV1.MapScheduleEndpoints();
 apiV1.MapRaceEndpoints();

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CarnivalSettings, DivisionProfile } from "../../api/types";
-import { ensureProfile, fullMatrixSpecs, rosterDefaultToSave } from "./addDivisions";
+import { ensureProfile, fullMatrixSpecs, schoolDefaultToSave } from "./addDivisions";
 
 /**
- * The write both presses share (ADR-0059 §2): the roster default becomes the
+ * The write both presses share (ADR-0059 §2): the school's ages become the
  * carnival's profile, or nothing is written at all.
  */
 
@@ -14,19 +14,19 @@ vi.mock("../../api/resources", () => ({
 
 import { getCarnivalSettings, updateCarnivalSettings } from "../../api/resources";
 
-const rosterDefault: DivisionProfile = {
+const schoolDefault: DivisionProfile = {
   ageGroups: ["12", "13"],
   categories: ["M", "F"],
   tiers: ["Competitive"],
 };
 
 function settings(divisions: DivisionProfile | null): CarnivalSettings {
-  return { divisions, divisionsDefault: rosterDefault } as CarnivalSettings;
+  return { divisions, divisionsDefault: schoolDefault } as CarnivalSettings;
 }
 
 beforeEach(() => {
   vi.mocked(getCarnivalSettings).mockReset().mockResolvedValue(settings(null));
-  vi.mocked(updateCarnivalSettings).mockReset().mockResolvedValue(settings(rosterDefault));
+  vi.mocked(updateCarnivalSettings).mockReset().mockResolvedValue(settings(schoolDefault));
 });
 
 describe("ensureProfile", () => {
@@ -38,10 +38,10 @@ describe("ensureProfile", () => {
 
   it("saves the default, and says the cache is stale", async () => {
     const changed = vi.fn();
-    expect(await ensureProfile("c-1", rosterDefault, changed, "added")).toEqual({ kind: "ready" });
+    expect(await ensureProfile("c-1", schoolDefault, changed, "added")).toEqual({ kind: "ready" });
     expect(vi.mocked(updateCarnivalSettings).mock.calls[0]).toEqual([
       "c-1",
-      { divisions: rosterDefault },
+      { divisions: schoolDefault },
     ]);
     expect(changed).toHaveBeenCalled();
   });
@@ -51,7 +51,7 @@ describe("ensureProfile", () => {
       settings({ ageGroups: ["16"], categories: ["M"], tiers: ["Competitive"] }),
     );
     const changed = vi.fn();
-    expect(await ensureProfile("c-1", rosterDefault, changed, "added")).toEqual({ kind: "raced" });
+    expect(await ensureProfile("c-1", schoolDefault, changed, "added")).toEqual({ kind: "raced" });
     expect(updateCarnivalSettings).not.toHaveBeenCalled();
     expect(changed).toHaveBeenCalled();
   });
@@ -59,8 +59,8 @@ describe("ensureProfile", () => {
   // A second row pressed while the first is still adding: the profile now
   // stored is the one this press was about to write, so it may go on.
   it("goes ahead when the stored ages are the ones it was about to save", async () => {
-    vi.mocked(getCarnivalSettings).mockResolvedValue(settings({ ...rosterDefault }));
-    expect(await ensureProfile("c-1", rosterDefault, () => undefined, "added")).toEqual({
+    vi.mocked(getCarnivalSettings).mockResolvedValue(settings({ ...schoolDefault }));
+    expect(await ensureProfile("c-1", schoolDefault, () => undefined, "added")).toEqual({
       kind: "ready",
     });
     expect(updateCarnivalSettings).not.toHaveBeenCalled();
@@ -69,19 +69,19 @@ describe("ensureProfile", () => {
   // The sentence is the caller's: the setup list adds a row, Create creates one.
   it("reports a refused save in the words of the press that made it", async () => {
     vi.mocked(updateCarnivalSettings).mockRejectedValue(new Error("nope"));
-    const added = await ensureProfile("c-1", rosterDefault, () => undefined, "added");
+    const added = await ensureProfile("c-1", schoolDefault, () => undefined, "added");
     expect(added.kind).toBe("failed");
     expect(added.kind === "failed" && added.text).toContain(
       "The ages couldn’t be saved, so nothing was added",
     );
-    const created = await ensureProfile("c-1", rosterDefault, () => undefined, "created");
+    const created = await ensureProfile("c-1", schoolDefault, () => undefined, "created");
     expect(created.kind === "failed" && created.text).toContain("nothing was created");
   });
 });
 
 describe("fullMatrixSpecs", () => {
   it("is every division the profile contests, row-major", () => {
-    expect(fullMatrixSpecs(rosterDefault)).toEqual([
+    expect(fullMatrixSpecs(schoolDefault)).toEqual([
       { ageGroup: "12", category: "M", tier: "Competitive" },
       { ageGroup: "12", category: "F", tier: "Competitive" },
       { ageGroup: "13", category: "M", tier: "Competitive" },
@@ -105,10 +105,10 @@ describe("fullMatrixSpecs", () => {
   });
 });
 
-describe("rosterDefaultToSave", () => {
+describe("schoolDefaultToSave", () => {
   it("is the default only while nothing is stored", () => {
-    expect(rosterDefaultToSave(null, rosterDefault)).toEqual(rosterDefault);
-    expect(rosterDefaultToSave(rosterDefault, rosterDefault)).toBeNull();
-    expect(rosterDefaultToSave(null, null)).toBeNull();
+    expect(schoolDefaultToSave(null, schoolDefault)).toEqual(schoolDefault);
+    expect(schoolDefaultToSave(schoolDefault, schoolDefault)).toBeNull();
+    expect(schoolDefaultToSave(null, null)).toBeNull();
   });
 });

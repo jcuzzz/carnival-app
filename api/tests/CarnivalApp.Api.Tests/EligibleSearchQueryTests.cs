@@ -76,15 +76,17 @@ public class EligibleSearchQueryTests
     [Theory]
     [InlineData("15")]
     [InlineData("SNR")]
-    public void The_age_is_matched_on_the_bare_column_as_a_parameter(string age)
+    public async Task The_age_is_matched_on_the_bare_column_as_a_parameter(string age)
     {
         using var postgres = Postgres();
         using var sqlite = Sqlite();
 
         foreach (var sql in new[]
         {
-            EligibilityService.WhereDivisionMatches(postgres.RosterSnapshots, EventScoped(age)).ToQueryString(),
-            EligibilityService.WhereDivisionMatches(sqlite.RosterSnapshots, EventScoped(age)).ToQueryString(),
+            (await EligibilityService.WhereDivisionMatchesAsync(postgres.RosterSnapshots, EventScoped(age), default))
+                .ToQueryString(),
+            (await EligibilityService.WhereDivisionMatchesAsync(sqlite.RosterSnapshots, EventScoped(age), default))
+                .ToQueryString(),
         })
         {
             // The column is bare (indexable), and the age travels as a parameter
@@ -95,12 +97,13 @@ public class EligibleSearchQueryTests
     }
 
     [Fact]
-    public void An_open_scope_adds_no_age_predicate_at_all()
+    public async Task An_open_scope_adds_no_age_predicate_at_all()
     {
         // An all-ages house relay must not filter on the axis — not even with a
         // never-false catch-all that the planner would still have to evaluate.
         using var db = Postgres();
-        var sql = EligibilityService.WhereDivisionMatches(db.RosterSnapshots, EventScoped()).ToQueryString();
+        var sql = (await EligibilityService.WhereDivisionMatchesAsync(db.RosterSnapshots, EventScoped(), default))
+            .ToQueryString();
         Assert.DoesNotContain("CompetitionAgeGroup\" =", sql);
         Assert.DoesNotContain("WHERE", sql);
     }

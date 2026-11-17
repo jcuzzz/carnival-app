@@ -102,7 +102,7 @@ public static class CarnivalEventEndpoints
         IReadOnlyList<decimal>? Heights,
         /// <summary>Null on a non-Height event.</summary>
         int? AttemptsPerHeight,
-        /// <summary>The age contested ("13", "SNR"), or "OPEN" across the axis.</summary>
+        /// <summary>The age contested ("13", "18+" for 18 and older), or "OPEN" across the axis.</summary>
         string AgeGroup,
         CompetitionCategory? Category,
         EventTier Tier,

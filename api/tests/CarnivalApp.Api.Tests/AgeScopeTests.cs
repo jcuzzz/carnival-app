@@ -38,16 +38,15 @@ public sealed class AgeScopeTests
     }
 
     [Theory]
-    [InlineData("15/16")]
-    [InlineData("15 16")]
-    [InlineData("13+")]
-    [InlineData("U13")]  // legal: letters and digits only
-    public void Only_a_plain_alphanumeric_age_code_is_accepted(string code)
-    {
-        var refused = AgeScope.Validate(code);
-        if (code == "U13") Assert.Null(refused);
-        else Assert.NotNull(refused);
-    }
+    [InlineData("15/16", false)]
+    [InlineData("15 16", false)]
+    [InlineData("+13", false)]
+    [InlineData("13++", false)]
+    [InlineData("U13+", false)] // "+" follows a number only
+    [InlineData("U13", true)]   // legacy: letters and digits
+    [InlineData("13+", true)]   // ADR-0067 §2: 13 and older
+    public void An_age_code_is_alphanumeric_or_a_number_and_over(string code, bool accepted) =>
+        Assert.Equal(accepted, AgeScope.Validate(code) is null);
 
     [Fact]
     public void An_age_that_would_not_fit_the_column_is_refused_not_stored()
@@ -74,8 +73,24 @@ public sealed class AgeScopeTests
     {
         // Ordinal ordering would put "10" before "9" in the results book.
         Assert.Equal(
-            [AgeScope.OpenKey, "9", "10", "13", "SNR"],
-            new[] { "13", "SNR", "10", AgeScope.OpenKey, "9" }
+            [AgeScope.OpenKey, "9", "10", "13", "13+", "18+", "SNR"],
+            new[] { "18+", "13", "SNR", "13+", "10", AgeScope.OpenKey, "9" }
                 .OrderBy(AgeScope.Order).ThenBy(c => c, StringComparer.Ordinal));
     }
+
+    [Theory]
+    [InlineData("18", "18+", true)]
+    [InlineData("19", "18+", true)]
+    [InlineData("17", "18+", false)]
+    [InlineData("15", "15", true)]
+    [InlineData("16", "15", false)]
+    [InlineData("18+", "18+", true)]
+    [InlineData("18+", "18", true)]
+    [InlineData("18+", "19", true)]
+    [InlineData("18+", "19+", true)]
+    [InlineData("18+", "17", false)]
+    [InlineData("18+", "SNR", false)]
+    public void A_filter_age_selects_its_own_age_the_and_over_age_it_reaches_or_every_age_its_and_over_names(
+        string filter, string carnivalAge, bool selected) =>
+        Assert.Equal(selected, AgeScope.FilterSelects(filter, carnivalAge));
 }

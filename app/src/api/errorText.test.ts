@@ -78,6 +78,17 @@ describe("errorText", () => {
     expect(text).not.toContain("CARNIVAL_NOT_READY");
   });
 
+  it("words the ages refusals in plain terms, never their codes", () => {
+    for (const code of ["AGES_REQUIRED", "AGE_ALREADY_COVERED", "SCHOOL_AGES_INVALID"]) {
+      const text = errorText(new ApiError(409, { error: code, detail: "machine detail" }, "/x"));
+      expect(text).not.toBe("machine detail");
+      expect(text).not.toContain(code);
+    }
+    expect(
+      errorText(new ApiError(409, { error: "AGES_REQUIRED", detail: "x" }, "/x")),
+    ).toContain("School settings");
+  });
+
   it("tells an official a too-large submission is not theirs to retry", () => {
     const failure = new ApiError(
       413,

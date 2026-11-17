@@ -35,6 +35,10 @@ describe("divisionLabel", () => {
     expect(divisionLabel({ ageGroup: "15", category: "F" })).toBe("15 · Girls");
   });
 
+  it("names the open-ended oldest age as its code", () => {
+    expect(divisionLabel({ ageGroup: "18+", category: "M" })).toBe("18+ · Boys");
+  });
+
   it("renders a non-numeric age as the code the roster derives", () => {
     expect(divisionLabel({ ageGroup: "SNR", category: "M" })).toBe("SNR · Boys");
   });
@@ -95,6 +99,16 @@ describe("ageScopeOrder", () => {
       "OPEN",
       "13",
       "16",
+      "SNR",
+    ]);
+  });
+
+  it("puts the open-ended oldest age after 17, and after a plain 18", () => {
+    const codes = ["18+", "17", "18", "SNR"];
+    expect([...codes].sort((a, b) => ageScopeOrder(a) - ageScopeOrder(b))).toEqual([
+      "17",
+      "18",
+      "18+",
       "SNR",
     ]);
   });

@@ -123,10 +123,13 @@ public static class ErrorCodes
     public const string TemplateReconcileStale = "TEMPLATE_RECONCILE_STALE";
 
     /// <summary>
-    /// 409: a template apply needs ages, which come from the student list until the carnival saves
-    /// its own. Promoting a roster import, or saving the carnival's ages, resolves it.
+    /// 409: the carnival has no ages of its own and the school has none to start from. Setting the
+    /// school's ages in School settings resolves it.
     /// </summary>
-    public const string RosterRequired = "ROSTER_REQUIRED";
+    public const string AgesRequired = "AGES_REQUIRED";
+
+    /// <summary>409: extending a carnival's ages down to an age it already covers.</summary>
+    public const string AgeAlreadyCovered = "AGE_ALREADY_COVERED";
 
     /// <summary>
     /// A guarded field would move under results, team entries, standings or records.
@@ -421,6 +424,9 @@ public static class ErrorCodes
     public const string HouseNameTooLong = "HOUSE_NAME_TOO_LONG";
     public const string HouseColourInvalid = "HOUSE_COLOUR_INVALID";
     public const string HouseColourDuplicate = "HOUSE_COLOUR_DUPLICATE";
+
+    /// <summary>422: ages must satisfy 1 ≤ youngest ≤ oldest ≤ 25.</summary>
+    public const string SchoolAgesInvalid = "SCHOOL_AGES_INVALID";
 
     /// <summary>
     /// Removing or renaming the house would orphan roster, entry, leg or adjustment rows.

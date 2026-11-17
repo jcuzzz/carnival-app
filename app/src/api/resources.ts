@@ -9,6 +9,7 @@ import type {
   CarnivalProgress,
   CarnivalRequest,
   CarnivalSettings,
+  ExtendAgesResult,
   CarnivalStatus,
   CorrectResultRequest,
   DefinitionRequest,
@@ -243,6 +244,14 @@ export function setAttemptsPerHeight(
   return api(`/carnivals/${carnivalId}/events/${eventId}/attempts-per-height`, {
     method: "PUT",
     body: { attemptsPerHeight },
+  });
+}
+
+/** Lowers the carnival's youngest age and adds those ages' divisions to every event over its ages. */
+export function extendCarnivalAges(carnivalId: string, youngest: number): Promise<ExtendAgesResult> {
+  return api(`/carnivals/${carnivalId}/divisions/extend-ages`, {
+    method: "POST",
+    body: { youngest },
   });
 }
 

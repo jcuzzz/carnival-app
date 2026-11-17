@@ -17,6 +17,9 @@ public static class AuditActions
 
     public const string CarnivalApplyTemplate = "carnival.apply-template";
 
+    /// <summary>One row for the new ages and every division they added.</summary>
+    public const string CarnivalExtendAges = "carnival.extend-ages";
+
     // ---- Event-definition catalogue --------------------------------------
 
     public const string EventDefinitionCreate = "event-definition.create";

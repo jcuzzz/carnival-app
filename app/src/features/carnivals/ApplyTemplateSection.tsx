@@ -9,27 +9,27 @@ import { counted } from "../events/counted";
 import { carnivalSport } from "../events/eventLabels";
 import { showToast } from "../../shell/toast";
 import { useConnectivity } from "../../shell/useOnline";
-import { RosterRequiredNotice } from "./RosterRequiredNotice";
+import { AgesRequiredNotice } from "./AgesRequiredNotice";
 
 // Idempotent, so there is no armed second tap: what it will do is stated above the button.
 export function ApplyTemplateSection({
   carnivalId,
   carnivalType,
   empty,
-  canImport,
+  canSetAges,
 }: {
   carnivalId: string;
   carnivalType: CarnivalType | undefined;
   /** No division here yet: the screen's primary. Otherwise a disclosure. */
   empty: boolean;
-  /** SystemAdministrator: a refusal for want of a roster may link at the import. */
-  canImport: boolean;
+  /** SystemAdministrator: a refusal for want of ages may link at School settings. */
+  canSetAges: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [template, setTemplate] = useState("");
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rosterRequired, setRosterRequired] = useState(false);
+  const [agesRequired, setAgesRequired] = useState(false);
   const [outcome, setOutcome] = useState<ApplyTemplateResult | null>(null);
   const invalidate = useInvalidate();
   const online = useConnectivity() === "connected";
@@ -50,7 +50,7 @@ export function ApplyTemplateSection({
     if (applying || template === "") return;
     setApplying(true);
     setError(null);
-    setRosterRequired(false);
+    setAgesRequired(false);
     try {
       const result = await applyCarnivalTemplate(carnivalId, template);
       setOutcome(result);
@@ -66,7 +66,7 @@ export function ApplyTemplateSection({
       );
     } catch (err) {
       setError(errorText(err, DIRECT_WRITE_NETWORK_ERROR_TEXT));
-      setRosterRequired(err instanceof ApiError && err.code === "ROSTER_REQUIRED");
+      setAgesRequired(err instanceof ApiError && err.code === "AGES_REQUIRED");
     } finally {
       setApplying(false);
     }
@@ -111,8 +111,8 @@ export function ApplyTemplateSection({
               Events can still be added one at a time on this screen.
             </div>
           )}
-          {rosterRequired ? (
-            <RosterRequiredNotice carnivalId={carnivalId} canImport={canImport} />
+          {agesRequired ? (
+            <AgesRequiredNotice canSetAges={canSetAges} />
           ) : (
             error && (
               <div className="alert error" role="alert">
@@ -148,9 +148,9 @@ export function ApplyTemplateSection({
                 and the template’s program is built. Nothing is removed.
               </p>
               <div className="button-row">
-                {/* Refused for want of a roster, the import link is what it steers at. */}
+                {/* Refused for want of ages, the School settings link is what it steers at. */}
                 <button
-                  className={empty && !rosterRequired ? "primary" : undefined}
+                  className={empty && !agesRequired ? "primary" : undefined}
                   type="button"
                   disabled={applying || template === "" || !online}
                   onClick={() => void apply()}
@@ -179,8 +179,8 @@ export function ApplyTemplateSection({
               </div>
               <div>
                 {outcome.divisionProfileSeeded
-                  ? "This carnival’s ages were saved from the student list, and its categories " +
-                    "and tiers from the template."
+                  ? "This carnival now has its own ages, from the school’s, with the template’s " +
+                    "categories and tiers."
                   : "This carnival’s saved ages, categories and tiers were used."}{" "}
                 {counted(outcome.slotsCreated, "slot")} across{" "}
                 {counted(outcome.streamsCreated, "stream")}.

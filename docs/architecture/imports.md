@@ -60,7 +60,9 @@ Every transition writes an audit event: `import.stage` (file name, SHA-256, mapp
 
 ## The mapping file
 
-`Imports:MappingPath` names a JSON file, read from disk on every upload and defaults read. If the setting is missing, the file does not exist or cannot be read, or it is not valid JSON or not a valid mapping (for example a missing `cutOff`, a refused `openLabel`, a column whose value is `null`, or two column names that differ only by case), those requests answer `500 IMPORT_MAPPING_UNAVAILABLE` with the reason in `detail`. The example is `config/import-mapping.example.json`.
+`Imports:MappingPath` names a JSON file, read from disk on every upload and defaults read. If the setting is missing, the file does not exist or cannot be read, or it is not valid JSON or not a valid mapping (for example a missing `cutOff`, a column whose value is `null`, or two column names that differ only by case), those requests answer `500 IMPORT_MAPPING_UNAVAILABLE` with the reason in `detail`. The example is `config/import-mapping.example.json`.
+
+A mapping that still sets the removed senior band (`ageGroupRule.openFromAge` or `ageGroupRule.openLabel`) stops the API at startup with a message naming the key: the oldest age of the school's range now takes everyone older (School settings → Ages; [ADR-0067](../adr/0067-ages-come-from-the-schools-range.md) §2). Delete the key and restart.
 
 ```json
 {
@@ -68,7 +70,7 @@ Every transition writes an audit event: `import.stage` (file name, SHA-256, mapp
     "STKEY":     { "maps_to": "external_student_id", "required": true },
     "BIRTHDATE": { "maps_to": "competition_age_group", "required": true }
   },
-  "ageGroupRule": { "cutOff": "12-31", "openFromAge": 17, "openLabel": "SNR" }
+  "ageGroupRule": { "cutOff": "12-31" }
 }
 ```
 
@@ -80,8 +82,6 @@ What the API reads from it:
 | `columns.<NAME>.maps_to` | Loaded but not used: the importer reads fixed CASES21 column names (below). |
 | `ageGroupRule.cutOff` | `MM-DD`, the day of the competition year ages are taken at. Required. `02-29` falls on 28 February in a common year. |
 | `ageGroupRule.cutOffDate` | Legacy `YYYY-MM-DD`; only its month and day are used. Read only when `cutOff` is absent. |
-| `ageGroupRule.openFromAge` | Optional. Every student this age or older derives the senior band instead of a number. |
-| `ageGroupRule.openLabel` | The senior band's code, uppercased; default `SNR`. `OPEN` is refused (it is the event age scope meaning every age), as is a purely numeric label (indistinguishable from a plain age). |
 
 The file's base name is recorded on each batch as its mapping version. `source`, `unique`, `fallback`, `validate`, `transform`, `store_source_value` and `$comment` keys in the example are documentation for the reader and are ignored by the API.
 
@@ -138,19 +138,19 @@ Each row gets a disposition, compared against the current roster:
 
 ## Age group and category
 
-The age group is the student's exact age on the cut-off day of the **competition year**, as a string (`"13"`), or the senior band when `openFromAge` is set and reached.
+The age group is the student's exact age on the cut-off day of the **competition year**, as a string (`"13"`).
 
 | Born | Competition year | Cut-off | Age group |
 |---|---|---|---|
 | 2014-03-05 | 2027 | `12-31` | `13` |
 | 2016-01-01 | 2027 | `12-31` | `11` |
-| 2009-06-01 | 2027 | `12-31`, `openFromAge: 17` | `SNR` |
+| 2008-06-01 | 2027 | `12-31` | `19` |
 
 The competition year is chosen per import, not configured. If the upload names none, the server uses the year of the earliest carnival dated today or later (looking no further than the end of next year), else the current year, so a November import for a February carnival lands on the carnival's year. "Today" is the school's date in `School:Timezone` (`Australia/Melbourne` when absent or blank; UTC when the zone is unknown). A year more than one from the current year is refused with `400 IMPORT_COMPETITION_YEAR_INVALID`, and nothing is staged. `GET /api/v1/imports/defaults` returns the default, the allowed range and the cut-off, which the upload form uses to pre-fill a year picker and state "Ages as at 31 December 2027". An import launched from a carnival pre-fills that carnival's year instead ([the review screen](#the-review-screen)). Ages only move when the roster is imported again. See [ADR-0060](../adr/0060-the-competition-year-is-chosen-at-import.md).
 
 The **competition category** comes from `GENDER`: `M` → `M`, `F` → `F`, any other non-blank value → `S`. It is a competition grouping default used only for server-side eligibility, and it does not leave the server except in the import review below ([ADR-0026](../adr/0026-the-student-category-is-server-side-only.md)).
 
-The roster's distinct age groups seed a carnival's default divisions, and division eligibility matches them exactly, so the cut-off and senior band decide which divisions a school can run.
+A carnival's ages come from the school's range, not the roster ([data model](data-model.md#division-profile)). A student's plain age is matched exactly by a division of that age, or by the carnival's oldest age `N+` when it is at least N, so a 19-year-old enters `18+`. A carnival's settings read counts, per age, the current, active students none of its ages takes (`uncoveredAges`): students younger than its youngest age; students older than its oldest when a saved profile ends in a plain age rather than `N+`; and any legacy non-numeric code (`SNR`) the profile does not name. The organiser can add a younger age; nothing refuses the import for these students.
 
 ## What is stored and what is discarded
 

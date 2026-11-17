@@ -1,6 +1,6 @@
 # ADR-0059: Adding a catalogue event to a carnival is one press
 
-- **Status:** Accepted (2026-09). Amends [ADR-0054](0054-setting-up-a-carnival.md) §3: "Add an event" becomes "New event…", the secondary path. Partly superseded by [ADR-0067](0067-divisions-come-from-the-student-list.md): §2's no-roster notice points at the student import; there are no ages to add by hand.
+- **Status:** Accepted (2026-09). Amends [ADR-0054](0054-setting-up-a-carnival.md) §3: "Add an event" becomes "New event…", the secondary path. Partly superseded by [ADR-0067](0067-ages-come-from-the-schools-range.md): §2's no-roster notice points at the student import; there are no ages to add by hand.
 
 ## Context
 

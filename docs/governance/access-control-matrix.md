@@ -58,6 +58,7 @@ Deny = HTTP 403. Unauthenticated = HTTP 401 on every row below. Routes are under
 | Create / update a carnival | `POST /carnivals`, `PUT /carnivals/{id}` | allow | allow | deny | deny |
 | Change status (open / close / **finalise**) | `POST /carnivals/{id}/status` | allow | allow | deny | deny |
 | Apply an event template | `POST /carnivals/{id}/apply-template` | allow | allow | deny | deny |
+| Add a younger age to a carnival | `POST /carnivals/{id}/divisions/extend-ages` | allow | allow | deny | deny |
 | Read events | `GET /carnivals/{id}/events`, `.../events/{eventId}` | allow | allow | allow | allow |
 | Schedule, generate, update or unschedule events; change status; open all scheduled | `POST`, `PUT`, `DELETE .../events…`, `.../events/{eventId}/status`, `.../events/open-scheduled` | allow | allow | deny | deny |
 | Assign officials (advisory data) | `PUT .../events/{eventId}/officials` | allow | allow | deny | deny |

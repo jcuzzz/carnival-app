@@ -1,6 +1,6 @@
 # ADR-0058: One age per division — the merged age band is removed
 
-- **Status:** Accepted (2026-09). Supersedes the age-axis-as-a-set parts of [ADR-0014](0014-result-entry-navigation-and-schedule-model.md) §4, [ADR-0022](0022-event-and-division-management.md) §2 and §9, [ADR-0027](0027-the-division-profile-gets-its-own-table.md) (row and wire shape), [ADR-0028](0028-records-and-district-selection.md) (merged-band record categories), [ADR-0052](0052-athletics-measures-field-capture-and-record-eligibility.md) §7 (slot `ages` filters), and [ADR-0057](0057-age-bands-from-the-roster.md) §3 (the band editor). Partly superseded by [ADR-0067](0067-divisions-come-from-the-student-list.md): §5, no 5–21 fallback.
+- **Status:** Accepted (2026-09). Supersedes the age-axis-as-a-set parts of [ADR-0014](0014-result-entry-navigation-and-schedule-model.md) §4, [ADR-0022](0022-event-and-division-management.md) §2 and §9, [ADR-0027](0027-the-division-profile-gets-its-own-table.md) (row and wire shape), [ADR-0028](0028-records-and-district-selection.md) (merged-band record categories), [ADR-0052](0052-athletics-measures-field-capture-and-record-eligibility.md) §7 (slot `ages` filters), and [ADR-0057](0057-age-bands-from-the-roster.md) §3 (the band editor). Partly superseded by [ADR-0067](0067-ages-come-from-the-schools-range.md): §5, no 5–21 fallback.
 
 ## Context
 

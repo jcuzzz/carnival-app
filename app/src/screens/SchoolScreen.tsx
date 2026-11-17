@@ -28,7 +28,7 @@ const ROWS: readonly HubRow[] = [
   {
     path: "/school/settings",
     title: "School settings",
-    summary: "The school's name, its brand colour and its houses",
+    summary: "The school's name, its brand colour, its houses and its ages",
     visible: schoolAdmin,
   },
   {

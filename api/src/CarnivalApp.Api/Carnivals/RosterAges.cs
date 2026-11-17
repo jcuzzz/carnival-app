@@ -3,8 +3,9 @@ using CarnivalApp.Api.Data;
 
 namespace CarnivalApp.Api.Carnivals;
 
-// Year is null when no roster is promoted.
-public sealed record RosterFacts(IReadOnlyList<string> AgeGroups, int? Year);
+// Year is null when no roster is promoted. StudentsByAge counts current, active students per code.
+public sealed record RosterFacts(
+    IReadOnlyList<string> AgeGroups, int? Year, IReadOnlyDictionary<string, int> StudentsByAge);
 
 public static class RosterAges
 {
@@ -25,14 +26,12 @@ public static class RosterAges
             .ThenByDescending(y => y.Key)
             .Select(y => (int?)y.Key)
             .FirstOrDefault();
+        var byAge = groups
+            .Where(g => !string.IsNullOrWhiteSpace(g.CompetitionAgeGroup)
+                && AgeScope.Validate(g.CompetitionAgeGroup) is null)
+            .GroupBy(g => g.CompetitionAgeGroup, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Count), StringComparer.Ordinal);
         return new RosterFacts(
-        [
-            .. groups
-                .Select(g => g.CompetitionAgeGroup)
-                .Distinct()
-                .Where(c => !string.IsNullOrWhiteSpace(c) && AgeScope.Validate(c) is null)
-                .OrderBy(AgeScope.Order)
-                .ThenBy(c => c, StringComparer.Ordinal),
-        ], year);
+            [.. byAge.Keys.OrderBy(AgeScope.Order).ThenBy(c => c, StringComparer.Ordinal)], year, byAge);
     }
 }

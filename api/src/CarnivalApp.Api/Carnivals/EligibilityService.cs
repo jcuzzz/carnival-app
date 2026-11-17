@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using CarnivalApp.Api.Data.Entities;
 using CarnivalApp.Api.Http;
 
@@ -28,12 +29,19 @@ public static class EligibilityService
         CompetitionCategory snapshotDefault, CompetitionCategory? categoryOverride) =>
         categoryOverride ?? snapshotDefault;
 
-    // CheckDivision as a query filter; matches on the snapshot default, never an override.
-    public static IQueryable<RosterSnapshot> WhereDivisionMatches(
-        IQueryable<RosterSnapshot> snapshots, CarnivalEvent carnivalEvent)
+    // CheckDivision as a query filter; matches on the snapshot default, never an override. An "N+"
+    // age is matched against the codes present, read first: string comparison would put "9" above "18".
+    public static async Task<IQueryable<RosterSnapshot>> WhereDivisionMatchesAsync(
+        IQueryable<RosterSnapshot> snapshots, CarnivalEvent carnivalEvent, CancellationToken ct)
     {
         var age = carnivalEvent.AgeGroup;
-        if (age != AgeScope.OpenKey)
+        if (AgeScope.TryAndOver(age, out _))
+        {
+            var present = await snapshots.Select(s => s.CompetitionAgeGroup).Distinct().ToListAsync(ct);
+            var admitted = present.Where(code => AgeScope.Admits(age, code)).ToList();
+            snapshots = snapshots.Where(s => admitted.Contains(s.CompetitionAgeGroup));
+        }
+        else if (age != AgeScope.OpenKey)
             snapshots = snapshots.Where(s => s.CompetitionAgeGroup == age);
         // Must stay the same rule as CheckCategory.
         if (carnivalEvent.Category is { } required && required != CompetitionCategory.S)
@@ -48,8 +56,7 @@ public static class EligibilityService
         CarnivalEvent carnivalEvent, RosterSnapshot snapshot, CompetitionCategory? categoryOverride)
     {
         var age = carnivalEvent.AgeGroup;
-        if (age != AgeScope.OpenKey
-            && !string.Equals(age, snapshot.CompetitionAgeGroup, StringComparison.Ordinal))
+        if (!AgeScope.Admits(age, snapshot.CompetitionAgeGroup))
             return new EligibilityVerdict(
                 EligibilityAxis.AgeGroup, snapshot.CompetitionAgeGroup, age);
         return CheckCategory(carnivalEvent, snapshot.CompetitionCategory, categoryOverride);

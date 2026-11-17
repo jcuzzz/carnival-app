@@ -40,8 +40,9 @@ public static class AdjustmentEndpoints
         int SocialPerEntryPoints);
 
     // LaneCount null means no limit, never zero. Divisions null means no profile yet, never a
-    // carnival that contests nothing. RosterAgeGroups, RosterYear and DivisionsDefault are never
-    // stored; RosterYear is null when no roster is promoted.
+    // carnival that contests nothing. Everything after Divisions is derived, never stored:
+    // DivisionsDefault is the school's range while no profile is saved, RosterYear is null with no
+    // promoted roster, and the two age lists are empty with neither a profile nor a default.
     public sealed record CarnivalSettingsDto(
         ScoringRulesDto Scoring,
         IReadOnlyList<string> AdjustmentCategories,
@@ -50,7 +51,9 @@ public static class AdjustmentEndpoints
         DivisionProfileDto? Divisions,
         IReadOnlyList<string> RosterAgeGroups,
         DivisionProfileDto? DivisionsDefault,
-        int? RosterYear);
+        int? RosterYear,
+        IReadOnlyList<UncoveredAgeDto> UncoveredAges,
+        IReadOnlyList<string> AgesWithoutStudents);
 
     // Leaves out the roster facts: an auditor would read their defaults beside a settings change as
     // "the roster was empty".
@@ -77,9 +80,11 @@ public static class AdjustmentEndpoints
         divisions?.ToDto());
 
     private static CarnivalSettingsDto ProjectSettings(
-        CarnivalSettings s, DivisionProfile? divisions, RosterFacts roster)
+        CarnivalSettings s, DivisionProfile? divisions, RosterFacts roster, SchoolAges? schoolAges)
     {
         var audited = ProjectForAudit(s, divisions);
+        var fallback = divisions is null ? CarnivalAges.Default(schoolAges) : null;
+        var effective = divisions ?? fallback;
         return new(
             audited.Scoring,
             audited.AdjustmentCategories,
@@ -87,26 +92,21 @@ public static class AdjustmentEndpoints
             audited.AutoFillLanes,
             audited.Divisions,
             roster.AgeGroups,
-            audited.Divisions is null && roster.AgeGroups.Count > 0
-                ? DivisionProfile.FromRoster(roster.AgeGroups)?.ToDto()
-                : null,
-            roster.Year);
+            fallback?.ToDto(),
+            roster.Year,
+            CarnivalAges.Uncovered(effective, roster),
+            CarnivalAges.WithoutStudents(effective, roster));
     }
 
-    private static async Task<DivisionProfile?> ReadProfileAsync(
-        CarnivalAppDbContext db, Guid carnivalId, CancellationToken ct) =>
-        DivisionProfile.FromRows(await db.CarnivalDivisions.AsNoTracking()
-            .Where(d => d.CarnivalId == carnivalId)
-            .ToListAsync(ct));
-
     private static async Task<IResult> GetSettingsAsync(
-        Guid id, [FromServices] CarnivalAppDbContext db, CancellationToken ct)
+        Guid id, [FromServices] CarnivalAppDbContext db, [FromServices] SchoolSettingsProvider school,
+        CancellationToken ct)
     {
         var carnival = await db.Carnivals.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
         return Results.Ok(ProjectSettings(
-            CarnivalSettings.Parse(carnival.SettingsJson), await ReadProfileAsync(db, id, ct),
-            await RosterAges.ReadAsync(db, ct)));
+            CarnivalSettings.Parse(carnival.SettingsJson), await CarnivalAges.ReadSavedAsync(db, id, ct),
+            await RosterAges.ReadAsync(db, ct), (await school.GetAsync(ct)).Ages));
     }
 
     public sealed record ScoringSettingsRequest(
@@ -120,7 +120,8 @@ public static class AdjustmentEndpoints
 
     private static async Task<IResult> UpdateSettingsAsync(
         Guid id, SettingsRequest request, HttpContext ctx,
-        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit, CancellationToken ct)
+        [FromServices] CarnivalAppDbContext db, [FromServices] AuditService audit,
+        [FromServices] SchoolSettingsProvider school, CancellationToken ct)
     {
         var carnival = await CarnivalGuards.FindCarnivalAsync(db, id, ct);
         if (carnival is null) return CarnivalGuards.CarnivalNotFound();
@@ -215,7 +216,7 @@ public static class AdjustmentEndpoints
         if (await CarnivalGuards.SaveGuardingConcurrencyAsync(db, "carnival", ct) is { } conflict)
             return conflict;
         return Results.Ok(ProjectSettings(
-            updated, updatedProfile, await RosterAges.ReadAsync(db, ct)));
+            updated, updatedProfile, await RosterAges.ReadAsync(db, ct), (await school.GetAsync(ct)).Ages));
     }
 
     private static List<string>? NormaliseCategories(List<string>? categories)

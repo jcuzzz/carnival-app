@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using CarnivalApp.Api.Carnivals;
 
 namespace CarnivalApp.Api.Imports;
 
@@ -36,6 +35,8 @@ public sealed class ImportMapping
                 $"Import mapping '{sourceName}' names column '{twice.Key}' more than once " +
                 "(column names are matched ignoring case).");
         var rule = doc.AgeGroupRule ?? new AgeGroupRuleDocument();
+        if (RetiredKeyRefusal(rule, sourceName) is { } retired)
+            throw new InvalidDataException(retired);
         var cutOff = ReadCutOff(rule, sourceName);
 
         return new ImportMapping
@@ -53,8 +54,6 @@ public sealed class ImportMapping
             {
                 CutOffMonth = cutOff.Month,
                 CutOffDay = cutOff.Day,
-                OpenFromAge = rule.OpenFromAge,
-                OpenLabel = ReadOpenLabel(rule.OpenLabel, sourceName),
             },
             Version = sourceName,
         };
@@ -86,31 +85,34 @@ public sealed class ImportMapping
             $"Import mapping '{sourceName}' must define ageGroupRule.cutOff (MM-DD).");
     }
 
-    // "OPEN" is refused: an event scoped to it reads as all ages, so the band could never be its
-    // own division. Uppercased because eligibility matches age codes by exact string equality.
-    private static string ReadOpenLabel(string? declared, string sourceName)
+    /// <summary>
+    /// Throws when the mapping still sets the removed senior band, so a deployment fails at startup
+    /// rather than on its first import. A missing or unreadable file is left to the import path.
+    /// </summary>
+    public static void RefuseRetiredKeys(string path)
     {
-        var label = declared?.Trim().ToUpperInvariant();
-        if (string.IsNullOrEmpty(label)) return AgeGroupRule.DefaultOpenLabel;
-        if (label == AgeScope.OpenKey)
-            throw new InvalidDataException(
-                $"Import mapping '{sourceName}': ageGroupRule.openLabel may not be '{declared!.Trim()}' — " +
-                $"'{AgeScope.OpenKey}' is reserved for the event age scope meaning OPEN ACROSS the age " +
-                "axis (every age eligible), so a derived band of that name could never be scheduled as a " +
-                $"division of its own. Name the band something else (the default is " +
-                $"'{AgeGroupRule.DefaultOpenLabel}').");
-        if (AgeScope.Validate(label) is { } invalid)
-            throw new InvalidDataException(
-                $"Import mapping '{sourceName}': ageGroupRule.openLabel '{declared!.Trim()}' is not a " +
-                $"usable age-group code — {invalid}");
-        // A numeric label collides with the plain ages the derivation produces below the cut-off.
-        if (label.All(char.IsAsciiDigit))
-            throw new InvalidDataException(
-                $"Import mapping '{sourceName}': ageGroupRule.openLabel may not be '{declared!.Trim()}' — " +
-                "a number is what the derivation produces for every age below the cut-off, so the band " +
-                $"would be indistinguishable from that age group. Name it something else (the default is " +
-                $"'{AgeGroupRule.DefaultOpenLabel}').");
-        return label;
+        if (!File.Exists(path)) return;
+        MappingDocument? doc;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            doc = JsonSerializer.Deserialize<MappingDocument>(stream, JsonOptions);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+        if (doc?.AgeGroupRule is { } rule && RetiredKeyRefusal(rule, Path.GetFileName(path)) is { } retired)
+            throw new InvalidOperationException(retired);
+    }
+
+    private static string? RetiredKeyRefusal(AgeGroupRuleDocument rule, string sourceName)
+    {
+        var key = rule.OpenFromAge.HasValue ? "openFromAge" : rule.OpenLabel.HasValue ? "openLabel" : null;
+        return key is null
+            ? null
+            : $"Import mapping '{sourceName}': ageGroupRule.{key} is no longer supported. Remove it: the "
+              + "oldest age now takes everyone older, set in School settings → Ages.";
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -137,9 +139,10 @@ public sealed class ImportMapping
     {
         public string? CutOff { get; set; }
         public string? CutOffDate { get; set; }
-        public int? OpenFromAge { get; set; }
 
-        public string? OpenLabel { get; set; }
+        // Removed keys, read only to refuse them.
+        public JsonElement? OpenFromAge { get; set; }
+        public JsonElement? OpenLabel { get; set; }
     }
 }
 
@@ -150,22 +153,11 @@ public sealed class ImportColumn
     public bool Required { get; init; }
 }
 
-/// <summary>
-/// Age as at the cut-off day of the competition year; ages at or above <see
-/// cref="OpenFromAge"/> collapse into one senior band.
-/// </summary>
+/// <summary>Age as at the cut-off day of the competition year.</summary>
 public sealed class AgeGroupRule
 {
-    /// <summary>Never "OPEN", which is reserved for the event age scope meaning all ages.</summary>
-    public const string DefaultOpenLabel = "SNR";
-
     public required int CutOffMonth { get; init; }
     public required int CutOffDay { get; init; }
-
-    /// <summary>Absent ⇒ every student derives a plain age.</summary>
-    public int? OpenFromAge { get; init; }
-
-    public string OpenLabel { get; init; } = DefaultOpenLabel;
 
     /// <summary>MM-DD, as the mapping and the API write it.</summary>
     public string CutOff => $"{CutOffMonth:00}-{CutOffDay:00}";
@@ -179,7 +171,6 @@ public sealed class AgeGroupRule
         var cutOff = CutOffIn(competitionYear);
         var age = cutOff.Year - birthdate.Year;
         if (birthdate > cutOff.AddYears(-age)) age--;
-        if (OpenFromAge is int open && age >= open) return OpenLabel;
         return age.ToString();
     }
 }

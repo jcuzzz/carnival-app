@@ -93,7 +93,7 @@ Identifier, name, IANA timezone, houses, branding and settings, including the tw
 
 ## 2. Derived fields
 
-**`CompetitionAgeGroup`** is derived at import from `BIRTHDATE` (age at the configured cut-off, 31 December by default, or a configured senior band). No full date of birth is persisted in any entity.
+**`CompetitionAgeGroup`** is derived at import from `BIRTHDATE` (age at the configured cut-off, 31 December by default). No full date of birth is persisted in any entity.
 
 **`CompetitionCategory` (M / F / S)** is derived from the `GENDER` column: M→M, F→F, anything else→S. The derivation is total, so the column is effectively the source gender value recoded, and **`S` identifies a student outside M and F by construction**. The design limits exposure ([ADR-0026](../adr/0026-the-student-category-is-server-side-only.md)):
 

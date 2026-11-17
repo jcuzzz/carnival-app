@@ -55,6 +55,8 @@ const carnival = {
 const settings: CarnivalSettings = {
   divisionsDefault: null,
   rosterAgeGroups: [],
+  uncoveredAges: [],
+  agesWithoutStudents: [],
   rosterYear: null,
   scoring: {
     placePoints: [4, 3, 2],

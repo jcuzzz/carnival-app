@@ -128,7 +128,7 @@ test("local accounts, from the first administrator to a disabled account", async
     ).toBeVisible();
     // The Development config seeds a name, which does not count until the settings are saved.
     await expect(page.locator("ol.row-list a.row-link").first()).toContainText(
-      /School name, colours and houses.*Do this next/,
+      /School name, colours, houses and ages.*Do this next/,
     );
 
     const stored = await page.evaluate(() =>
