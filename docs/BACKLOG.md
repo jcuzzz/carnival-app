@@ -12,6 +12,7 @@ Open work for Carnival App: the Phase 2 roadmap, known defects and technical deb
 - **[P2] A stale dev-loop e2e spec** (found 2026-11-06, failing on every device): the template test in `school-settings.spec` expects `swimming.json` on Update the event catalogue, which selects athletics first. Decide what the screen should show, then fix the spec or the screen.
 - **[P2] Docs link check in CI.** Catch broken relative links across `docs/` and the root documents.
 - **[P2] Staff guide pages.** The *(planned)* pages in [`docs/README.md`](README.md): importing the roster, carnival day, house points/records/reports, roles and shared devices.
+- **[P3] Docs in plain English.** Rewrite the existing docs tree by the `simple-english` skill (`AGENTS.md` Writing) as its own OpenSpec change, one docs folder per stage (`architecture/`, `admin/`, `guide/`, `development/`, then the root documents). Keep every fact, the Australian spelling and the page structure. ADRs stay as they were written. New and changed text already follows the skill. This item changes no behaviour, so it needs no ADR.
 
 ### Later (each needs an ADR)
 

@@ -6,7 +6,8 @@ context: |
   Read docs/HANDOFF.md before proposing.
   The docs tree (docs/README.md) is the primary current-state documentation. openspec/specs/
   holds only testable requirements (SHALL + scenarios) for the areas changes have touched; link
-  the docs page that explains a behaviour instead of restating it.
+  the docs page that explains a behaviour instead of restating it. There is no back-fill: a
+  capability gets its spec the first time a change modifies it.
   Capability names follow the docs/architecture page names where one fits (imports, scoring,
   result-lifecycle, offline-outbox, records, reports, races-and-lanes, authorisation-and-audit,
   app-navigation, data-model); otherwise a short kebab-case area name (e.g. setup-flow).
@@ -14,6 +15,8 @@ context: |
   self-accepted); design.md links it rather than repeating it.
   The maintainer is the only decision-maker. UI work shows mockups or screenshots first and is
   checked by a fresh-install walk-through with shipped defaults.
+  Each change has its own branch; the maintainer names it before the artifacts are written.
+  Write the artifacts by the simple-english skill, with Australian spelling.
 
 rules:
   proposal:
@@ -26,15 +29,21 @@ rules:
     - For UI, follow docs/development/design-system.md
   tasks:
     - Keep tasks small enough to verify one at a time
-    - "End with: update the docs-tree pages named in design.md; for UI changes, npm run screenshots and a fresh-install walk-through; one independent review; full gates (dotnet test, npm test); handoff-update"
+    - "Group the tasks into stages that can each be reviewed on their own (staged-implementation skill). Put shared contracts (API routes and DTOs, migrations, shared app types) in the first, serial groups; parallel lanes start only from a committed, building state, never from guessed interfaces."
+    - "The last task group holds: update the docs-tree pages named in design.md; for UI changes, npm run screenshots and a fresh-install walk-through; full gates (dotnet test, npm test, npm run test:e2e when the UI changed); handoff-update."
+    - "End tasks.md with a section '## Dependencies and parallel work' (plain text, no checkboxes, no diagram): what each task group depends on; the serial critical path; the lanes that can run in parallel once their prerequisites are committed, each with the files or folders it owns; the files that more than one lane touches and how conflicts are avoided (e.g. the main session edits tasks.md and docs/HANDOFF.md); and a recommendation: one agent, or fan out at which point, with the gain against the cost (each lane needs its own worktree, npm ci, a build and a fresh read of the change)."
+    - "In that section, add a '### Models' table: for each task group or lane, the review after each stage, the fix-ups, and the test and screenshot runs, give the tier from AGENTS.md 'Model tiers' (with the Claude Code model in brackets), the effort and the reason."
+    - "End tasks.md, after 'Dependencies and parallel work', with a section '## Workflow follow-up' (plain bullets, no checkboxes) that holds at least: one independent review per stage, low-severity findings batched or added to docs/BACKLOG.md; open the pull request with a description and reading guide (pr-description skill); archive the change on the feature branch as the last commit before the pull request merges (openspec-archive-change), after making sure that the docs-tree pages are updated."
 
 operations:
   apply:
     guidance:
-      - Use subagents only for large parallel work on disjoint files and for one review per phase; do small fixes directly
-      - Run only the relevant tests while iterating; one full suite per commit
+      - Implement stage by stage by the staged-implementation skill; parallel lanes by the parallel-lanes skill
+      - Every subagent gets the model and effort from the tasks.md Models table
+      - Run only the relevant tests while iterating; one full suite per stage
       - Never run prettier; keep code comments minimal; commits carry no AI attribution
   archive:
     guidance:
+      - Archive on the feature branch as its last commit, before the pull request merges, never in a follow-up branch
       - Confirm the docs-tree pages were updated before archiving
       - Sync delta specs, then remove the change's pointer from docs/HANDOFF.md

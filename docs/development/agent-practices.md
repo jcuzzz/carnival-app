@@ -13,14 +13,16 @@ How this project's work is done with AI coding agents (Claude Code and similar).
 
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) (MIT) keeps each change's plan in the repository, so a fresh session picks up a half-done change from its files rather than from a chat transcript.
 
-1. **Grill (optional):** `/grill-me` interviews the maintainer in rounds of numbered questions, each with a recommended answer, until every decision the plan depends on is settled. The agent looks facts up itself; the decisions are the maintainer's.
-2. **Propose:** the `openspec-propose` skill writes `openspec/changes/<name>/`: `proposal.md` (why, who needs it, out of scope), `specs/<capability>/spec.md` (requirement deltas: ADDED, MODIFIED, REMOVED), `design.md` (how; links the ADR and names the docs pages it updates) and `tasks.md`. It plans only; nothing is built until the maintainer has reviewed the artifacts. `openspec-explore` is a thinking step before a proposal; `openspec-update-change` revises one.
-3. **Apply:** the `openspec-apply-change` skill works through `tasks.md`, ticking items as they are done. Every task list ends with the docs-tree update, screenshots and a fresh-install walk-through for UI, one review, the full gates and the handoff.
-4. **Archive:** the `openspec-archive-change` skill merges the spec deltas into `openspec/specs/` (or `openspec-sync-specs` on its own) and moves the change to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+1. **Grill (optional):** `/grill-me` interviews the maintainer in rounds of numbered questions, each with a recommended answer, until every decision the plan depends on is settled. The agent looks facts up itself, with a read-only search agent on the small tier for searches across many files. The decisions are the maintainer's.
+2. **Branch:** the agent asks the maintainer for the branch name and creates the branch from `main` before it writes any artifact. A separate worktree is only for two changes at the same time, or for parallel lanes.
+3. **Propose:** the `openspec-propose` skill writes `openspec/changes/<name>/`: `proposal.md` (why, who needs it, out of scope), `specs/<capability>/spec.md` (requirement deltas: ADDED, MODIFIED, REMOVED), `design.md` (how; links the ADR and names the docs pages it updates) and `tasks.md`. It plans only; nothing is built until the maintainer has reviewed the artifacts. `openspec-explore` is a thinking step before a proposal; `openspec-update-change` revises one.
+4. **Apply:** the `openspec-apply-change` skill works through `tasks.md` stage by stage, by the `staged-implementation` skill. A stage is one task group. A background agent builds it, commits it and stops. Then one reviewer agent checks it, and the main session gives the maintainer a short guided review. The next stage starts only after the maintainer approves. When `tasks.md` recommends a fan-out, the lanes follow the `parallel-lanes` skill. The last task group holds the docs-tree update, screenshots and a fresh-install walk-through for UI, the full gates and the handoff.
+5. **Pull request:** the agent pushes the branch and opens the pull request with the `pr-description` skill: what and why, decisions, a reading guide, where to look closely, and testing.
+6. **Archive:** the `openspec-archive-change` skill merges the spec deltas into `openspec/specs/` (or `openspec-sync-specs` on its own) and moves the change to `openspec/changes/archive/YYYY-MM-DD-<name>/`. This is the last commit on the feature branch, before the pull request merges, so that `main` never holds a finished change in `openspec/changes/`.
 
-`openspec/specs/` holds testable requirements (SHALL statements with scenarios), grouped by the capability names of the `docs/architecture/` pages; the docs tree still explains how things work. It grows only as changes touch an area, so there is no back-fill. The project's rules for every artifact (the docs-tree, ADR, mockup and review steps) live in `openspec/config.yaml`, which the OpenSpec skills read each time. `docs/HANDOFF.md` points at active changes rather than restating their tasks.
+`openspec/specs/` holds testable requirements (SHALL statements with scenarios), grouped by the capability names of the `docs/architecture/` pages; the docs tree still explains how things work. It grows only as changes touch an area, so there is no back-fill. The project's rules for every artifact (the docs-tree, ADR, mockup and review steps, and the "Dependencies and parallel work" and "Workflow follow-up" sections that end every `tasks.md`) live in `openspec/config.yaml`, which the OpenSpec skills read each time. `docs/HANDOFF.md` points at active changes rather than restating their tasks.
 
-The `openspec` CLI is installed per machine (`npm install -g @fission-ai/openspec`, Node 22.12+). After upgrading it, run `openspec update` to regenerate the skills; they live in `.agents/skills/`, linked from `.claude/skills/`. Turn off its anonymous usage telemetry with `openspec config set telemetry.enabled false`.
+The `openspec` CLI is installed per machine (`npm install -g @fission-ai/openspec`, Node 22.12+). After upgrading it, run `openspec update` to regenerate the skills in `.agents/skills/`. Claude Code reads the stubs in `.claude/skills/`, which `openspec update` keeps. If it adds a new workflow as a symlink, replace the symlink with a stub (the `agent-instructions` skill). Turn off its anonymous usage telemetry with `openspec config set telemetry.enabled false`.
 
 Before building a new surface, check that a named user needs it. Asking costs minutes; building and retiring a speculative screen costs days.
 
@@ -30,14 +32,15 @@ When work is split across parallel agents, each brief carries:
 
 - **The shared rules**, written once in a common brief every agent reads first: hard rules, the comment rule, the docs rule, "never run prettier".
 - **A disjoint file set.** Each agent edits only its assigned files, so parallel work never collides.
-- **No git writes.** Agents may read history (`git log`, `git show`, `git diff`) but never commit, stage, stash, reset or check out. The coordinating session or the human reviews the combined diff and commits.
+- **Git writes only on an agent's own branch.** Agents that share a checkout may read history (`git log`, `git show`, `git diff`) but never commit, stage, stash, reset or check out; the coordinating session reviews the combined diff and commits. A stage agent or a lane agent that owns its branch commits its own stage (the `staged-implementation` and `parallel-lanes` skills).
+- **An explicit model and effort**, from the Models table in `tasks.md` or the tiers in `AGENTS.md`. A subagent without a model runs on the main session's model, which costs more than most tasks need.
 - **A required report**: files changed, claims not verified, suspected bugs with `file:line`.
 
 If another session owns `docs/BACKLOG.md` or a source tree, record deltas in `docs/HANDOFF.md` instead of editing its files. Check `git status` before large edits.
 
 ## Review after build
 
-Scoring, result-lifecycle, authorisation and audit work goes through layers: **build → adversarial reviewers → fix batch → verifier**. Reviewers get the change and the relevant rules, not the builder's reasoning, and look for defects rather than confirming the design. Run the full suites (`dotnet test`, `npm test`, `npm run test:e2e`) before the verifier signs off.
+Every stage gets **one independent review**: a reviewer agent on the strong tier gets the stage's diff and the relevant rules, not the builder's reasoning, and looks for defects rather than confirming the design. Scoring, result-lifecycle, authorisation and audit work is reviewed with high effort. Real issues are fixed in one follow-up commit. Low-severity findings are batched into that commit or added to `docs/BACKLOG.md`. A fix commit is not reviewed again unless it changes logic. Run the full suites (`dotnet test`, `npm test`, `npm run test:e2e`) once per stage, before the maintainer approves it.
 
 ## Proving mechanical changes
 
@@ -71,7 +74,9 @@ Make the data rule mechanical in your local agent settings rather than advisory,
 ## In the code
 
 - `AGENTS.md`: the rules every agent loads
-- `.claude/skills/`: `new-adr`, `handoff-update`, `sanitize-data`; `grill-me` and `grilling` (adapted from mattpocock/skills, MIT); the `openspec-*` skills (generated, linked from `.agents/skills/`)
+- `.agents/skills/`: the skills every agent tool reads: `new-adr`, `handoff-update`, `sanitize-data`, `staged-implementation`, `parallel-lanes`, `pr-description`, `agent-instructions`; `grill-me` and `grilling` (adapted from mattpocock/skills, MIT); `simple-english` (AminBlg/SimpleEnglish 2.1.2, MIT); the `openspec-*` skills (generated)
+- `.claude/skills/`: one-line stubs that point Claude Code to `.agents/skills/`; `.claude/agents/Explore.md`: the read-only search agent on the small tier
+- `CLAUDE.md`: imports `AGENTS.md` and maps the model tiers to Claude Code models
 - `openspec/config.yaml`: project context and per-artifact rules for OpenSpec
 - `app/e2e/fixed.ts`: pixel-reproducible screenshot mode
 - `scripts/sanitize_export.py`, `scripts/generate_synthetic_roster.py`
