@@ -53,7 +53,7 @@ Do not write these comments:
 - An explanation of code. If the code needs one, add a code comment or make the code clearer. A later reader then gets it too.
 - A reason that stays true after the merge. Put it in the commit message, the ADR or the design, and link it.
 
-Open the pull request with `gh pr create --base main --title "<title>" --body-file <file>`. Post the description and the comments directly, without a preview. The maintainer reviews them on GitHub. When you report the new pull request, give its full URL.
+Open the pull request with `gh pr create --base main --title "<title>" --body-file <file>`. After the archive commit, update the link to the change folder in the description to its new path, `openspec/changes/archive/YYYY-MM-DD-<name>/`, or link `openspec/specs/`. Post the description and the comments directly, without a preview. The maintainer reviews them on GitHub. When you report the new pull request, give its full URL.
 
 ## Sources
 
