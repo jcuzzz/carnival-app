@@ -32,7 +32,7 @@ When work is split across parallel agents, each brief carries:
 
 - **The shared rules**, written once in a common brief every agent reads first: hard rules, the comment rule, the docs rule, "never run prettier".
 - **A disjoint file set.** Each agent edits only its assigned files, so parallel work never collides.
-- **Git writes only on an agent's own branch.** Agents that share a checkout may read history (`git log`, `git show`, `git diff`) but never commit, stage, stash, reset or check out; the coordinating session reviews the combined diff and commits. A stage agent or a lane agent that owns its branch commits its own stage (the `staged-implementation` and `parallel-lanes` skills).
+- **Who commits.** The one stage agent at work commits its stage on the feature branch. Agents that run in parallel in one checkout never commit, stage, stash, reset or check out; they may read history (`git log`, `git show`, `git diff`), and the coordinating session reviews the combined diff and commits. A lane agent commits on its own lane branch (the `staged-implementation` and `parallel-lanes` skills).
 - **An explicit model and effort**, from the Models table in `tasks.md` or the tiers in `AGENTS.md`. A subagent without a model runs on the main session's model, which costs more than most tasks need.
 - **A required report**: files changed, claims not verified, suspected bugs with `file:line`.
 
